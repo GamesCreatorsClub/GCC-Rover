@@ -1,0 +1,60 @@
+#!/usr/bin/python3
+
+import sys
+import pyroscommon as pc
+
+pc.loadAliases()
+
+delete = False
+help = False
+def processSwitches(args):
+    global delete, help
+
+    while len(args) > 0 and args[0].startswith("-"):
+        if args[0] == "-d":
+            delete = True
+        elif args[0] == "-h":
+            help = True
+        del args[0]
+
+    return args
+
+
+args = processSwitches(pc.args)
+
+
+def help(rc):
+    print("usage: pyros alias [<options>] <alias> [<host-address>]")
+    print("")
+    print("    -h                    help message")
+    print("    -d                    delete alias. <alias> must be set, <host-address> unset.")
+    print("    <alias>               alias to set or query")
+    print("    <host-address>        value to set alias to")
+    print("")
+    print("If both <alias> and <host-address> are omitted then whole alias map is printed to stdout")
+    print("If <host-address> is omitted then value of alias is displayed to output.")
+    print("If <host-address> is omitted but -d supplied then alias is removed.")
+    print("If both <alias> and <host-address> are supplied then alias is set.")
+    sys.exit(rc)
+
+if help:
+    help(0)
+elif len(args) == 0:
+    for alias in pc.aliases:
+        print(alias + " = " + pc.aliases[alias])
+
+elif len(args) == 1:
+    if delete:
+        del pc.aliases[args[0]]
+        pc.saveAliases()
+    else:
+        if args[0] in pc.aliases:
+            # print(args[0] + " = " + pc.aliases[args[0]])
+            print(pc.aliases[args[0]])
+        else:
+            print(args[0])
+
+
+elif len(args) == 2:
+    pc.aliases[args[0]] = args[1]
+    pc.saveAliases()

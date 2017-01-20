@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# description: Starts and stops the RoverController daemon
+#
+### BEGIN INIT INFO
+# Provides: RoverController
+# Required-Start: $network $syslog $remote_fs mosquitto ssh bluetooth rc.local
+# Required-Stop: $network
+# Default-Start: 2 3 5
+# Default-Stop: 0 1 6
+# Short-Description: RoverController daemon
+# Description: Start or stop the RoverController daemon
+### END INIT INFO
+
+BINARY=/home/pi/RoverController/RoverController.py
+test -x $BINARY || { echo "$BINARY not avaible";
+        if [ "$1" = "stop" ]; then exit 0;
+        else exit 5; fi; }
+
+RETVAL=0
+
+case "$1" in
+  start)
+        echo -n "Starting RoverController daemon... "
+        cd /home/pi/RoverController
+        sudo -u pi python3 -u 2>&1 >RoverController.log $BINARY &         
+        echo "Done."
+        ;;
+  stop)
+        echo -n "Shutting down RoverController daemon... "
+        pkill -9 -f "python3 -u $BINARY"
+        echo "Done."
+        ;;
+  restart)
+        $0 stop
+        $0 start
+        ;;
+  status)
+        if pgrep -f "python3 -u $BINARY" >/dev/null 2>&1
+        then
+          echo "RoverController is running."
+        else
+          echo "RoverController is not running."
+        fi
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+

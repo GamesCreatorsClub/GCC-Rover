@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import pyroscommon as pc
+
+
+if len(pc.args) == 0:
+    sys.exit(os.system(pc.binDir + "/pyros-help"))
+
+localCommands = ["alias"]
+commandAlias = {
+    "kill" : "stop",
+    "rm" : "remove"
+}
+
+pc.loadAliases()
+
+
+def processSwitches(args):
+    return args
+
+
+args = processSwitches(pc.args)
+
+
+command = args[0]
+if command in commandAlias:
+    command = commandAlias[command]
+
+del args[0]
+
+if os.path.exists(pc.binDir + "/pyros-" + command):
+    if (len(args) > 0 and (args[0] == "-h")):
+        fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
+        sys.exit(os.system(fullCommand))
+    if command not in localCommands:
+        if pc.defaultAlias is not None:
+            args.insert(0, pc.defaultAlias)
+        else:
+            print("No default alias is set. Use pyros <host[:port]> <command> <args> format or set default alias with:")
+            print("")
+            print("    pyros alias default <host>")
+            sys.exit(1)
+
+    fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
+    sys.exit(os.system(fullCommand))
+
+print("Unknown command ")
+sys.exit(1)

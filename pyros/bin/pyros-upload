@@ -1,0 +1,61 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import pyroscommon as pc
+
+
+args = pc.processCommonHostSwitches(pc.args)
+
+def help(rc):
+    print("usage: pyros [<host[:port]>] prepare <service|agent> <processId> <file>")
+    print("")
+    print("    -h                    help message")
+    print("    <service|agent>       uploaded code is supposed to be service or agent.")
+    print("    <processId>           id process is going to be known from this point on.")
+    print("    <file>                python file name to be uploaded.")
+    sys.exit(rc)
+
+if len(args) < 3:
+    help(1)
+
+if pc.help:
+    help(0)
+
+type = args[0]
+
+processId = args[1]
+
+filename = args[2]
+
+if type != "agent" and type != "service":
+    print("Only supported types are 'agent' and 'service'.")
+    sys.exit(1)
+
+
+if not os.path.exists(filename):
+    print("File '" + filename + "' does not exist.")
+    sys.exit(1)
+
+
+def executeCommand(client):
+    file = open(filename)
+    fileContent = file.read()
+    file.close()
+
+    client.publish("exec/" + processId + "/" + type, fileContent)
+
+    return True
+
+def processOut(line):
+    return False
+
+
+def processStatus(line):
+    if line.startswith("stored"):
+        return False
+    return True
+
+pc.processCommand(processId, executeCommand, processOut, processStatus)
+
+

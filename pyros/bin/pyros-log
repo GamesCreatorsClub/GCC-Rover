@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import pyroscommon as pc
+
+
+all = False
+
+args = pc.processCommonHostSwitches(pc.args)
+
+def help(rc):
+    print("usage: pyros [<host[:port]>] log <processId>")
+    print("")
+    print("    -h                    help message")
+    print("    -a                    reprint last 1000 log lines")
+    print("    <processId>           process id")
+    sys.exit(rc)
+
+if len(args) < 1:
+    help(1)
+
+if pc.help:
+    help(0)
+
+if args[0] == "-a":
+    all = True
+    del args[0]
+
+processId = args[0]
+
+
+def executeCommand(client):
+    print("Showing process " + processId + " output:")
+    if all:
+        client.publish("exec/" + processId, "log")
+    return True
+
+
+def processOut(line):
+    if line.endswith("\n"):
+        line = line[:len(line) - 1]
+
+    print(line)
+    return True
+
+
+def processStatus(line):
+    if line.startswith("exit"):
+        print("Process " + processId + " is exited.")
+        return False
+    return True
+
+
+pc.processCommand(processId, executeCommand, processOut, processStatus)
+
+

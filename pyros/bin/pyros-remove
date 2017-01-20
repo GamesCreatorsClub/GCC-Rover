@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import pyroscommon as pc
+
+
+args = pc.processCommonHostSwitches(pc.args)
+
+def help(rc):
+    print("usage: pyros [<host[:port]>] remove|rm <processId>")
+    print("")
+    print("    -h                    help message")
+    print("    <processId>           process id")
+    sys.exit(rc)
+
+if len(args) < 1:
+    help(1)
+
+if pc.help:
+    help(0)
+
+processId = args[0]
+
+
+def executeCommand(client):
+    client.publish("exec/" + processId, "remove")
+    return False
+
+
+def processOut(line):
+    return False
+
+
+def processStatus(line):
+    return False
+
+
+pc.processCommand(processId, executeCommand, processOut, processStatus)
+
+
