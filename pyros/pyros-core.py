@@ -10,6 +10,11 @@ import paho.mqtt.client as mqtt
 dir = os.getcwd()
 
 DEBUG = True
+host = "localhost"
+port = 1883
+timeout = 60
+
+scriptname = None
 
 processes = {}
 
@@ -17,6 +22,48 @@ print("Starting PyROS...")
 
 
 client = mqtt.Client("PyROS")
+
+def processCommonHostSwitches(args):
+    global help, timeout, host, port
+
+    scriptname = args[0]
+    del args[0]
+
+    while len(args) > 0 and args[0].startswith("-"):
+        if args[0] == "-t":
+            del args[0]
+            if len(args) == 0:
+                print("ERROR: -t option must be followed with a number.")
+            try:
+                timeout = int(args[0])
+                if timeout < 0:
+                    print("ERROR: -t option must be followed with a positive number.")
+                    sys.exit(1)
+            except:
+                print("ERROR: -t option must be followed with a number. '" +  args[0] + "' is not a number.")
+                sys.exit(1)
+        # elif args[0] == "-h":
+        #     help = True
+        del args[0]
+
+    if len(args) > 0:
+        hostSplit = args[0].split(":")
+        if len(hostSplit) == 1:
+            host = hostSplit[0]
+        elif len(hostSplit) == 2:
+            host = hostSplit[0]
+            try:
+                port = int(hostSplit[1])
+            except:
+                print("ERROR: Port must be a number. '" +  hostSplit[1] + "' is not a number.")
+                sys.exit(1)
+        else:
+            print("ERROR: Host and port should in host:port format not '" + args[0] + "'.")
+            sys.exit(1)
+        del args[0]
+
+    return args
+
 
 
 def makeProcessDir(id, isService):
@@ -368,7 +415,10 @@ def startupServices():
 client.on_connect = onConnect
 client.on_message = onMessage
 
-client.connect("localhost", 1883, 60)
+args = processCommonHostSwitches(sys.argv)
+
+print("    Connecting to " + str(host) + ":" + str(port) + " (timeout " + str(timeout) + ").")
+client.connect(host, port, timeout)
 
 
 print("Started PyROS.")

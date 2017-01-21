@@ -68,7 +68,7 @@ def expandArgs(args):
 
 
 def processCommonHostSwitches(args):
-    global help, timeout, host
+    global help, timeout, host, port
 
     while len(args) > 0 and args[0].startswith("-"):
         if args[0] == "-h":
@@ -141,7 +141,7 @@ def printOutCommand(command, processLine, header, footer):
     client.on_message = onMessage
 
     try:
-        client.connect(host, 1883, 60)
+        client.connect(host, port, 60)
 
         commandId = uniqueId + str(time.time())
 
@@ -209,7 +209,7 @@ def processCommand(processId, executeCommand, processOut, processStatus):
     client.on_message = onMessage
 
     try:
-        client.connect(host, 1883, 60)
+        client.connect(host, port, 60)
 
         commandId = uniqueId + str(time.time())
 
