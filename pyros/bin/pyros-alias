@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import sys
 import pyroscommon as pc
@@ -7,6 +7,7 @@ pc.loadAliases()
 
 delete = False
 help = False
+
 def processSwitches(args):
     global delete, help
 
@@ -23,7 +24,7 @@ def processSwitches(args):
 args = processSwitches(pc.args)
 
 
-def help(rc):
+def displayHelp(rc):
     print("usage: pyros alias [<options>] <alias> [<host-address>]")
     print("")
     print("    -h                    help message")
@@ -38,7 +39,8 @@ def help(rc):
     sys.exit(rc)
 
 if help:
-    help(0)
+    displayHelp(0)
+
 elif len(args) == 0:
     for alias in pc.aliases:
         print(alias + " = " + pc.aliases[alias])

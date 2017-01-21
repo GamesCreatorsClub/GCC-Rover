@@ -29,7 +29,8 @@ aliases = {}
 help = False
 timeout = 10
 connected = False;
-
+host = None
+port = 1883
 client = None
 
 def _aliasLine(t):
@@ -80,13 +81,27 @@ def processCommonHostSwitches(args):
                 timeout = int(args[0])
                 if timeout < 0:
                     print("ERROR: -t option must be followed with a positive number.")
+                    sys.exit(1)
             except:
                 print("ERROR: -t option must be followed with a number. '" +  args[0] + "' is not a number.")
+                sys.exit(1)
 
         del args[0]
 
     if len(args) > 0:
-        host = args[0]
+        hostSplit = args[0].split(":")
+        if len(hostSplit) == 1:
+            host = hostSplit[0]
+        elif len(hostSplit) == 2:
+            host = hostSplit[0]
+            try:
+                port = int(hostSplit[1])
+            except:
+                print("ERROR: Port must be a number. '" +  hostSplit[1] + "' is not a number.")
+                sys.exit(1)
+        else:
+            print("ERROR: Host and port should in host:port format not '" + args[0] + "'.")
+            sys.exit(1)
         del args[0]
 
     return args

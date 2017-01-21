@@ -103,7 +103,11 @@ def runProcess(processId):
         if DEBUG:
             print("Starting " + filename + " at dir " + subprocessDir)
 
-        process = subprocess.Popen(["python3", processId + ".py"], stdout=subprocess.PIPE, universal_newlines=True,
+        process = subprocess.Popen(["python3", "-u", processId + ".py"],
+                                   bufsize=0,
+                                   stdout=subprocess.PIPE,
+                                   shell=False,
+                                   universal_newlines=True,
                                    cwd=subprocessDir)
         outputStatus(processId, "started")
     except Exception as e:
@@ -114,7 +118,6 @@ def runProcess(processId):
     processes[processId]["process"] = process
 
     textStream = process.stdout
-
     process.poll()
     while process.returncode is None:
         line = textStream.readline()
