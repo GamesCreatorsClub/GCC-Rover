@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 import subprocess
 import threading
 
@@ -86,6 +87,14 @@ def processFilename(processId):
     else:
         return None
 
+def _output(processId, line):
+    client.publish("exec/" + processId + "/out", line)
+    if DEBUG:
+        if line.endswith("\n"):
+            print("exec/" + processId + "/out > " + line, end="")
+        else:
+            print("exec/" + processId + "/out > " + line)
+
 def output(processId, line):
     if "logs" not in processes[processId]:
         logs = []
@@ -97,13 +106,7 @@ def output(processId, line):
         del logs[0]
 
     logs.append(line)
-
-    client.publish("exec/" + processId + "/out", line)
-    if DEBUG:
-        if line.endswith("\n"):
-            print("exec/" + processId + "/out > " + line, end="")
-        else:
-            print("exec/" + processId + "/out > " + line)
+    _output(processId, line)
 
 
 def outputStatus(processId, status):
@@ -163,6 +166,8 @@ def runProcess(processId):
         return
 
     processes[processId]["process"] = process
+    if "old" in processes[processId]:
+        del processes[processId]["old"]
 
     textStream = process.stdout
     process.poll()
@@ -170,6 +175,7 @@ def runProcess(processId):
         line = textStream.readline()
         output(processId, line)
         process.poll()
+
 
     for line in textStream.readlines():
         if len(len) > 0:
@@ -202,9 +208,7 @@ def getProcessProcess(processId):
 
 def storeCode(processId, payload, isService):
     if processId in processes:
-        oldProcess = getProcessProcess(processId)
-        if oldProcess is not None:
-            oldProcess.terminate()
+        processes[processId]["old"] = True
 
     makeProcessDir(processId, isService)
 
@@ -213,7 +217,10 @@ def storeCode(processId, payload, isService):
     else:
         type = "agent"
 
-    processes[processId] = { "type" : type }
+    if processId not in processes:
+        processes[processId] = {}
+
+    processes[processId]["type"] = type
 
     filename = processFilename(processId)
 
@@ -235,6 +242,10 @@ def stopProcess(processId):
         if process.returncode is None:
             process.kill()
             output(processId, "PyROS: killed " + getProcessTypeName(processId))
+
+        time.sleep(0.01)
+        # Just in case - we really need that process killed!!!
+        subprocess.call(["/usr/bin/pkill", "-9", "python3 -u " + processId + ".py"])
 
 
 def restartProcess(processId):
@@ -280,7 +291,7 @@ def readLog(processId):
             logs = []
 
         for log in logs:
-            output(processId, log)
+            _output(processId, log)
 
 def psComamnd(commandId, args):
     for processId in processes:
@@ -290,6 +301,8 @@ def psComamnd(commandId, args):
             if returnCode is None:
                 status = "running"
                 returnCode = "-"
+                if "old" in processes[processId] and processes[processId]["old"]:
+                    status = "running-old"
             else:
                 status = "stopped"
                 returnCode = str(returnCode)
@@ -367,37 +380,43 @@ def processSystemCommand(commandId, commandLine):
 
 
 def onConnect(client, data, rc):
-    if rc == 0:
-        client.subscribe("system/+", 0)
-        client.subscribe("exec/+", 0)
-        client.subscribe("exec/+/agent", 0)
-        client.subscribe("exec/+/service", 0)
-    else:
-        print("ERROR: Connection returned error result: " + str(rc))
-        sys.exit(rc)
+    try:
+        if rc == 0:
+            client.subscribe("system/+", 0)
+            client.subscribe("exec/+", 0)
+            client.subscribe("exec/+/agent", 0)
+            client.subscribe("exec/+/service", 0)
+        else:
+            print("ERROR: Connection returned error result: " + str(rc))
+            sys.exit(rc)
+    except Exception as e:
+        print("ERROR: Got exception on connect; " + str(e))
 
 
 def onMessage(client, data, msg):
-    payload = str(msg.payload, 'utf-8')
-    topic = msg.topic
+    try:
+        payload = str(msg.payload, 'utf-8')
+        topic = msg.topic
 
-    if topic.startswith("exec/") and topic.endswith("/agent"):
-        processId = topic[5:len(topic) - 6]
-        storeCode(processId, payload, False)
-    elif topic.startswith("exec/") and topic.endswith("/service"):
-        processId = topic[5:len(topic) - 8]
-        storeCode(processId, payload, True)
-    elif topic.startswith("exec/"):
-        processId = topic[5:]
-        if processId in processes:
-            processCommand(processId, payload)
+        if topic.startswith("exec/") and topic.endswith("/agent"):
+            processId = topic[5:len(topic) - 6]
+            storeCode(processId, payload, False)
+        elif topic.startswith("exec/") and topic.endswith("/service"):
+            processId = topic[5:len(topic) - 8]
+            storeCode(processId, payload, True)
+        elif topic.startswith("exec/"):
+            processId = topic[5:]
+            if processId in processes:
+                processCommand(processId, payload)
+            else:
+                output(processId, "No such process '" + processId + "'")
+        elif topic.startswith("system/"):
+            commandId = topic[7:]
+            processSystemCommand(commandId, payload)
         else:
-            output(processId, "No such process '" + processId + "'")
-    elif topic.startswith("system/"):
-        commandId = topic[7:]
-        processSystemCommand(commandId, payload)
-    else:
-        print("ERROR: No such topic " + topic)
+            print("ERROR: No such topic " + topic)
+    except Exception as e:
+        print("ERROR: Got exception on message; " + str(e))
 
 
 def startupServices():
@@ -427,4 +446,9 @@ startupServices()
 
 
 while True:
-    client.loop(0.05)
+    try:
+        for i in range(0, 10):
+            time.sleep(0.0015)
+            client.loop(0.0005)
+    except Exception as e:
+        print("ERROR: Got exception in main loop; " + str(e))
