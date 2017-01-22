@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 import pygame, sys, threading, os, random
-import agent
+import pyros.agent as agent
 
 pygame.init()
 bigFont = pygame.font.SysFont("apple casual", 32)
@@ -11,7 +11,7 @@ client = mqtt.Client("DriveController#" + str(random.randint(1000, 9999)))
 
 roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "gcc-wifi-ap", "gcc-wifi-ap"]
 roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
-selectedRover = 1
+selectedRover = 2
 
 speeds = [50, 75, 100, 150, 200, 250, 300]
 selectedSpeed = 1
@@ -21,7 +21,7 @@ def onConnect(client, data, rc):
     global connected
     if rc == 0:
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");
-        agent.init(client, "DriveAgent.py")
+        agent.init(client, "drive-agent.py")
         connected = True
     else:
         print("DriveController: Connection returned error result: " + str(rc))
@@ -30,8 +30,8 @@ def onConnect(client, data, rc):
 def onMessage(client, data, msg):
     global exit
 
-    if agent.process(msg):
-        if agent.returncode("DriveAgent") != None:
+    if agent.process(client, msg):
+        if agent.returncode("drive-agent") != None:
             exit = True
     else:
         print("DriveController: Wrong topic '" + msg.topic + "'")
