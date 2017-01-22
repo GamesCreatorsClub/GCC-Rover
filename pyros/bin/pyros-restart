@@ -33,10 +33,13 @@ hadStart = False
 
 def executeCommand(client):
     client.publish("exec/" + processId, "restart")
+    if tail:
+        pc.timeout = 0
+
     return True
 
 
-def processOut(line):
+def processOut(line, processId):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
     if not tail:
@@ -45,15 +48,15 @@ def processOut(line):
     return True
 
 
-def processStatus(line):
+def processStatus(line, processId):
     global hadStart
 
     if line.startswith("started"):
         hadStart = True
         if tail:
-            print("Process " + processId + " is started. Showing output:")
+            print("Process " + processId + " is restarted. Showing output:")
         else:
-            print("Process " + processId + " is started.")
+            print("Process " + processId + " is restarted.")
         return tail
     elif line.startswith("exit"):
         print("Process " + processId + " is exited.")

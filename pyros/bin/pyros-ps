@@ -17,6 +17,11 @@ if pc.help:
     help(0)
 
 
+def executeCommand(client, commandId):
+    client.publish("system/" + commandId, "ps")
+    return True
+
+
 def processLine(line):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
@@ -26,11 +31,11 @@ def processLine(line):
         try:
             l = int(split[4])
             if l >= 2 * 1024 * 1024 * 1024:
-                ll = str(round(l / (1024.0 * 1024.0 * 1024.0), 3)) + "GB"
+                ll = str(round(l / (1024.0 * 1024.0 * 1024.0), 2)) + "GB"
             elif l > 2 * 1024 * 1024:
-                ll = str(round(l / (1024.0 * 1024.0), 3)) + "MB"
+                ll = str(round(l / (1024.0 * 1024.0), 2)) + "MB"
             elif l > 2 * 1024:
-                ll = str(round(l / 1024.0, 3)) + "KB"
+                ll = str(round(l / 1024.0, 2)) + "KB"
             else:
                 ll = str(l) + "B"
             split[4] = ll
@@ -45,10 +50,10 @@ def processLine(line):
             pass
 
     # print("split=" + str(split))
-    print("{0!s:<15} {1:<10} {2:<10} {3:<7} {4:<10} {5:<15}".format(*split))
+    print("{0!s:<15} {1:<10} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
 
-pc.printOutCommand("ps", processLine,
-                   "{0:<15} {1:<10} {2:<10} {3:<7} {4:<10} {5:<15}".format(
+pc.printOutCommand(executeCommand, processLine,
+                   "{0:<15} {1:<10} {2:<15} {3:<7} {4:<10} {5:<15}".format(
                        "name", "type", "status", "rc", "len", "date"), "")
 
 

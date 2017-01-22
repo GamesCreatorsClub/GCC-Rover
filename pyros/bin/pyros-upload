@@ -47,11 +47,11 @@ def executeCommand(client):
 
     return True
 
-def processOut(line):
+def processOut(line, processId):
     return False
 
 
-def processStatus(line):
+def processStatus(line, processId):
     if line.startswith("stored"):
         return False
     return True

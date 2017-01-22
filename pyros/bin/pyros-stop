@@ -28,11 +28,11 @@ def executeCommand(client):
     return False
 
 
-def processOut(line):
+def processOut(line, processId):
     return False
 
 
-def processStatus(line):
+def processStatus(line, processId):
     return False
 
 

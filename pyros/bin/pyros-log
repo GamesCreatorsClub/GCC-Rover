@@ -4,7 +4,7 @@ import os
 import sys
 import pyroscommon as pc
 
-
+everything = False
 all = False
 
 args = pc.processCommonHostSwitches(pc.args)
@@ -15,6 +15,9 @@ def help(rc):
     print("    -h                    help message")
     print("    -a                    reprint last 1000 log lines")
     print("    <processId>           process id")
+    print("")
+    print("Argument <processId> can be '%' which will mean all output of all processes. ")
+    print("It cannot be used in conjunction with -a option.")
     sys.exit(rc)
 
 if len(args) < 1:
@@ -29,26 +32,39 @@ if args[0] == "-a":
 
 processId = args[0]
 
+if processId == "%":
+    if all:
+        print("ERROR: Cannot use option -a with '%' (everything).")
+        sys.exit(1)
+    processId = "+"
+    everything = True
 
 def executeCommand(client):
-    print("Showing process " + processId + " output:")
-    if all:
-        client.publish("exec/" + processId, "log")
+    if everything:
+        print("Showing all processes output:")
+    else:
+        print("Showing process " + processId + " output:")
+        if all:
+            client.publish("exec/" + processId, "log")
+    pc.timeout = 0
     return True
 
 
-def processOut(line):
+def processOut(line, processId):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
 
-    print(line)
+    if everything:
+        print(processId + ": " + line)
+    else:
+        print(line)
     return True
 
 
-def processStatus(line):
+def processStatus(line, processId):
     if line.startswith("exit"):
-        print("Process " + processId + " is exited.")
-        return False
+        print("** Process " + processId + " is exited.")
+        return everything
     return True
 
 

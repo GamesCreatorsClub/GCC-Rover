@@ -32,10 +32,13 @@ processId = args[0]
 
 def executeCommand(client):
     client.publish("exec/" + processId, "start")
+    if tail:
+        pc.timeout = 0
+
     return True
 
 
-def processOut(line):
+def processOut(line, processId):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
     if not tail:
@@ -44,7 +47,7 @@ def processOut(line):
     return True
 
 
-def processStatus(line):
+def processStatus(line, processId):
     if line.startswith("started"):
         if tail:
             print("Process " + processId + " is started. Showing output:")
@@ -55,7 +58,6 @@ def processStatus(line):
         print("Process " + processId + " is exited.")
         return False
     return True
-
 
 pc.processCommand(processId, executeCommand, processOut, processStatus)
 
