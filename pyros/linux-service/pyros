@@ -1,18 +1,18 @@
 #!/bin/sh
 #
-# description: Starts and stops the RoverController daemon
+# description: Starts and stops the PyROS daemon
 #
 ### BEGIN INIT INFO
-# Provides: RoverController
+# Provides: PyROS
 # Required-Start: $network $syslog $remote_fs mosquitto ssh bluetooth rc.local
 # Required-Stop: $network
 # Default-Start: 2 3 5
 # Default-Stop: 0 1 6
-# Short-Description: RoverController daemon
-# Description: Start or stop the RoverController daemon
+# Short-Description: PyROS daemon
+# Description: Start or stop the PyROS daemon
 ### END INIT INFO
 
-BINARY=/home/pi/RoverController/RoverController.py
+BINARY=/home/pi/pyros/pyros-core.py
 test -x $BINARY || { echo "$BINARY not avaible";
         if [ "$1" = "stop" ]; then exit 0;
         else exit 5; fi; }
@@ -21,13 +21,17 @@ RETVAL=0
 
 case "$1" in
   start)
-        echo -n "Starting RoverController daemon... "
-        cd /home/pi/RoverController
-        sudo -u pi python3 -u 2>&1 >RoverController.log $BINARY &         
+        echo -n "Starting PyROS daemon... "
+        mkdir -p /home/pi/pyros/code
+        mkdir -p /home/pi/pyros/logs
+        chown pi /home/pi/pyros/code
+        chown pi /home/pi/pyros/logs
+        cd /home/pi/pyros/code
+        sudo -u pi python3 -u 2>&1 >/home/pi/pyros/logs/pyros.log $BINARY &
         echo "Done."
         ;;
   stop)
-        echo -n "Shutting down RoverController daemon... "
+        echo -n "Shutting down PyROS daemon... "
         pkill -9 -f "python3 -u $BINARY"
         echo "Done."
         ;;
@@ -38,9 +42,9 @@ case "$1" in
   status)
         if pgrep -f "python3 -u $BINARY" >/dev/null 2>&1
         then
-          echo "RoverController is running."
+          echo "PyROS is running."
         else
-          echo "RoverController is not running."
+          echo "PyROS is not running."
         fi
         ;;
   *)
