@@ -3,71 +3,36 @@ import sys
 import paho.mqtt.client as mqtt
 import subprocess
 import time
+import RPi.GPIO as GPIO
 
 #
-# shutdown service
+# lights service
 #
-# This service is responsible shutting down Linux.
+# This service is responsible switching LEDs on and off.
 #
 
-storageMap = {}
-wheelMap = {}
-wheelCalibrationMap = {}
+CAMERA_LIGHT_GPIO = 16
 
 lightsState = False
 
 
 DEBUG = False
 
-client = mqtt.Client("shutdown-service")
+client = mqtt.Client("lights-service")
 
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 
 def setLights(state):
     global lightsState
 
-    # lightsState = state
-    # GPIO.output(CAMERA_LIGHT_GPIO, state)
-    pass
-
-
-def prepareToShutdown():
-    previousLightsState = lightsState
-    seconds = 0.0
-    interval = 0.3
-    state = True
-    while seconds <= 6.0:
-    # while seconds <= 6.0 and GPIO.input(SWITCH_GPIO) == 0:
-        time.sleep(interval)
-        seconds = seconds + interval
-        setLights(state)
-        state = not state
-
-    # if GPIO.input(SWITCH_GPIO) == 0:
-    #     doShutdown()
-    # else:
-    #     setLights(previousLightsState)
-    doShutdown()
-
-
-def doShutdown():
-    print("Shutting down now!")
-    subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
-
-
-def handleSystemMessages(topic, payload):
-    print("Got system message on " + topic + ": " + payload)
-    if topic == "shutdown" and payload == "secret_message":
-        doShutdown()
-
+    lightsState = state
+    GPIO.output(CAMERA_LIGHT_GPIO, state)
 
 def onConnect(client, data, rc):
     try:
         if rc == 0:
-            client.subscribe("servo/+", 0)
-            client.subscribe("wheel/+/deg", 0)
-            client.subscribe("wheel/+/speed", 0)
-            client.subscribe("storage/write/#", 0)
-            client.subscribe("storage/read", 0)
+            client.subscribe("lights/camera", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
@@ -82,8 +47,15 @@ def onMessage(client, data, msg):
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
-        if topic.startswith("system/"):
-            handleSystemMessages(topic[7:], payload)
+        print("Got " + payload + " on " +topic)
+
+        if topic.startswith("lights/"):
+            topicsplit = topic.split("/")
+            if topicsplit[1] == "camera":
+                if "on" == payload or "ON" == payload or "1" == payload:
+                    setLights(True)
+                else:
+                    setLights(False)
 
     except Exception as e:
         print("ERROR: Got exception on message; " + str(e))
@@ -93,17 +65,19 @@ def onMessage(client, data, msg):
 # Initialisation
 #
 
-print("Starting shutdown-service...")
+print("Starting lights service...")
 
 client.on_connect = onConnect
 client.on_message = onMessage
 
 client.connect("localhost", 1883, 60)
 
-print("Started shutdown-service.")
+print("Started lights service.")
 
 while True:
     try:
-        client.loop(0.5)
+        for i in range(0, 10):
+            time.sleep(0.045)
+            client.loop(0.005)
     except Exception as e:
         print("ERROR: Got exception in main loop; " + str(e))
