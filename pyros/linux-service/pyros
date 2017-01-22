@@ -4,7 +4,7 @@
 #
 ### BEGIN INIT INFO
 # Provides: PyROS
-# Required-Start: $network $syslog $remote_fs mosquitto ssh bluetooth rc.local
+# Required-Start: $network $syslog mosquitto sshd
 # Required-Stop: $network
 # Default-Start: 2 3 5
 # Default-Stop: 0 1 6

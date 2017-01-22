@@ -47,7 +47,7 @@ def onMessage(client, data, msg):
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
-        print("Got " + payload + " on " +topic)
+        # print("Got " + payload + " on " +topic)
 
         if topic.startswith("lights/"):
             topicsplit = topic.split("/")

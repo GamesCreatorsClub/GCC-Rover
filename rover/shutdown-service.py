@@ -27,10 +27,8 @@ def setLights(state):
 
     if state:
         client.publish("lights/camera", "on")
-        print("Switched lights on")
     else:
         client.publish("lights/camera", "off")
-        print("Switched lights off")
     client.loop(0.005)
 
 
@@ -66,8 +64,7 @@ def prepareToShutdown():
 def doShutdown():
     print("Shutting down now!")
     try:
-        # subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
-        pass
+        subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
     except Exception as e:
         print("ERROR: Failed to shutdown; " + str(e))
 
