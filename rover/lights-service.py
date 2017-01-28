@@ -1,7 +1,6 @@
 
 import sys
 import paho.mqtt.client as mqtt
-import subprocess
 import time
 import RPi.GPIO as GPIO
 
@@ -23,26 +22,26 @@ client = mqtt.Client("lights-service")
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 
+
 def setLights(state):
     global lightsState
 
     lightsState = state
     GPIO.output(CAMERA_LIGHT_GPIO, state)
 
-def onConnect(client, data, rc):
+
+def onConnect(mqttClient, data, rc):
     try:
         if rc == 0:
-            client.subscribe("lights/camera", 0)
+            mqttClient.subscribe("lights/camera", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
-    except Exception as e:
-        print("ERROR: Got exception on connect; " + str(e))
+    except Exception as ex:
+        print("ERROR: Got exception on connect; " + str(ex))
 
 
-def onMessage(client, data, msg):
-    global dist
-
+def onMessage(mqttClient, data, msg):
     try:
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
@@ -57,8 +56,8 @@ def onMessage(client, data, msg):
                 else:
                     setLights(False)
 
-    except Exception as e:
-        print("ERROR: Got exception on message; " + str(e))
+    except Exception as ex:
+        print("ERROR: Got exception on message; " + str(ex))
 
 
 #

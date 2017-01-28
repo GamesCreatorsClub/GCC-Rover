@@ -10,8 +10,8 @@ if len(pc.args) == 0:
 
 localCommands = ["alias", "help"]
 commandAlias = {
-    "kill" : "stop",
-    "rm" : "remove"
+    "kill": "stop",
+    "rm": "remove"
 }
 
 host = None
@@ -19,13 +19,13 @@ host = None
 pc.loadAliases()
 
 
-def commandExists(command):
-    if os.path.exists(pc.binDir + "/pyros-" + command):
-        return command
-    if command in commandAlias:
-        command = commandAlias[command]
-        if os.path.exists(pc.binDir + "/pyros-" + command):
-            return command
+def commandExists(cmd):
+    if os.path.exists(pc.binDir + "/pyros-" + cmd):
+        return cmd
+    if cmd in commandAlias:
+        cmd = commandAlias[cmd]
+        if os.path.exists(pc.binDir + "/pyros-" + cmd):
+            return cmd
     return None
 
 args = pc.args
@@ -61,7 +61,7 @@ if command is None:
     del args[0]
 
 if command is not None:
-    if (len(args) > 0 and (args[0] == "-h")):
+    if len(args) > 0 and (args[0] == "-h"):
         fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
         sys.exit(os.system(fullCommand))
 
@@ -79,5 +79,5 @@ if command is not None:
     fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
     sys.exit(os.system(fullCommand))
 
-print("Unknown command " + command)
+print("Unknown command " + str(command))
 sys.exit(1)

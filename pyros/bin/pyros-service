@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+
+import sys
+import pyroscommon as pc
+
+
+tail = False
+
+args = pc.processCommonHostSwitches(pc.args)
+
+
+def printHelp(rc):
+    print("usage: pyros [<host[:port]>] service <processId> <make|unmake|enable|disable>")
+    print("")
+    print("    -h                    help message")
+    print("    <processId>           process id")
+    print("    make                  promote process to a service.")
+    print("    unmake                remove service attribute from a process.")
+    print("    enable                enable auto start of the service.")
+    print("    disable               disable auto start of the service.")
+    print("")
+    print("A service is a process that is automatically started at the start of PyROS.")
+    print("Also, if service's process stops, PyROS is responsible to restart it. (*)")
+    print("")
+    print("(*) not yet implemented.")
+    sys.exit(rc)
+
+if len(args) < 1:
+    printHelp(1)
+
+if pc.hasHelpSwitch:
+    printHelp(0)
+
+processId = args[0]
+
+if len(args) < 2:
+    print("ERROR: missing command")
+    print("")
+    printHelp(1)
+
+command = args[1]
+if command != "make" and command != "unmake" and command != "enable" and command != "disable":
+    print("ERROR: unknown command")
+    print("")
+    printHelp(1)
+
+
+def executeCommand(client):
+    if command == "make":
+        client.publish("exec/" + processId, "make-service")
+    elif command == "unmake":
+        client.publish("exec/" + processId, "unmake-service")
+    elif command == "enable":
+        client.publish("exec/" + processId, "enable-service")
+    elif command == "disable":
+        client.publish("exec/" + processId, "disable-service")
+
+    if tail:
+        pc.timeout = 0
+
+    return True
+
+
+def processOut(line, pid):
+    if line.endswith("\n"):
+        line = line[:len(line) - 1]
+    if not tail:
+        return False
+    print(line)
+    return True
+
+
+def processStatus(line, pid):
+    if line.startswith("PyROS"):
+        print(line)
+        return False
+    return True
+
+pc.processCommand(processId, executeCommand, processOut, processStatus)

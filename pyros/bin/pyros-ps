@@ -7,14 +7,15 @@ import pyroscommon as pc
 
 args = pc.processCommonHostSwitches(pc.args)
 
-def help(rc):
+
+def printHelp(rc):
     print("usage: pyros [<host[:port]] ps [<options>]")
     print("")
     print("    -h                    help message")
     sys.exit(rc)
 
-if pc.help:
-    help(0)
+if pc.hasHelpSwitch:
+    printHelp(0)
 
 
 def executeCommand(client, commandId):
@@ -50,10 +51,8 @@ def processLine(line):
             pass
 
     # print("split=" + str(split))
-    print("{0!s:<15} {1:<10} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
+    print("{0!s:<15} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
 
 pc.printOutCommand(executeCommand, processLine,
-                   "{0:<15} {1:<10} {2:<15} {3:<7} {4:<10} {5:<15}".format(
+                   "{0:<15} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(
                        "name", "type", "status", "rc", "len", "date"), "")
-
-

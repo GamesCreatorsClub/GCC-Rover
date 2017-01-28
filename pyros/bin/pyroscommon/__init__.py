@@ -28,15 +28,12 @@ del args[0]
 defaultAlias = None
 aliases = {}
 
-help = False
+hasHelpSwitch = False
 timeout = None
-connected = False;
+connected = False
 host = None
 port = 1883
 client = None
-
-def _aliasLine(t):
-    return t[0] + "=" + t[1]
 
 
 def loadAliases():
@@ -55,18 +52,22 @@ def loadAliases():
 
 loadAliases()
 
+
 def saveAliases():
+    def _aliasLine(t):
+        return t[0] + "=" + t[1]
+
     aliasStr = "\n".join(list(map(_aliasLine, list(aliases.items())))) + "\n"
     #    print(aliasStr)
     with open(aliasFile, 'wt') as f:
         f.write(aliasStr)
 
 
-def expandArgs(args):
-    if len(args) == 0:
+def expandArgs(arguments):
+    if len(arguments) == 0:
         return ""
 
-    return " " + " ".join(args)
+    return " " + " ".join(arguments)
 
 
 def getTimeout():
@@ -92,18 +93,18 @@ def _processTOption(i):
         sys.exit(1)
 
 
-def processCommonHostSwitches(args):
-    global help, host, port
+def processCommonHostSwitches(arguments):
+    global hasHelpSwitch, host, port
 
-    while len(args) > 0 and args[0].startswith("-"):
-        if args[0] == "-h":
-            help = True
-        elif args[0] == "-t":
+    while len(arguments) > 0 and arguments[0].startswith("-"):
+        if arguments[0] == "-h":
+            hasHelpSwitch = True
+        elif arguments[0] == "-t":
             _processTOption(0)
-        del args[0]
+        del arguments[0]
 
-    if len(args) > 0:
-        hostSplit = args[0].split(":")
+    if len(arguments) > 0:
+        hostSplit = arguments[0].split(":")
         if len(hostSplit) == 1:
             host = hostSplit[0]
         elif len(hostSplit) == 2:
@@ -111,55 +112,58 @@ def processCommonHostSwitches(args):
             try:
                 port = int(hostSplit[1])
             except:
-                print("ERROR: Port must be a number. '" +  hostSplit[1] + "' is not a number.")
+                print("ERROR: Port must be a number. '" + hostSplit[1] + "' is not a number.")
                 sys.exit(1)
         else:
-            print("ERROR: Host and port should in host:port format not '" + args[0] + "'.")
+            print("ERROR: Host and port should in host:port format not '" + arguments[0] + "'.")
             sys.exit(1)
-        del args[0]
+        del arguments[0]
 
         if host in aliases:
             host = aliases[host]
 
     i = 0
-    while i < len(args) and args[i].startswith("-"):
-        if args[i] == "-t":
+    while i < len(arguments) and arguments[i].startswith("-"):
+        if arguments[i] == "-t":
             _processTOption(i)
-            del args[i]
+            del arguments[i]
         i = +1
 
-    return args
+    return arguments
 
 
 def printOutCommand(executeCommand, processLine, header, footer):
-    global connected
+    global connected, client
+
     client = mqtt.Client("PyROS." + uniqueId)
 
-    connected = False;
+    connected = False
+    afterCommand = False
 
-    def onConnect(client, data, rc):
+    def onConnect(c, data, rc):
         global connected
 
         if rc == 0:
-            client.subscribe("system/+/out", 0)
+            c.subscribe("system/+/out", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
 
         connected = True
 
-    def onMessage(client, data, msg):
+    def onMessage(c, data, msg):
         global connected, countdown
 
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
-        if topic.endswith("/out"):
-            if payload != "":
-                processLine(payload)
-            else:
-                connected = False
-        countdown = getTimeout()
+        if afterCommand:
+            if topic.endswith("/out"):
+                if payload != "":
+                    processLine(payload)
+                else:
+                    connected = False
+            countdown = getTimeout()
 
     client.on_connect = onConnect
     client.on_message = onMessage
@@ -171,7 +175,6 @@ def printOutCommand(executeCommand, processLine, header, footer):
             print("ERROR: failed to connect to " + str(host) + ":" + str(port) + "; " + str(e))
             sys.exit(1)
 
-
         commandId = uniqueId + str(time.time())
 
         countdown = getTimeout()
@@ -180,7 +183,7 @@ def printOutCommand(executeCommand, processLine, header, footer):
             client.loop(1)
             countdown -= 1
             if countdown == 0:
-                print("ERROR: reached timeout waiting to connect to " + host)
+                print("ERROR: reached timeout waiting to connect to " + str(host))
                 sys.exit(1)
             elif countdown < 0:
                 countdown = 0
@@ -189,6 +192,7 @@ def printOutCommand(executeCommand, processLine, header, footer):
             print(header)
 
         connected = executeCommand(client, commandId)
+        afterCommand = True
 
         countdown = getTimeout()
 
@@ -208,38 +212,43 @@ def printOutCommand(executeCommand, processLine, header, footer):
 
 
 def processCommand(processId, executeCommand, processOut, processStatus):
-    global connected, countdown
+    global connected, countdown, client
+
     client = mqtt.Client("PyROS." + uniqueId)
 
-    connected = False;
+    connected = False
+    afterCommand = False
 
-    def onConnect(client, data, rc):
+    def onConnect(c, data, rc):
         global connected
 
         if rc == 0:
-            client.subscribe("exec/" + processId + "/out", 0)
-            client.subscribe("exec/" + processId + "/status", 0)
+            c.subscribe("exec/" + processId + "/out", 0)
+            c.subscribe("exec/" + processId + "/status", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
 
         connected = True
 
-    def onMessage(client, data, msg):
+    def onMessage(c, data, msg):
         global connected, countdown
 
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
-        if topic.startswith("exec/"):
-            if topic.endswith("/out"):
-                processId = topic[5:len(topic)-4]
-                connected = processOut(payload, processId)
-            elif topic.endswith("/status"):
-                processId = topic[5:len(topic)-7]
-                connected = processStatus(payload, processId)
+        if afterCommand:
+            if topic.startswith("exec/"):
+                if topic.endswith("/out"):
+                    pid = topic[5:len(topic)-4]
+                    connected = processOut(payload, pid)
+                elif topic.endswith("/status"):
+                    pid = topic[5:len(topic)-7]
+                    connected = processStatus(payload, pid)
 
-        countdown = getTimeout()
+            countdown = getTimeout()
+        else:
+            print("Before command: " + payload)
 
     client.on_connect = onConnect
     client.on_message = onMessage
@@ -255,12 +264,13 @@ def processCommand(processId, executeCommand, processOut, processStatus):
                 client.loop(0.005)
             countdown -= 1
             if countdown == 0:
-                print("ERROR: reached timeout waiting to connect to " + host)
+                print("ERROR: reached timeout waiting to connect to " + str(host))
                 sys.exit(1)
             elif countdown < 0:
                 countdown = 0
 
-        connected =  executeCommand(client)
+        connected = executeCommand(client)
+        afterCommand = True
 
         countdown = getTimeout()
 

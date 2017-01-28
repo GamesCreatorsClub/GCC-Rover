@@ -6,19 +6,20 @@ import pyroscommon as pc
 pc.loadAliases()
 
 delete = False
-help = False
+hasHelpSwitch = False
 
-def processSwitches(args):
-    global delete, help
 
-    while len(args) > 0 and args[0].startswith("-"):
-        if args[0] == "-d":
+def processSwitches(arguments):
+    global delete, hasHelpSwitch
+
+    while len(arguments) > 0 and arguments[0].startswith("-"):
+        if arguments[0] == "-d":
             delete = True
-        elif args[0] == "-h":
-            help = True
-        del args[0]
+        elif arguments[0] == "-h":
+            helpSwitch = True
+        del arguments[0]
 
-    return args
+    return arguments
 
 
 args = processSwitches(pc.args)
@@ -38,7 +39,7 @@ def displayHelp(rc):
     print("If both <alias> and <host-address> are supplied then alias is set.")
     sys.exit(rc)
 
-if help:
+if hasHelpSwitch:
     displayHelp(0)
 
 elif len(args) == 0:

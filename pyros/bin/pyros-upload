@@ -4,33 +4,35 @@ import os
 import sys
 import pyroscommon as pc
 
+service = False
 
 args = pc.processCommonHostSwitches(pc.args)
 
-def help(rc):
-    print("usage: pyros [<host[:port]>] prepare <service|agent> <processId> <file>")
+
+def printHelp(rc):
+    print("usage: pyros [<host[:port]>] upload [-s|--service] <processId> <file>")
     print("")
     print("    -h                    help message")
-    print("    <service|agent>       uploaded code is supposed to be service or agent.")
+    print("    -s|--service          uploaded code is supposed to be service.")
     print("    <processId>           id process is going to be known from this point on.")
     print("    <file>                python file name to be uploaded.")
     sys.exit(rc)
 
-if len(args) < 3:
-    help(1)
 
-if pc.help:
-    help(0)
+if len(args) < 2:
+    print("Not enought arguments. Got only " + str(len(args)) + ".")
+    print(str(args))
+    printHelp(1)
 
-type = args[0]
+if pc.hasHelpSwitch:
+    printHelp(0)
 
-processId = args[1]
+if args[0] == "-s" or args[0] == "--service":
+    service = True
 
-filename = args[2]
+processId = args[0]
 
-if type != "agent" and type != "service":
-    print("Only supported types are 'agent' and 'service'.")
-    sys.exit(1)
+filename = args[1]
 
 
 if not os.path.exists(filename):
@@ -43,19 +45,23 @@ def executeCommand(client):
     fileContent = file.read()
     file.close()
 
-    client.publish("exec/" + processId + "/" + type, fileContent)
+    client.publish("exec/" + processId + "/process", fileContent)
+
+    if service:
+        client.publish("exec/" + processId, "make-service")
+        client.publish("exec/" + processId, "enable-service")
 
     return True
 
-def processOut(line, processId):
+
+def processOut(line, pId):
     return False
 
 
-def processStatus(line, processId):
+def processStatus(line, pId):
     if line.startswith("stored"):
         return False
     return True
 
+
 pc.processCommand(processId, executeCommand, processOut, processStatus)
-
-

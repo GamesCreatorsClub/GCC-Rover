@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import pyroscommon as pc
 
 
 args = pc.processCommonHostSwitches(pc.args)
 
-def help(rc):
+
+def printHelp(rc):
     print("usage: pyros [<host[:port]>] stop|kill <processId>")
     print("")
     print("    -h                    help message")
@@ -15,10 +15,10 @@ def help(rc):
     sys.exit(rc)
 
 if len(args) < 1:
-    help(1)
+    printHelp(1)
 
-if pc.help:
-    help(0)
+if pc.hasHelpSwitch:
+    printHelp(0)
 
 processId = args[0]
 
@@ -28,14 +28,12 @@ def executeCommand(client):
     return False
 
 
-def processOut(line, processId):
+def processOut(line, pid):
     return False
 
 
-def processStatus(line, processId):
+def processStatus(line, pid):
     return False
 
 
 pc.processCommand(processId, executeCommand, processOut, processStatus)
-
-

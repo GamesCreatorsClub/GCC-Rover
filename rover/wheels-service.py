@@ -29,6 +29,7 @@ STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
 
 SERVO_REGEX = re.compile("servo/(\d+)")
 
+
 def initWheel(wheelName, motorServo, steerServo):
     wheelMap[wheelName] = {
         "deg": 0,
@@ -103,7 +104,7 @@ def moveServo(servoid, angle):
     f.close()
 
 
-def handleWheel(client, topic, payload):
+def handleWheel(mqttClient, topic, payload):
     # wheel/<name>/<deg|speed>
 
     topicsplit = topic.split("/")
@@ -115,7 +116,7 @@ def handleWheel(client, topic, payload):
         wheelCal = wheelCalibrationMap[wheelName]
 
         if DEBUG:
-            print("Handing action: " +  str(topicsplit) + ", " + str(payload))
+            print("Handing action: " + str(topicsplit) + ", " + str(payload))
 
         if command == "deg":
             if DEBUG:
@@ -126,7 +127,8 @@ def handleWheel(client, topic, payload):
                 print("  Setting wheel: " + wheelName + " speed to " + str(payload))
             handleSpeed(wheel, wheelCal["speed"], float(payload))
     else:
-        print("ERROR: no wheel with name " +  wheelName + " fonund.")
+        print("ERROR: no wheel with name " + wheelName + " fonund.")
+
 
 def handleDeg(wheel, wheelCal, degrees):
     if degrees >= 0:
@@ -157,8 +159,8 @@ def handleSpeed(wheel, wheelCal, speed):
 
 def interpolate(value, zerostr, maxstr):
     zero = float(zerostr)
-    max = float(maxstr)
-    return (max - zero) * value + zero
+    maxValue = float(maxstr)
+    return (maxValue - zero) * value + zero
 
 
 def driveWheel(wheelName):
@@ -190,7 +192,7 @@ def loadStorageMap():
         file.close()
 
         if DEBUG:
-            print("  Loaded " +  str(loaded))
+            print("  Loaded " + str(loaded))
 
         for key in loaded:
             storageMap[key] = loaded[key]
@@ -200,34 +202,34 @@ def loadStorageMap():
         print("  No storage map found @ " + STORAGE_MAP_FILE)
 
 
-def composeRecursively(map, prefix):
+def composeRecursively(m, prefix):
     res = ""
-    for key in map:
-        if type(map[key]) is dict:
+    for key in m:
+        if type(m[key]) is dict:
             newPrefix = prefix + key + "/"
-            res = res + composeRecursively(map[key], newPrefix)
+            res = res + composeRecursively(m[key], newPrefix)
         else:
-            res = res + prefix + key + "=" + str(map[key]) + "\n"
+            res = res + prefix + key + "=" + str(m[key]) + "\n"
 
-    return  res
+    return res
 
 
 def readoutStorage():
     client.publish("storage/values", composeRecursively(storageMap, ""))
 
 
-def writeStorage(topicsplit, value):
-    map = storageMap
-    for i in range(2, len(topicsplit) - 1):
-        key = topicsplit[i]
-        if key not in map:
-            map[key] = {}
-        map = map[key]
-    key = topicsplit[len(topicsplit) - 1]
-    map[key] = value
+def writeStorage(topicSplit, value):
+    m = storageMap
+    for i in range(2, len(topicSplit) - 1):
+        key = topicSplit[i]
+        if key not in m:
+            m[key] = {}
+        m = m[key]
+    key = topicSplit[len(topicSplit) - 1]
+    m[key] = value
 
     if DEBUG:
-        print("Storing to storage " + str(topicsplit) + " = " + value)
+        print("Storing to storage " + str(topicSplit) + " = " + value)
 
     file = open("rover-storage.config", 'wb')
 
@@ -238,31 +240,28 @@ def writeStorage(topicsplit, value):
 # --- Storage Map code end -------------------------
 
 
-def onConnect(client, data, rc):
+def onConnect(mqttClient, data, rc):
     try:
         if rc == 0:
-            client.subscribe("servo/+", 0)
-            client.subscribe("wheel/+/deg", 0)
-            client.subscribe("wheel/+/speed", 0)
-            client.subscribe("storage/write/#", 0)
-            client.subscribe("storage/read", 0)
+            mqttClient.subscribe("servo/+", 0)
+            mqttClient.subscribe("wheel/+/deg", 0)
+            mqttClient.subscribe("wheel/+/speed", 0)
+            mqttClient.subscribe("storage/write/#", 0)
+            mqttClient.subscribe("storage/read", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
-    except Exception as e:
-        print("ERROR: Got exception on connect; " + str(e))
+    except Exception as ex:
+        print("ERROR: Got exception on connect; " + str(ex))
 
 
-def onMessage(client, data, msg):
-    global dist
-
+def onMessage(mqttClient, data, msg):
     try:
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
-
-        if  topic.startswith("wheel/"):
-            handleWheel(client, topic, payload)
+        if topic.startswith("wheel/"):
+            handleWheel(mqttClient, topic, payload)
         else:
             servoMatch = SERVO_REGEX.match(msg.topic)
             if servoMatch:
@@ -278,8 +277,9 @@ def onMessage(client, data, msg):
                     readoutStorage()
                 elif topicsplit[1] == "write":
                     writeStorage(topicsplit, payload)
-    except Exception as e:
-        print("ERROR: Got exception on message; " + str(e))
+
+    except Exception as ex:
+        print("ERROR: Got exception on message; " + str(ex))
 
 
 #
@@ -301,7 +301,7 @@ print("Started wheels-service.")
 
 while True:
     try:
-        for i in range(0, 10):
+        for it in range(0, 10):
             time.sleep(0.0015)
             client.loop(0.0005)
         driveWheels()

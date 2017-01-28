@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import pyroscommon as pc
 
 everything = False
-all = False
+allSwitch = False
 
 args = pc.processCommonHostSwitches(pc.args)
 
-def help(rc):
+
+def printHelp(rc):
     print("usage: pyros [<host[:port]>] log <processId>")
     print("")
     print("    -h                    help message")
@@ -21,36 +21,37 @@ def help(rc):
     sys.exit(rc)
 
 if len(args) < 1:
-    help(1)
+    printHelp(1)
 
-if pc.help:
-    help(0)
+if pc.hasHelpSwitch:
+    printHelp(0)
 
 if args[0] == "-a":
-    all = True
+    allSwitch = True
     del args[0]
 
 processId = args[0]
 
 if processId == "%":
-    if all:
+    if allSwitch:
         print("ERROR: Cannot use option -a with '%' (everything).")
         sys.exit(1)
     processId = "+"
     everything = True
+
 
 def executeCommand(client):
     if everything:
         print("Showing all processes output:")
     else:
         print("Showing process " + processId + " output:")
-        if all:
+        if allSwitch:
             client.publish("exec/" + processId, "log")
     pc.timeout = 0
     return True
 
 
-def processOut(line, processId):
+def processOut(line, pid):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
 
@@ -61,13 +62,11 @@ def processOut(line, processId):
     return True
 
 
-def processStatus(line, processId):
-    if line.startswith("exit"):
-        print("** Process " + processId + " is exited.")
+def processStatus(line, pid):
+    if line.startswith("PyROS: exit"):
+        print("** Process " + pid + " is exited.")
         return everything
     return True
 
 
 pc.processCommand(processId, executeCommand, processOut, processStatus)
-
-

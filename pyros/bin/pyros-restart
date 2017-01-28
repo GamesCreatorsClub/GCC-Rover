@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import pyroscommon as pc
-
 
 tail = False
 
 args = pc.processCommonHostSwitches(pc.args)
 
-def help(rc):
+
+def printHelp(rc):
     print("usage: pyros [<host[:port]>] restart [-f] <processId>")
     print("")
     print("    -h                    help message")
@@ -18,10 +17,10 @@ def help(rc):
     sys.exit(rc)
 
 if len(args) < 1:
-    help(1)
+    printHelp(1)
 
-if pc.help:
-    help(0)
+if pc.hasHelpSwitch:
+    printHelp(0)
 
 if args[0] == "-f":
     tail = True
@@ -31,6 +30,7 @@ processId = args[0]
 
 hadStart = False
 
+
 def executeCommand(client):
     client.publish("exec/" + processId, "restart")
     if tail:
@@ -39,7 +39,7 @@ def executeCommand(client):
     return True
 
 
-def processOut(line, processId):
+def processOut(line, pid):
     if line.endswith("\n"):
         line = line[:len(line) - 1]
     if not tail:
@@ -48,22 +48,20 @@ def processOut(line, processId):
     return True
 
 
-def processStatus(line, processId):
+def processStatus(line, pid):
     global hadStart
 
-    if line.startswith("started"):
+    if line.startswith("PyROS: started"):
         hadStart = True
         if tail:
-            print("Process " + processId + " is restarted. Showing output:")
+            print("Process " + pid + " is restarted. Showing output:")
         else:
-            print("Process " + processId + " is restarted.")
+            print("Process " + pid + " is restarted.")
         return tail
-    elif line.startswith("exit"):
-        print("Process " + processId + " is exited.")
+    elif line.startswith("PyROS: exit"):
+        print("Process " + pid + " is exited.")
         return not hadStart
     return True
 
 
 pc.processCommand(processId, executeCommand, processOut, processStatus)
-
-

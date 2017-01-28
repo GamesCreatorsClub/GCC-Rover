@@ -22,6 +22,7 @@ client = mqtt.Client("shutdown-service")
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SWITCH_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+
 def setLights(state):
     global lightsState
 
@@ -45,7 +46,7 @@ def prepareToShutdown():
 
     while seconds <= 6.0 and not (previousSwitch == 0 and currentSwtich == 1):
         time.sleep(interval)
-        seconds = seconds + interval
+        seconds += interval
         setLights(state)
         state = not state
         if lastSeconds != int(seconds):
@@ -65,23 +66,22 @@ def doShutdown():
     print("Shutting down now!")
     try:
         subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
-    except Exception as e:
-        print("ERROR: Failed to shutdown; " + str(e))
+    except Exception as ex:
+        print("ERROR: Failed to shutdown; " + str(ex))
 
-def onConnect(client, data, rc):
+
+def onConnect(mqttClient, data, rc):
     try:
         if rc == 0:
-            client.subscribe("system/shutdown", 0)
+            mqttClient.subscribe("system/shutdown", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
-    except Exception as e:
-        print("ERROR: Got exception on connect; " + str(e))
+    except Exception as ex:
+        print("ERROR: Got exception on connect; " + str(ex))
 
 
-def onMessage(client, data, msg):
-    global dist
-
+def onMessage(mqttClient, data, msg):
     try:
         payload = str(msg.payload, 'utf-8')
         topic = msg.topic
@@ -89,8 +89,8 @@ def onMessage(client, data, msg):
         if payload == "secret_message":
             prepareToShutdown()
 
-    except Exception as e:
-        print("ERROR: Got exception on message; " + str(e))
+    except Exception as ex:
+        print("ERROR: Got exception on message; " + str(ex))
 
 
 #
