@@ -13,8 +13,8 @@ roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "
 roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
 selectedRover = 2
 
-speeds = [50, 75, 100, 150, 200, 250, 300]
-selectedSpeed = 1
+speeds = [20, 30, 40, 50, 75, 100, 150, 200, 250, 300]
+selectedSpeed = 4
 connected = False
 
 def onConnect(client, data, rc):
@@ -80,9 +80,9 @@ speed = 50
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            print("Set speed to: " + str(speed))
             pygame.quit()
             sys.exit()
-            print("Set speed to: " + str(speed))
 
     keys = pygame.key.get_pressed()
 

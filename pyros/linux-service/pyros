@@ -26,7 +26,7 @@ case "$1" in
         mkdir -p /home/pi/pyros/logs
         chown pi /home/pi/pyros/code
         chown pi /home/pi/pyros/logs
-        cd /home/pi/pyros/code
+        cd /home/pi/pyros
         sudo -u pi python3 -u 2>&1 >/home/pi/pyros/logs/pyros.log $BINARY &
         echo "Done."
         ;;

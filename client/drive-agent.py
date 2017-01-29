@@ -143,5 +143,7 @@ print("DriverAgent: Starting...")
 client.connect("localhost", 1883, 60)
 
 while True:
-    client.loop(0.02)
+    for it in range(0, 10):
+        time.sleep(0.0015)
+        client.loop(0.0005)
 

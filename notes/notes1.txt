@@ -11,5 +11,5 @@ Servoblaster configuration:
 9OD I2C components addresses:
     0x1e - HMC5883L - compass
     0x53 - ADXL345 - accelerometer
-    0x34 - L3G4200D - gyroscope
+    0x69 - L3G4200D - gyroscope
     0x77 - BMP180 - pressure sensor

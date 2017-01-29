@@ -1,5 +1,6 @@
 import paho.mqtt.client as mqtt
 import pygame, sys, os
+import time
 
 
 client = mqtt.Client("CalibrateController")
@@ -61,7 +62,7 @@ client.on_connect = onConnect
 client.on_message = onMessage
 
 #client.connect("172.24.1.186", 1883, 60)
-client.connect("192.168.1.180", 1886, 60)
+client.connect("gcc-rover-2", 1883, 60)
 
 print("Waiting for calibration data from rover...")
 while not initialisationDone:
@@ -229,6 +230,8 @@ splitingRects = [
 speeds = ["-300","-150","-75","-50","0","50","75","150","300"]
 selectedSpeedIndex = 4
 selectedSpeed = speeds[selectedSpeedIndex]
+lastButton = None
+lastPressed = time.time()
 
 def drawButton(surface, button, pressed):
     if pressed:
@@ -237,14 +240,28 @@ def drawButton(surface, button, pressed):
         pygame.draw.rect(screen, (150, 150, 150), button["rect"])
     surface.blit(button["texture"], button["rect"])
 
+
+
+
 def buttonPressed(button, mousePos, mouseDown):
+    global lastButton, lastPressed
+
     if mouseDown:
-        if button["rect"].collidepoint(mousePos):
-            return True
+        if lastButton != button:
+            if button["rect"].collidepoint(mousePos):
+                print("got button")
+                lastPressed = time.time()
+                lastButton = button
+                return True
         else:
-            return False
+            print("same button")
+            if time.time() - lastPressed > 1:
+                    return True
     else:
-        return False
+        print("Button up")
+        lastButton = None
+
+    return False
 
 
 def drawText(surface, text, position, font):
@@ -262,10 +279,10 @@ def doCalStuff():
     for calDeg in todo:
         buttona = buttons["deg " + calDeg + " add"]
         buttonm = buttons["deg " + calDeg + " minus"]
-        plusDown = buttonPressed(buttona, mousePos, mouseDown and not lastMouseDown)
+        plusDown = buttonPressed(buttona, mousePos, mouseDown)
         drawButton(screen, buttona, plusDown)
         drawText(screen, str(wheelCal[selectedWheel]["deg"][calDeg]), (172, buttona["rect"].y), bigFont)
-        minusDown = buttonPressed(buttonm, mousePos, mouseDown and not lastMouseDown)
+        minusDown = buttonPressed(buttonm, mousePos, mouseDown)
         drawButton(screen, buttonm, minusDown)
         if plusDown:
             wheelCal[selectedWheel]["deg"][calDeg] = int(wheelCal[selectedWheel]["deg"][calDeg]) + 1
@@ -280,10 +297,10 @@ def doCalStuff():
     for calSpeed in todo:
         buttona = buttons["speed " + calSpeed + " add"]
         buttonm = buttons["speed " + calSpeed + " minus"]
-        plusDown = buttonPressed(buttona, mousePos, mouseDown and not lastMouseDown)
+        plusDown = buttonPressed(buttona, mousePos, mouseDown)
         drawButton(screen, buttona, plusDown)
         drawText(screen, str(wheelCal[selectedWheel]["speed"][calSpeed]), (442, buttona["rect"].y), bigFont)
-        minusDown = buttonPressed(buttonm, mousePos, mouseDown and not lastMouseDown)
+        minusDown = buttonPressed(buttonm, mousePos, mouseDown)
         drawButton(screen, buttonm, minusDown)
         if plusDown:
             wheelCal[selectedWheel]["speed"][calSpeed] = int(wheelCal[selectedWheel]["speed"][calSpeed]) + 1
@@ -305,10 +322,10 @@ def doSpeedStettingstuff():
 
     buttona = buttons["speed next"]
     buttonm = buttons["speed back"]
-    plusDown = buttonPressed(buttona, mousePos, mouseDown and not lastMouseDown)
+    plusDown = buttonPressed(buttona, mousePos, mouseDown)
     drawButton(screen, buttona, plusDown)
     drawText(screen, speeds[selectedSpeedIndex], (372, buttona["rect"].y), bigFont)
-    minusDown = buttonPressed(buttonm, mousePos, mouseDown and not lastMouseDown)
+    minusDown = buttonPressed(buttonm, mousePos, mouseDown)
     drawButton(screen, buttonm, minusDown)
 
     if plusDown:
@@ -375,7 +392,8 @@ while True:
     doSpeedStettingstuff()
 
 
-    if mouseDown and not lastMouseDown:
+    # if mouseDown and not lastMouseDown:
+    if mouseDown:
         if buttonPressed(buttons["bl select"], mousePos, True):
             selectedWheel = "bl"
         if buttonPressed(buttons["br select"], mousePos, True):

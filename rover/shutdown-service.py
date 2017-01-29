@@ -15,7 +15,7 @@ lightsState = False
 
 DEBUG = False
 
-SWITCH_GPIO = 20
+SWITCH_GPIO = 21
 
 client = mqtt.Client("shutdown-service")
 

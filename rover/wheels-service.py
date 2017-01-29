@@ -231,7 +231,7 @@ def writeStorage(topicSplit, value):
     if DEBUG:
         print("Storing to storage " + str(topicSplit) + " = " + value)
 
-    file = open("rover-storage.config", 'wb')
+    file = open(STORAGE_MAP_FILE, 'wb')
 
     pickle.dump(storageMap, file, 0)
 

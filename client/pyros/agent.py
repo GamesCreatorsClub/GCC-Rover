@@ -2,6 +2,7 @@
 returncodes = {}
 
 def init(client, filename, id = None):
+    # print("Connected to Rover " + str(client))
     if id == None:
         if filename.endswith(".py"):
             id = filename[ : len(filename) - 3]
@@ -17,7 +18,10 @@ def init(client, filename, id = None):
 
     client.subscribe("exec/" + str(id) + "/out", 0)
     client.subscribe("exec/" + str(id) + "/status", 0)
-    client.publish("exec/" + str(id) + "/agent", fileContent)
+    client.publish("exec/" + str(id), "stop")
+    client.publish("exec/" + str(id) + "/process", fileContent)
+    client.publish("exec/" + str(id), "restart")
+
 
 def process(client, msg):
     global returncode
