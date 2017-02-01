@@ -20,7 +20,6 @@ def init(client, filename, id = None):
     client.subscribe("exec/" + str(id) + "/status", 0)
     client.publish("exec/" + str(id), "stop")
     client.publish("exec/" + str(id) + "/process", fileContent)
-    client.publish("exec/" + str(id), "restart")
 
 
 def process(client, msg):
@@ -40,7 +39,7 @@ def process(client, msg):
         elif msg.topic.endswith("/status"):
             id = msg.topic[5: len(msg.topic) - 7]
             if payload == "stored":
-                client.publish("exec/" + str(id), "start")
+                client.publish("exec/" + str(id), "restart")
             elif payload.startswith("exit"):
                 if len(payload) > 5:
                     returncodes[id] = payload[5:]

@@ -3,7 +3,7 @@ import pygame, sys, threading, os, random
 import pyros.agent as agent
 
 pygame.init()
-bigFont = pygame.font.SysFont("apple casual", 32)
+bigFont = pygame.font.SysFont("arial", 32)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600,600))
 
@@ -68,7 +68,6 @@ rects = {
     "RIGHT": pygame.Rect(400, 200, 200, 200),
     "SPEED": pygame.Rect(200, 200, 200, 200),
 }
-
 
 
 straight = True
