@@ -20,6 +20,7 @@ import re
 storageMap = {}
 wheelMap = {}
 wheelCalibrationMap = {}
+wheelMap["servos"] = {}
 
 DEBUG = False
 
@@ -103,6 +104,9 @@ def moveServo(servoid, angle):
     f.write(str(servoid) + "=" + str(angle) + "\n")
     f.close()
 
+def handleServo(servoid, angle=0):
+    wheelMap["servos"][str(servoid)] = angle
+    moveServo(servoid, angle)
 
 def handleWheel(mqttClient, topic, payload):
     # wheel/<name>/<deg|speed>
@@ -262,6 +266,8 @@ def onMessage(mqttClient, data, msg):
 
         if topic.startswith("wheel/"):
             handleWheel(mqttClient, topic, payload)
+        elif topic.startswith("servo/"):
+            handleServo(topic.split("/")[2], payload)
         else:
             servoMatch = SERVO_REGEX.match(msg.topic)
             if servoMatch:

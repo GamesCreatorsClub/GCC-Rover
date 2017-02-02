@@ -62,7 +62,7 @@ client.on_connect = onConnect
 client.on_message = onMessage
 
 #client.connect("172.24.1.186", 1883, 60)
-client.connect("gcc-rover-2", 1883, 60)
+client.connect("gcc-rover-4", 1883, 60)
 
 print("Waiting for calibration data from rover...")
 while not initialisationDone:
