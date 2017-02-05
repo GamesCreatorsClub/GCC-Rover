@@ -13,8 +13,8 @@ pygame.init()
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((1024, 768))
 
-originalPilImage = Image.open("p5.jpg")
-whiteBalancePilImage = Image.open("p7.jpg")
+originalPilImage = Image.open("p9.jpg")
+whiteBalancePilImage = Image.open("p10.jpg")
 t = time.time()
 
 
