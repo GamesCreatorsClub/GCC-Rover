@@ -1,16 +1,23 @@
 import paho.mqtt.client as mqtt
-import pygame, sys, os
+import pygame, sys, os, threading
 import time
 
 
 client = mqtt.Client("CalibrateController")
 
+roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "gcc-wifi-ap", "gcc-wifi-ap"]
+roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
+selectedRover = 2
+
 storageMap = {}
+wheelMap = {}
 
 initialisationDone = False
 
 def onConnect(client, data, rc):
+    global connected
     if rc == 0:
+        connected = True
         print("Connected")
         client.subscribe("storage/values", 0)
         init()
@@ -19,7 +26,7 @@ def onConnect(client, data, rc):
         os._exit(rc)
 
 def onMessage(client, data, msg):
-    global exit, initialisationDone
+    global exit, initialisationDone, wheelMap
 
     payload = str(msg.payload, 'utf-8')
     topic = msg.topic
@@ -31,6 +38,9 @@ def onMessage(client, data, msg):
             processLine(line)
 
         initialisationDone = True
+
+        wheelMap = storageMap["wheels"]["cal"]
+
     else:
         print("Wrong topic '" + msg.topic + "'")
 
@@ -38,7 +48,7 @@ def onMessage(client, data, msg):
 def processLine(line):
     splitline = line.split("=")
     if not len(splitline) == 2:
-        print("Received an invalid value " + line)
+        print("Received an invalid value '" + line + "'")
     else:
         path = splitline[0].split("/")
         value = splitline[1]
@@ -58,26 +68,100 @@ def init():
     print("Done.")
 
 
+
+def _reconnect():
+    client.reconnect()
+
+def connect():
+    global connected, initialisationDone
+    initialisationDone = False
+    connected = False
+    client.disconnect()
+    print("DriveController: Connecting to rover " + str(selectedRover + 2) + " @ " + roverAddress[selectedRover] + "...");
+
+    # client.connect(roverAddress[selectedRover], 1883, 60)
+    client.connect_async(roverAddress[selectedRover], roverPort[selectedRover], 60)
+    thread = threading.Thread(target=_reconnect)
+    thread.daemon = True
+    thread.start()
+
+def onDisconnect(client, data, rc):
+    connect()
+
+
+def initWheel(wheelName, motorServo, steerServo):
+
+    defaultWheelCal = {
+        "deg": {
+            "servo": steerServo,
+            "90": "70",
+            "0": "160",
+            "-90": "230"
+        },
+        "speed": {
+            "servo": motorServo,
+            "-300": "95",
+            "0": "155",
+            "300": "215"
+        }
+    }
+
+    if wheelName not in wheelMap:
+        wheelMap[wheelName] = defaultWheelCal
+
+    if "deg" not in wheelMap[wheelName]:
+        wheelMap[wheelName]["deg"] = defaultWheelCal["deg"]
+
+    if "speed" not in wheelMap[wheelName]:
+        wheelMap[wheelName]["speed"] = defaultWheelCal["speed"]
+
+    if "servo" not in wheelMap[wheelName]["deg"]:
+        wheelMap[wheelName]["deg"]["servo"] = defaultWheelCal["deg"]["servo"]
+    if "90" not in wheelMap[wheelName]["deg"]:
+        wheelMap[wheelName]["deg"]["90"] = defaultWheelCal["deg"]["90"]
+    if "0" not in wheelMap[wheelName]["deg"]:
+        wheelMap[wheelName]["deg"]["0"] = defaultWheelCal["deg"]["0"]
+    if "-90" not in wheelMap[wheelName]["deg"]:
+        wheelMap[wheelName]["deg"]["-90"] = defaultWheelCal["deg"]["-90"]
+
+    if "servo" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["servo"] = defaultWheelCal["speed"]["servo"]
+    if "-300" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["-300"]["servo"] = defaultWheelCal["speed"]["-300"]
+    if "0" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
+    if "300" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["300"] = defaultWheelCal["speed"]["300"]
+
+initWheel("fr", 0, 1)
+initWheel("fl", 2, 3)
+initWheel("br", 4, 5)
+initWheel("bl", 6, 7)
+
+client.on_disconnect = onDisconnect
 client.on_connect = onConnect
 client.on_message = onMessage
 
-#client.connect("172.24.1.186", 1883, 60)
-client.connect("gcc-rover-2", 1883, 60)
+connect()
 
-print("Waiting for calibration data from rover...")
-while not initialisationDone:
-    client.loop()
 
-print("Received calibration data from rover.")
 
-print(storageMap)
+
+# print("Waiting for calibration data from rover...")
+# while not initialisationDone:
+#     client.loop()
+#
+# print("Received calibration data from rover.")
+#
+# print(storageMap)
 
 
 
 pygame.init()
 bigFont = pygame.font.SysFont("apple casual", 64)
+normalFont = pygame.font.SysFont("apple casual", 32)
 frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600,600))
+screen = pygame.display.set_mode((600,800))
 mousePos = [0, 0]
 
 mouseDown = False
@@ -85,7 +169,6 @@ lastMouseDown = False
 
 selectedWheel = "fl"
 selectedDeg = "0"
-wheelCal = storageMap["wheels"]["cal"]
 
 texts = {
     "Wheel Calibration" : bigFont.render("Wheel Calibration", True, (0,255,0)),
@@ -233,14 +316,13 @@ selectedSpeed = speeds[selectedSpeedIndex]
 lastButton = None
 lastPressed = time.time()
 
+
 def drawButton(surface, button, pressed):
     if pressed:
         pygame.draw.rect(screen, (255,255,255), button["rect"])
     else:
         pygame.draw.rect(screen, (150, 150, 150), button["rect"])
     surface.blit(button["texture"], button["rect"])
-
-
 
 
 def buttonPressed(button, mousePos, mouseDown):
@@ -254,11 +336,9 @@ def buttonPressed(button, mousePos, mouseDown):
                 lastButton = button
                 return True
         else:
-            print("same button")
             if time.time() - lastPressed > 1:
                     return True
     else:
-        print("Button up")
         lastButton = None
 
     return False
@@ -281,16 +361,16 @@ def doCalStuff():
         buttonm = buttons["deg " + calDeg + " minus"]
         plusDown = buttonPressed(buttona, mousePos, mouseDown)
         drawButton(screen, buttona, plusDown)
-        drawText(screen, str(wheelCal[selectedWheel]["deg"][calDeg]), (172, buttona["rect"].y), bigFont)
+        drawText(screen, str(wheelMap[selectedWheel]["deg"][calDeg]), (172, buttona["rect"].y), bigFont)
         minusDown = buttonPressed(buttonm, mousePos, mouseDown)
         drawButton(screen, buttonm, minusDown)
         if plusDown:
-            wheelCal[selectedWheel]["deg"][calDeg] = int(wheelCal[selectedWheel]["deg"][calDeg]) + 1
-            client.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelCal[selectedWheel]["deg"][calDeg]))
+            wheelMap[selectedWheel]["deg"][calDeg] = int(wheelMap[selectedWheel]["deg"][calDeg]) + 1
+            client.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelMap[selectedWheel]["deg"][calDeg]))
             client.publish("wheel/" + selectedWheel + "/deg", selectedDeg)
         elif minusDown:
-            wheelCal[selectedWheel]["deg"][calDeg] = int(wheelCal[selectedWheel]["deg"][calDeg]) - 1
-            client.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelCal[selectedWheel]["deg"][calDeg]))
+            wheelMap[selectedWheel]["deg"][calDeg] = int(wheelMap[selectedWheel]["deg"][calDeg]) - 1
+            client.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelMap[selectedWheel]["deg"][calDeg]))
             client.publish("wheel/" + selectedWheel + "/deg", selectedDeg)
     todo = ["-300", "0", "300"]
 
@@ -299,18 +379,18 @@ def doCalStuff():
         buttonm = buttons["speed " + calSpeed + " minus"]
         plusDown = buttonPressed(buttona, mousePos, mouseDown)
         drawButton(screen, buttona, plusDown)
-        drawText(screen, str(wheelCal[selectedWheel]["speed"][calSpeed]), (442, buttona["rect"].y), bigFont)
+        drawText(screen, str(wheelMap[selectedWheel]["speed"][calSpeed]), (442, buttona["rect"].y), bigFont)
         minusDown = buttonPressed(buttonm, mousePos, mouseDown)
         drawButton(screen, buttonm, minusDown)
         if plusDown:
-            wheelCal[selectedWheel]["speed"][calSpeed] = int(wheelCal[selectedWheel]["speed"][calSpeed]) + 1
+            wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) + 1
             client.publish("storage/write/wheels/cal/" + selectedWheel + "/speed/" + calSpeed,
-                           str(wheelCal[selectedWheel]["speed"][calSpeed]))
+                           str(wheelMap[selectedWheel]["speed"][calSpeed]))
             client.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
         elif minusDown:
-            wheelCal[selectedWheel]["speed"][calSpeed] = int(wheelCal[selectedWheel]["speed"][calSpeed]) - 1
+            wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) - 1
             client.publish("storage/write/wheels/cal/" + selectedWheel + "/speed/" + calSpeed,
-                           str(wheelCal[selectedWheel]["speed"][calSpeed]))
+                           str(wheelMap[selectedWheel]["speed"][calSpeed]))
             client.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
 
 def doSpeedStettingstuff():
@@ -343,11 +423,12 @@ def doSpeedStettingstuff():
 
 
 wheelsList = ["fr","fl","br","bl"]
+
+
 while True:
     lastMouseDown = mouseDown
     selectedSpeed = speeds[selectedSpeedIndex]
     if (selectedWheel == "all"):
-
         for wheel in wheelsList:
             client.publish("wheel/" + wheel + "/speed", selectedSpeed)
     else:
@@ -365,7 +446,44 @@ while True:
 
             mouseDown = False
 
+
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_ESCAPE]:
+        sys.exit()
+    elif keys[pygame.K_2]:
+        selectedRover = 0
+        connect()
+    elif keys[pygame.K_3]:
+        selectedRover = 1
+        connect()
+    elif keys[pygame.K_4]:
+        selectedRover = 2
+        connect()
+    elif keys[pygame.K_5]:
+        selectedRover = 3
+        connect()
+    elif keys[pygame.K_6]:
+        selectedRover = 4
+        connect()
+    elif keys[pygame.K_7]:
+        selectedRover = 5
+        connect()
+
+
     screen.fill((0,0,0))
+
+
+    selectedRoverTxt = str(selectedRover + 2)
+    if selectedRover > 2:
+        selectedRoverTxt = str(selectedRover - 1) + "-proxy"
+
+    if connected:
+        text = normalFont.render("Connected to rover: " + selectedRoverTxt + " @ " + roverAddress[selectedRover], 1, (128, 255, 128))
+    else:
+        text = normalFont.render("Connecting to rover: " + selectedRoverTxt + " @ " + roverAddress[selectedRover], 1, (255, 128, 128))
+    screen.blit(text, pygame.Rect(0, 620, 0, 0))
+
+
     for rect in splitingRects:
         pygame.draw.rect(screen, (100,100,100), rect)
 
