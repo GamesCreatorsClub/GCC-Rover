@@ -121,6 +121,10 @@ def processCommonHostSwitches(arguments):
 
         if host in aliases:
             host = aliases[host]
+            if ":" in host:
+                splithost = host.split(":")
+                host = splithost[0]
+                port = int(splithost[1])
 
     i = 0
     while i < len(arguments) and arguments[i].startswith("-"):
