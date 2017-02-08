@@ -7,8 +7,11 @@ client = mqtt.Client("Straightlineagent")
 
 leftSideSpeed = 0
 rightSideSpeed = 0
-integratedDrift = 0
+integratedError = 0
 
+gyroCentre = 0
+gyroMin = 0
+gyroMax = 0
 
 driving = False
 
@@ -20,7 +23,7 @@ def onConnect(client, data, rc):
 
 
 def onMessage(client, data, msg):
-    global  centre, integratedDrift
+    global  centre, integratedError
     print("Ding! You've got mail!")
     payload= str(msg.payload, 'utf-8')
     if msg.topic == "straight":
@@ -28,7 +31,7 @@ def onMessage(client, data, msg):
             startDriving()
         if payload == "calibrate":
             centre = getCentre()
-            integratedDrift = 0
+            integratedError = 0
         if payload == "stop":
             stopDriving()
 
@@ -67,70 +70,95 @@ def stopDriving():
 
 
 i2c_bus=smbus.SMBus(1)
-#i2c slave address of the L3G4200D
-i2c_address=0x69
+i2c_address=0x69 # i2c slave address of the L3G4200D
+i2c_bus.write_byte_data(i2c_address, 0x20, 0x0F) # normal mode and all axes on to control reg1
+i2c_bus.write_byte_data(i2c_address, 0x23, 0x20) # full 2000dps to control reg4
 
-#initialise the L3G4200D
+def readGyroZ():
+    global lastTimeGyroRead
 
-#normal mode and all axes on to control reg1
-i2c_bus.write_byte_data(i2c_address,0x20,0x0F)
-#full 2000dps to control reg4
-i2c_bus.write_byte_data(i2c_address,0x23,0x20)
+    # print("        readGyroZ():")
+    thisTimeGyroRead = time.time()
 
-
-def getZ():
+    # print("          reading first byte... ")
     i2c_bus.write_byte(i2c_address, 0x2C)
-    Z_L = i2c_bus.read_byte(i2c_address)
+    zl = i2c_bus.read_byte(i2c_address)
+    # print("          reading first byte - zl=" + str(zl))
+
     i2c_bus.write_byte(i2c_address, 0x2D)
-    Z_H = i2c_bus.read_byte(i2c_address)
-    Z = Z_H << 8 | Z_L
+    zh = i2c_bus.read_byte(i2c_address)
+    # print("          reading second byte - zh=" + str(zh))
 
-    if Z & (1 << 15):
-        Z = Z | ~0xff
+    z = zh << 8 | zl
+    if z & (1 << 15):
+        z = z | ~65535
     else:
-        Z = Z & 0xff
-    return Z
+        z = z & 65535
 
-def getCentre():
+    degreesPerSecond = z * 70.00 / 1000
+    degrees = degreesPerSecond * (lastTimeGyroRead - thisTimeGyroRead)
+
+    # degrees = degreesPerSecond
+    # print("          done: z=" + str(z) + " degrees=" + str(degrees) + " dps=" + str(degreesPerSecond) + " time=" + str(lastTimeGyroRead - thisTimeGyroRead))
+
+    lastTimeGyroRead = thisTimeGyroRead
+
+    return degrees
+
+
+def calibrateGyro():
+    global gyroCentre, gyroMin, gyroMax
+
     c = 0
     avg = 0
 
-    min = getZ()
-    max = getZ()
-    while c < 100:
-        print("collecting still gyroscope...")
-        Z = getZ()
+    min = readGyroZ()
+    max = readGyroZ()
+    while c < 50:
+        z = readGyroZ()
 
-        avg += Z
+        avg += z
 
         c += 1
-        if Z > max:
-            max = Z
-        if Z < min:
-            min = Z
+        if z > max:
+            max = z
+        if z < min:
+            min = z
 
         time.sleep(0.02)
-        avg = avg / 100.0
 
-    return {"min" : min, "max" : max, "avg" : avg}
+    gyroCentre = avg / 50.0
+    gyroMin = min
+    gyroMax = max
 
 
-def getDrift(z, centre):
-    if z < centre["min"]:
-        return z - centre["avg"]
-    if z > centre["max"]:
-        return z - centre["avg"]
+def getError(gyroAngle):
+    if gyroAngle > gyroMax or gyroAngle < gyroMin:
+        return gyroAngle + z - gyroCentre
     return 0.0
 
-centre = getCentre()
+calibrateGyro()
 
 SPEED = 250
 
 SPEED_GAIN = 0.3 # 0.4
 SPEED_MAX_CONTROL = 75
 
+CONTROL_STEERING = True
+CONTROL_MOTORS = False
+
+CONTROL_TYPE = CONTROL_STEERING
+
 STEER_GAIN = 0.015
 SPEER_MAX_CONTROL = 4.5
+INTEGRAL_FADE_OUT = 0.95
+
+# P_GAIN = 0.9 and I_GAIN = 0.1
+
+P_GAIN = 0.85
+I_GAIN = 0.15
+D_GAIN = 0.0
+
 
 wheelDeg("fl", 0)
 wheelDeg("fr", 0)
@@ -143,26 +171,29 @@ leftSideSpeed = 75
 leftDeg = 0
 rightDeg = 0
 
-proportionalDrift = 0
-integratedDrift = 0
+proportionalError = 0
+integratedError = 0
+
+z = readGyroZ()
+lastTimeGyroRead = time.time()
 
 while True:
     for i in range(0, 10):
         time.sleep(0.045)
         client.loop(0.005)
 
-    z = getZ()
+    z = readGyroZ()
+    thisTimeGyroRead = time.time()
     if driving:
 
-        proportionalDrift = getDrift(z, centre)
-        integratedDrift = integratedDrift + proportionalDrift
+        integratedError = integratedError * INTEGRAL_FADE_OUT
 
 
-        integratedDrift = integratedDrift * 0.98
+        proportionalError = getError(z)
+        integratedError = integratedError + proportionalError * (thisTimeGyroRead - lastTimeGyroRead)
 
-        # 0.9 i 0.1
-        control = 0.9 * proportionalDrift + 0.1 * integratedDrift
-        control = 0.85 * proportionalDrift + 0.15 * integratedDrift
+
+        control = P_GAIN * proportionalError + I_GAIN * integratedError
 
         controlSpeed = int(control * SPEED_GAIN)
 
@@ -171,21 +202,26 @@ while True:
         elif controlSpeed < -SPEED_MAX_CONTROL:
             controlSpeed = -SPEED_MAX_CONTROL
 
-        # rightSideSpeed = SPEED - controlSpeed
-        # leftSideSpeed = SPEED + controlSpeed
-        rightSideSpeed = SPEED
-        leftSideSpeed = SPEED
-
         controlSteer = control * STEER_GAIN
         if controlSteer > SPEER_MAX_CONTROL:
             controlSteer = SPEER_MAX_CONTROL
         elif controlSteer < -SPEER_MAX_CONTROL:
             controlSteer = -SPEER_MAX_CONTROL
 
-        leftDeg = int(controlSteer)
-        rightDeg = int(controlSteer)
-        # leftDeg = 1
-        # rightDeg = 1
+
+        if CONTROL_TYPE == CONTROL_MOTORS:
+            rightSideSpeed = SPEED - controlSpeed
+            leftSideSpeed = SPEED + controlSpeed
+        else:
+            rightSideSpeed = SPEED
+            leftSideSpeed = SPEED
+
+        if CONTROL_TYPE == CONTROL_STEERING:
+            leftDeg = int(controlSteer)
+            rightDeg = int(controlSteer)
+        else:
+            leftDeg = 1
+            rightDeg = 1
 
     else:
         rightSideSpeed = 0
@@ -201,5 +237,5 @@ while True:
     wheelDeg("bl", 0)
     wheelDeg("br", 0)
 
-    print("Z: " + str(z) + " drift: " + str(proportionalDrift) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
+    print("Z: " + str(z) + " drift: " + str(proportionalError) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
 

@@ -79,7 +79,6 @@ speed = 50
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            print("Set speed to: " + str(speed))
             pygame.quit()
             sys.exit()
 

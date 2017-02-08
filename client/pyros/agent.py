@@ -51,8 +51,8 @@ def process(client, msg):
     return False
 
 
-def stopAgent(id):
-    pass
+def stopAgent(client, processId):
+    client.publish("exec/" + processId, "stop")
 
 def returncode(id):
     return returncodes[id]
