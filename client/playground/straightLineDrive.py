@@ -15,9 +15,19 @@ def onConnect(client, data, rc):
     print("Received connect callback. rc=" + str(rc))
     if rc == 0:
         agent.init(client, "straightLine-agent.py")
+        pass
 
+def onMessage(client, data, msg):
+    global exit
+
+    if agent.process(client, msg):
+        if agent.returncode("straightLine-agent") != None:
+            exit = True
+    else:
+        print("DriveController: Wrong topic '" + msg.topic + "'")
 
 client.on_connect =  onConnect
+client.on_message =  onMessage
 client.connect("gcc-rover-4", 1883, 60)
 
 def onKeyDown(key):
@@ -28,6 +38,9 @@ def onKeyDown(key):
     if key == pygame.K_DOWN:
         client.publish("straight", "stop")
         print("stppd")
+    if key == pygame.K_r:
+        client.publish("straight", "calibrate")
+        print("calibrating")
     return
 
 def onKeyUp(key):
@@ -35,8 +48,11 @@ def onKeyUp(key):
 
 lastkeys = []
 keys = []
+t = 0
 while True:
     client.loop(1.0/60)
+    t += 1
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             client.publish("straight", "stop")
@@ -53,7 +69,11 @@ while True:
             if not keys[i] and lastkeys[i]:
                 onKeyUp(i)
 
-
+    # if t % 5 == 0:
+    #     client.publish("wheel/fl/angle", str(0))
+    #     client.publish("wheel/bl/angle", str(0))
+    #     client.publish("wheel/fr/angle", str(0))
+    #     client.publish("wheel/br/angle", str(0))
 
     screen.fill((0, 0, 0))
     pygame.display.flip()
