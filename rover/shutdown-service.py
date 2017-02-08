@@ -104,6 +104,19 @@ client.on_message = onMessage
 
 client.connect("localhost", 1883, 60)
 
+
+if GPIO.input(SWITCH_GPIO) == 0:
+
+    while GPIO.input(SWITCH_GPIO) == 0:
+        print("   Waiting to start shutdown-service - switch in wrong position...")
+        setLights(True)
+        time.sleep(0.3)
+        setLights(False)
+        i = 0
+        while GPIO.input(SWITCH_GPIO) == 0 and i < 25:
+            time.sleep(0.2)
+            i += 1
+
 print("Started shutdown-service.")
 
 while True:
