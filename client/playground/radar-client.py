@@ -1,6 +1,7 @@
 import pygame, sys, threading, random
 import paho.mqtt.client as mqtt
 import pyros.agent as agent
+import time
 
 pygame.init()
 bigFont = pygame.font.SysFont("arial", 32)
@@ -15,6 +16,8 @@ selectedRover = 3
 
 connected = False
 stopped = False
+distance = ""
+received = True
 
 RADAR_AGENT = "radar-agent"
 
@@ -25,18 +28,24 @@ def onConnect(client, data, rc):
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");
         agent.init(client, RADAR_AGENT + ".py")
         connected = True
+        client.subscribe ("scan/data")
     else:
         print("DriveController: Connection returned error result: " + str(rc))
         sys.exit(rc)
 
 def onMessage(client, data, msg):
-    global exit
+    global exit, distance, received
 
     if agent.process(client, msg):
         if agent.returncode(RADAR_AGENT) != None:
             exit = True
     else:
-        print("DriveController: Wrong topic '" + msg.topic + "'")
+        payload = str(msg.payload, 'utf-8')
+        topic = msg.topic
+        if topic == "scan/data":
+            print("** distance = " + payload)
+            distance = payload
+            received = True
 
 
 def _reconnect():
@@ -64,9 +73,13 @@ client.on_connect = onConnect
 client.on_message = onMessage
 
 connect()
-
+angle = 0
 
 while True:
+    for it in range(0, 10):
+        time.sleep(0.0015)
+        client.loop(0.0005)
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -105,6 +118,19 @@ while True:
             client.publish("drive", "stop")
             agent.stopAgent(client, RADAR_AGENT)
             stopped = True
+    elif keys[pygame.K_s]:
+        if received:
+            received = False
+            client.publish("scan/start", str(angle))
+            print("** asked for distance")
+    elif keys[pygame.K_o]:
+        angle -= 1
+        if angle < -90:
+            angle = -90
+    elif keys[pygame.K_p]:
+        angle += 1
+        if angle > 90:
+            angle = 90
 
 
     selectedRoverTxt = str(selectedRover + 2)
@@ -119,6 +145,12 @@ while True:
 
     text = bigFont.render("Stopped: " + str(stopped), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 80, 0, 0))
+
+    text = bigFont.render("Angle: " + str(angle), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(0, 140, 0, 0))
+
+    text = bigFont.render("Distance: " + str(distance), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(0, 180, 0, 0))
 
     pygame.display.flip()
     frameclock.tick(30)
