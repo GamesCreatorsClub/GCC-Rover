@@ -1,10 +1,12 @@
+#!/usr/bin/python3
 
-import os
 import sys
+import os
+import traceback
 import time
+import re
 import pickle
 import paho.mqtt.client as mqtt
-import re
 
 
 #
@@ -17,18 +19,15 @@ import re
 #     - storage map
 #
 
+DEBUG = False
+STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
+SERVO_REGEX = re.compile("servo/(\d+)")
+
+
 storageMap = {}
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
-
-DEBUG = False
-
-client = mqtt.Client("wheels-service")
-
-STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
-
-SERVO_REGEX = re.compile("servo/(\d+)")
 
 
 def initWheel(wheelName, motorServo, steerServo):
@@ -96,17 +95,18 @@ def initWheels():
     initWheel("br", 4, 5)
     initWheel("bl", 6, 7)
 
-    print("  Started wheelhandler.")
-
 
 def moveServo(servoid, angle):
+    # TODO move this out to separate service
     f = open("/dev/servoblaster", 'w')
     f.write(str(servoid) + "=" + str(angle) + "\n")
     f.close()
 
+
 def handleServo(servoid, angle=0):
     wheelMap["servos"][str(servoid)] = angle
     moveServo(servoid, angle)
+
 
 def handleWheel(mqttClient, topic, payload):
     # wheel/<name>/<deg|speed>
@@ -245,71 +245,71 @@ def writeStorage(topicSplit, value):
 
 
 def onConnect(mqttClient, data, rc):
-    try:
-        if rc == 0:
-            mqttClient.subscribe("servo/+", 0)
-            mqttClient.subscribe("wheel/+/deg", 0)
-            mqttClient.subscribe("wheel/+/speed", 0)
-            mqttClient.subscribe("storage/write/#", 0)
-            mqttClient.subscribe("storage/read", 0)
-        else:
-            print("ERROR: Connection returned error result: " + str(rc))
-            sys.exit(rc)
-    except Exception as ex:
-        print("ERROR: Got exception on connect; " + str(ex))
+    if rc == 0:
+        mqttClient.subscribe("servo/+", 0)
+        mqttClient.subscribe("wheel/+/deg", 0)
+        mqttClient.subscribe("wheel/+/speed", 0)
+        mqttClient.subscribe("storage/write/#", 0)
+        mqttClient.subscribe("storage/read", 0)
+    else:
+        print("ERROR: Connection returned error result: " + str(rc))
+        sys.exit(rc)
 
 
 def onMessage(mqttClient, data, msg):
+    payload = str(msg.payload, 'utf-8')
+    topic = msg.topic
+
+    if topic.startswith("wheel/"):
+        handleWheel(mqttClient, topic, payload)
+    elif topic.startswith("servo/"):
+        handleServo(topic.split("/")[2], int(payload))
+    else:
+        servoMatch = SERVO_REGEX.match(msg.topic)
+        if servoMatch:
+            servo = int(servoMatch.group(1))
+            # print("servo matched: " + topic + ", servo " + str(servo))
+            moveServo(servo, payload)
+
+        elif topic.startswith("storage/"):
+            topicsplit = topic.split("/")
+            if topicsplit[1] == "read":
+                if DEBUG:
+                    print("Reading out storage")
+                readoutStorage()
+            elif topicsplit[1] == "write":
+                writeStorage(topicsplit, payload)
+
+
+if __name__ == "__main__":
     try:
-        payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
+        #
+        # Initialisation
+        #
 
-        if topic.startswith("wheel/"):
-            handleWheel(mqttClient, topic, payload)
-        elif topic.startswith("servo/"):
-            handleServo(topic.split("/")[2], payload)
-        else:
-            servoMatch = SERVO_REGEX.match(msg.topic)
-            if servoMatch:
-                servo = int(servoMatch.group(1))
-                # print("servo matched: " + topic + ", servo " + str(servo))
-                moveServo(servo, payload)
+        print("Starting wheels service...")
 
-            elif topic.startswith("storage/"):
-                topicsplit = topic.split("/")
-                if topicsplit[1] == "read":
-                    if DEBUG:
-                        print("Reading out storage")
-                    readoutStorage()
-                elif topicsplit[1] == "write":
-                    writeStorage(topicsplit, payload)
+        client = mqtt.Client("wheels-service")
+
+        loadStorageMap()
+
+        client.on_connect = onConnect
+        client.on_message = onMessage
+
+        client.connect("localhost", 1883, 60)
+
+        initWheels()
+
+        print("Started wheels service.")
+
+        while True:
+            try:
+                for it in range(0, 10):
+                    time.sleep(0.0015)
+                    client.loop(0.0005)
+                driveWheels()
+            except Exception as ex:
+                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
     except Exception as ex:
-        print("ERROR: Got exception on message; " + str(ex))
-
-
-#
-# Initialisation
-#
-
-print("Starting wheels-service...")
-
-loadStorageMap()
-
-client.on_connect = onConnect
-client.on_message = onMessage
-
-client.connect("localhost", 1883, 60)
-
-initWheels()
-
-print("Started wheels-service.")
-
-while True:
-    try:
-        for it in range(0, 10):
-            time.sleep(0.0015)
-            client.loop(0.0005)
-        driveWheels()
-    except Exception as e:
-        print("ERROR: Got exception in main loop; " + str(e))
+        print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
