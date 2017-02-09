@@ -1,9 +1,11 @@
+#!/usr/bin/python3
 
 import sys
-import paho.mqtt.client as mqtt
+import traceback
 import subprocess
 import time
 import RPi.GPIO as GPIO
+import paho.mqtt.client as mqtt
 
 #
 # shutdown service
@@ -11,16 +13,11 @@ import RPi.GPIO as GPIO
 # This service is responsible shutting down Linux.
 #
 
-lightsState = False
-
 DEBUG = False
 
 SWITCH_GPIO = 21
 
-client = mqtt.Client("shutdown-service")
-
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(SWITCH_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+lightsState = False
 
 
 def setLights(state):
@@ -66,65 +63,63 @@ def doShutdown():
     print("Shutting down now!")
     try:
         subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
-    except Exception as ex:
-        print("ERROR: Failed to shutdown; " + str(ex))
+    except Exception as exception:
+        print("ERROR: Failed to shutdown; " + str(exception))
 
 
 def onConnect(mqttClient, data, rc):
-    try:
-        if rc == 0:
-            mqttClient.subscribe("system/shutdown", 0)
-        else:
-            print("ERROR: Connection returned error result: " + str(rc))
-            sys.exit(rc)
-    except Exception as ex:
-        print("ERROR: Got exception on connect; " + str(ex))
+    if rc == 0:
+        mqttClient.subscribe("system/shutdown", 0)
+    else:
+        print("ERROR: Connection returned error result: " + str(rc))
+        sys.exit(rc)
 
 
 def onMessage(mqttClient, data, msg):
-    try:
-        payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
+    payload = str(msg.payload, 'utf-8')
+    topic = msg.topic
 
-        if payload == "secret_message":
-            prepareToShutdown()
+    if payload == "secret_message":
+        prepareToShutdown()
+
+
+if __name__ == "__main__":
+    try:
+        print("Starting shutdown service...")
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(SWITCH_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        client = mqtt.Client("shutdown-service")
+
+        client.on_connect = onConnect
+        client.on_message = onMessage
+
+        client.connect("localhost", 1883, 60)
+
+        if GPIO.input(SWITCH_GPIO) == 0:
+
+            while GPIO.input(SWITCH_GPIO) == 0:
+                print("   Waiting to start shutdown-service - switch in wrong position...")
+                setLights(True)
+                time.sleep(0.3)
+                setLights(False)
+                i = 0
+                while GPIO.input(SWITCH_GPIO) == 0 and i < 25:
+                    time.sleep(0.2)
+                    i += 1
+
+        print("Started shutdown service.")
+
+        while True:
+            try:
+                for i in range(0, 10):
+                    time.sleep(0.045)
+                    client.loop(0.005)
+                if GPIO.input(SWITCH_GPIO) == 0:
+                    prepareToShutdown()
+            except Exception as ex:
+                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
     except Exception as ex:
-        print("ERROR: Got exception on message; " + str(ex))
-
-
-#
-# Initialisation
-#
-
-print("Starting shutdown-service...")
-
-client.on_connect = onConnect
-client.on_message = onMessage
-
-client.connect("localhost", 1883, 60)
-
-
-if GPIO.input(SWITCH_GPIO) == 0:
-
-    while GPIO.input(SWITCH_GPIO) == 0:
-        print("   Waiting to start shutdown-service - switch in wrong position...")
-        setLights(True)
-        time.sleep(0.3)
-        setLights(False)
-        i = 0
-        while GPIO.input(SWITCH_GPIO) == 0 and i < 25:
-            time.sleep(0.2)
-            i += 1
-
-print("Started shutdown-service.")
-
-while True:
-    try:
-        for i in range(0, 10):
-            time.sleep(0.045)
-            client.loop(0.005)
-        if GPIO.input(SWITCH_GPIO) == 0:
-            prepareToShutdown()
-    except Exception as e:
-        print("ERROR: Got exception in main loop; " + str(e))
+        print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
