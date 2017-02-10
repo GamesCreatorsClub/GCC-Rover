@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 
-import sys
 import traceback
 import subprocess
 import time
+import pyroslib
 import RPi.GPIO as GPIO
-import paho.mqtt.client as mqtt
 
 #
 # shutdown service
@@ -24,10 +23,10 @@ def setLights(state):
     global lightsState
 
     if state:
-        client.publish("lights/camera", "on")
+        pyroslib.publish("lights/camera", "on")
     else:
-        client.publish("lights/camera", "off")
-    client.loop(0.005)
+        pyroslib.publish("lights/camera", "off")
+        pyroslib.loop(0.005)
 
 
 def prepareToShutdown():
@@ -67,18 +66,7 @@ def doShutdown():
         print("ERROR: Failed to shutdown; " + str(exception))
 
 
-def onConnect(mqttClient, data, rc):
-    if rc == 0:
-        mqttClient.subscribe("system/shutdown", 0)
-    else:
-        print("ERROR: Connection returned error result: " + str(rc))
-        sys.exit(rc)
-
-
-def onMessage(mqttClient, data, msg):
-    payload = str(msg.payload, 'utf-8')
-    topic = msg.topic
-
+def checkIfSecretMessage(topic, payload, groups):
     if payload == "secret_message":
         prepareToShutdown()
 
@@ -90,17 +78,13 @@ if __name__ == "__main__":
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(SWITCH_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        client = mqtt.Client("shutdown-service")
+        pyroslib.subscribe("system/shutdown", checkIfSecretMessage)
 
-        client.on_connect = onConnect
-        client.on_message = onMessage
-
-        client.connect("localhost", 1883, 60)
+        pyroslib.init("shutdown-service")
 
         if GPIO.input(SWITCH_GPIO) == 0:
-
             while GPIO.input(SWITCH_GPIO) == 0:
-                print("   Waiting to start shutdown-service - switch in wrong position...")
+                print("  Waiting to start shutdown-service - switch in wrong position...")
                 setLights(True)
                 time.sleep(0.3)
                 setLights(False)
@@ -111,15 +95,11 @@ if __name__ == "__main__":
 
         print("Started shutdown service.")
 
-        while True:
-            try:
-                for i in range(0, 10):
-                    time.sleep(0.045)
-                    client.loop(0.005)
-                if GPIO.input(SWITCH_GPIO) == 0:
-                    prepareToShutdown()
-            except Exception as ex:
-                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+        def checkSwitch():
+            if GPIO.input(SWITCH_GPIO) == 0:
+                prepareToShutdown()
+
+        pyroslib.forever(0.5, checkSwitch)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

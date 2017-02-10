@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
-import paho.mqtt.client as mqtt
 import time
 import traceback
 import smbus
+import pyroslib
 
 
 CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending gyro data out
@@ -91,34 +91,44 @@ def calibrateGyro():
     gyroMax = maxZ
 
 
-def onConnect(mqttClient, data, rc):
-    mqttClient.subscribe("sensor/gyro/read")
-    mqttClient.subscribe("sensor/gyro/continuous")
+def handleRead(topic, message, groups):
+    global readGyro
+
+    readGyro = True
+    print("  Got request to start gyro.")
 
 
-def onMessage(mqttClient, data, msg):
+def handleContinuous(topic, message, groups):
     global readGyro, continuousMode, lastTimeReceivedRequestForContMode
-    payload = str(msg.payload, 'utf-8')
 
-    if msg.topic == "sensor/gyro/read":
-        readGyro = True
-        print("  Got request to start gyro.")
-    elif msg.topic == "sensor/gyro/continuous":
-        continuousMode = True
-        readGyro = True
-        print("  Started continuous mode...")
-        lastTimeReceivedRequestForContMode = time.time()
+    continuousMode = True
+    readGyro = True
+    print("  Started continuous mode...")
+    lastTimeReceivedRequestForContMode = time.time()
+
+
+def loop():
+    global readGyro, lastTimeGyroRead, continuousMode
+
+    if readGyro:
+        if time.time() - lastTimeGyroRead > MAX_GYRO_TIMEOUT:
+            z = readGyroZ()
+            time.sleep(0.02)
+        z = readGyroZ()
+
+        pyroslib.publish("sensor/gyro", str(z))
+
+        if continuousMode:
+            if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
+                continuousMode = False
+                print("  Stopped continuous mode.")
+        else:
+            readGyro = False
 
 
 if __name__ == "__main__":
     try:
         print("Starting gyro sensor service...")
-
-        client = mqtt.Client("gyro-sensor-service")
-        client.connect("localhost", 1883, 60)
-
-        client.on_connect = onConnect
-        client.on_message = onMessage
 
         initGyro()
 
@@ -126,30 +136,13 @@ if __name__ == "__main__":
 
         print("  Calibrated gyro offset=" + str(gyroCentre) + " min=" + str(gyroMin) + " max=" + str(gyroMax))
 
+        pyroslib.subscribe("sensor/gyro/read", handleRead)
+        pyroslib.subscribe("sensor/gyro/continuous", handleContinuous)
+        pyroslib.init("gyro-sensor-service")
+
         print("Started gyro sensor service.")
-        while True:
-            try:
-                for it in range(0, 10):
-                    time.sleep(0.0015)
-                    client.loop(0.0005)
 
-                if readGyro:
-                    if time.time() - lastTimeGyroRead > MAX_GYRO_TIMEOUT:
-                        z = readGyroZ()
-                        time.sleep(0.02)
-                    z = readGyroZ()
-
-                    client.publish("sensor/gyro", str(z))
-
-                    if continuousMode:
-                        if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
-                            continuousMode = False
-                            print("  Stopped continuous mode.")
-                    else:
-                        readGyro = False
-
-            except Exception as ex:
-                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+        pyroslib.forever(0.02, loop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

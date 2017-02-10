@@ -1,10 +1,8 @@
 #!/usr/bin/python3
 
-import sys
 import traceback
-import time
+import pyroslib
 import RPi.GPIO as GPIO
-import paho.mqtt.client as mqtt
 
 #
 # lights service
@@ -25,30 +23,12 @@ def setLights(state):
     GPIO.output(CAMERA_LIGHT_GPIO, state)
 
 
-def onConnect(mqttClient, data, rc):
-    if rc == 0:
-        mqttClient.subscribe("lights/camera", 0)
+def handleLights(topic, payload, groups):
+    if "on" == payload or "ON" == payload or "1" == payload:
+        setLights(True)
     else:
-        print("ERROR: Connection returned error result: " + str(rc))
-        sys.exit(rc)
+        setLights(False)
 
-
-def onMessage(mqttClient, data, msg):
-    payload = str(msg.payload, 'utf-8')
-    topic = msg.topic
-
-    if topic.startswith("lights/"):
-        topicsplit = topic.split("/")
-        if topicsplit[1] == "camera":
-            if "on" == payload or "ON" == payload or "1" == payload:
-                setLights(True)
-            else:
-                setLights(False)
-
-
-#
-# Initialisation
-#
 
 if __name__ == "__main__":
     try:
@@ -57,21 +37,12 @@ if __name__ == "__main__":
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 
-        client = mqtt.Client("lights-service")
-        client.on_connect = onConnect
-        client.on_message = onMessage
-
-        client.connect("localhost", 1883, 60)
+        pyroslib.subscribe("lights/camera", handleLights)
+        pyroslib.init("light-service")
 
         print("Started lights service.")
 
-        while True:
-            try:
-                for i in range(0, 10):
-                    time.sleep(0.045)
-                    client.loop(0.005)
-            except Exception as ex:
-                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+        pyroslib.forever(0.5)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

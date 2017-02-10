@@ -2,9 +2,8 @@
 
 import time
 import traceback
-import sys
+import pyroslib
 import RPi.GPIO as GPIO
-import paho.mqtt.client as mqtt
 
 
 TRIG = 11  # Originally was 23
@@ -13,7 +12,6 @@ ECHO = 8   # Originally was 24
 SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
 
-connected = False
 lastServoAngle = 0
 
 
@@ -60,28 +58,11 @@ def readDistance():
     return distance
 
 
-def onConnect(mqttClient, data, rc):
-    global connected
-
-    if rc == 0:
-        connected = True
-        client.subscribe("sensor/distance/scan")
-
-    else:
-        print("ERROR: Connection returned error result: " + str(rc))
-        sys.exit(rc)
-
-
-def onMessage(mqttClient, data, msg):
-
-    payload = str(msg.payload, 'utf-8')
-    topic = msg.topic
-
-    if topic == "sensor/distance/scan":
-        moveServo(float(payload))
-        distance = readDistance()
-        # print ("   distance =" + str(distance))
-        client.publish("sensor/distance", str(distance))
+def handleScan(topic, payload, groups):
+    moveServo(float(payload))
+    distance = readDistance()
+    # print ("   distance =" + str(distance))
+    pyroslib.publish("sensor/distance", str(distance))
 
 
 if __name__ == "__main__":
@@ -94,31 +75,18 @@ if __name__ == "__main__":
 
         GPIO.output(TRIG, False)
 
-        print("Waiting for sensor to settle")
+        print("  Waiting for sensor to settle")
 
         moveServo(lastServoAngle)
 
-        client = mqtt.Client("sonar-sensor-service")
-
         time.sleep(1)
 
-        client.on_connect = onConnect
-        client.on_message = onMessage
-
-        client.connect("localhost", 1883, 60)
-
-        print("  Waiting to connect before proceeding...")
-        while not connected:
-            client.loop()
+        pyroslib.subscribe("sensor/distance/scan", handleScan)
+        pyroslib.init("sonar-sensor-service")
 
         print("Started sonar sensor service.")
-        while True:
-            try:
-                for it in range(0, 10):
-                    time.sleep(0.0015)
-                    client.loop(0.0005)
-            except Exception as ex:
-                print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
+        pyroslib.forever(0.02)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
