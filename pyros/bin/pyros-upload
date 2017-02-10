@@ -29,6 +29,7 @@ if pc.hasHelpSwitch:
 
 if args[0] == "-s" or args[0] == "--service":
     service = True
+    del args[0]
 
 processId = args[0]
 
