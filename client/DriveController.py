@@ -87,7 +87,9 @@ while True:
     client.loop(1/40)
     screen.fill((0, 0, 0))
 
-    if keys[pygame.K_w]:
+    if keys[pygame.K_ESCAPE]:
+        sys.exit(1)
+    elif keys[pygame.K_w]:
         client.publish("drive", "forward>" + str(speed))
         pygame.draw.rect(screen, (255, 255, 255), rects["UP"])
         stopped = False
