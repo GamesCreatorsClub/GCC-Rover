@@ -1,51 +1,51 @@
-import pygame, sys, threading, random
-import paho.mqtt.client as mqtt
-import pyros.agent as agent
+import sys
+import threading
 import time
+import random
+import pygame
+import paho.mqtt.client as mqtt
+
 
 pygame.init()
 bigFont = pygame.font.SysFont("arial", 32)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600,600))
+arrow_image = pygame.image.load("arrow.png")
 
-client = mqtt.Client("radar-client-#" + str(random.randint(1000, 9999)))
+client = mqtt.Client("gyro-display-#" + str(random.randint(1000, 9999)))
 
 roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "gcc-wifi-ap", "gcc-wifi-ap"]
 roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
 selectedRover = 3
 
-connected = False
-stopped = False
-distance = ""
-received = True
+gyroAngle = 0.0
 
-RADAR_AGENT = "radar-agent"
+connected = False
 
 
 def onConnect(client, data, rc):
     global connected
     if rc == 0:
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");
-        agent.init(client, RADAR_AGENT + ".py")
+
+        client.subscribe("sensor/gyro")
+        client.publish("sensor/gyro/continuous", "")
+
         connected = True
-        client.subscribe ("scan/data")
     else:
         print("DriveController: Connection returned error result: " + str(rc))
         sys.exit(rc)
 
-def onMessage(client, data, msg):
-    global exit, distance, received
 
-    if agent.process(client, msg):
-        if agent.returncode(RADAR_AGENT) != None:
-            exit = True
-    else:
-        payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
-        if topic == "scan/data":
-            print("** distance = " + payload)
-            distance = payload
-            received = True
+def onMessage(client, data, msg):
+    global gyroAngle
+
+    payload = str(msg.payload, 'utf-8')
+    topic = msg.topic
+
+    if topic == "sensor/gyro":
+        gyroAngle += float(payload)
+        # print("Got gyro " + payload)
 
 
 def _reconnect():
@@ -58,6 +58,7 @@ def connect():
     client.disconnect()
     print("DriveController: Connecting to rover " + str(selectedRover + 2) + " @ " + roverAddress[selectedRover] + "...");
 
+    # client.connect(roverAddress[selectedRover], 1883, 60)
     client.connect_async(roverAddress[selectedRover], roverPort[selectedRover], 60)
     thread = threading.Thread(target=_reconnect)
     thread.daemon = True
@@ -73,13 +74,10 @@ client.on_connect = onConnect
 client.on_message = onMessage
 
 connect()
-angle = 0
+
+resubscribe = time.time()
 
 while True:
-    for it in range(0, 10):
-        time.sleep(0.0015)
-        client.loop(0.0005)
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -87,10 +85,14 @@ while True:
 
     keys = pygame.key.get_pressed()
 
-    client.loop(1/40)
+    for it in range(0, 30):
+        time.sleep(0.0005)
+        client.loop(0.0005)
     screen.fill((0, 0, 0))
 
-    if keys[pygame.K_2]:
+    if keys[pygame.K_ESCAPE]:
+        sys.exit()
+    elif keys[pygame.K_2]:
         selectedRover = 0
         connect()
     elif keys[pygame.K_3]:
@@ -108,30 +110,6 @@ while True:
     elif keys[pygame.K_7]:
         selectedRover = 5
         connect()
-    elif keys[pygame.K_ESCAPE]:
-        client.publish("drive", "stop")
-        agent.stopAgent(client, RADAR_AGENT)
-        client.loop(0.7)
-        sys.exit(0)
-    elif keys[pygame.K_SPACE]:
-        if not stopped:
-            client.publish("drive", "stop")
-            agent.stopAgent(client, RADAR_AGENT)
-            stopped = True
-    elif keys[pygame.K_s]:
-        if received:
-            received = False
-            client.publish("scan/start", str(angle))
-            print("** asked for distance")
-    elif keys[pygame.K_o]:
-        angle -= 1
-        if angle < -90:
-            angle = -90
-    elif keys[pygame.K_p]:
-        angle += 1
-        if angle > 90:
-            angle = 90
-
 
     selectedRoverTxt = str(selectedRover + 2)
     if selectedRover > 2:
@@ -141,16 +119,21 @@ while True:
         text = bigFont.render("Connected to rover: " + selectedRoverTxt + " @ " + roverAddress[selectedRover], 1, (128, 255, 128))
     else:
         text = bigFont.render("Connecting to rover: " + selectedRoverTxt + " @ " + roverAddress[selectedRover], 1, (255, 128, 128))
-    screen.blit(text, pygame.Rect(0, 0, 0, 0))
 
-    text = bigFont.render("Stopped: " + str(stopped), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 80, 0, 0))
+    screen.blit(text, (0, 0))
 
-    text = bigFont.render("Angle: " + str(angle), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 140, 0, 0))
+    loc = arrow_image.get_rect().center
+    rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
+    rot_arrow_image.get_rect().center = loc
 
-    text = bigFont.render("Distance: " + str(distance), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 180, 0, 0))
+    screen.blit(rot_arrow_image, (150, 150))
+
 
     pygame.display.flip()
     frameclock.tick(30)
+
+    if time.time() - resubscribe > 2:
+        resubscribe = time.time()
+        if connected:
+            client.publish("sensor/gyro/continuous", "")
+            print("Re-subscribed")

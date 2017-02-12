@@ -1,10 +1,10 @@
+#!/usr/bin/python3
 
 import os
-import sys
-import time
-import pickle
-import paho.mqtt.client as mqtt
+import traceback
 import re
+import pickle
+import pyroslib
 
 
 #
@@ -17,18 +17,15 @@ import re
 #     - storage map
 #
 
+DEBUG = False
+STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
+SERVO_REGEX = re.compile("servo/(\d+)")
+
+
 storageMap = {}
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
-
-DEBUG = False
-
-client = mqtt.Client("wheels-service")
-
-STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
-
-SERVO_REGEX = re.compile("servo/(\d+)")
 
 
 def initWheel(wheelName, motorServo, steerServo):
@@ -96,17 +93,18 @@ def initWheels():
     initWheel("br", 4, 5)
     initWheel("bl", 6, 7)
 
-    print("  Started wheelhandler.")
-
 
 def moveServo(servoid, angle):
+    # TODO move this out to separate service
     f = open("/dev/servoblaster", 'w')
     f.write(str(servoid) + "=" + str(angle) + "\n")
     f.close()
 
+
 def handleServo(servoid, angle=0):
     wheelMap["servos"][str(servoid)] = angle
     moveServo(servoid, angle)
+
 
 def handleWheel(mqttClient, topic, payload):
     # wheel/<name>/<deg|speed>
@@ -211,20 +209,20 @@ def composeRecursively(m, prefix):
     for key in m:
         if type(m[key]) is dict:
             newPrefix = prefix + key + "/"
-            res = res + composeRecursively(m[key], newPrefix)
+            res += composeRecursively(m[key], newPrefix)
         else:
-            res = res + prefix + key + "=" + str(m[key]) + "\n"
+            res += prefix + key + "=" + str(m[key]) + "\n"
 
     return res
 
 
 def readoutStorage():
-    client.publish("storage/values", composeRecursively(storageMap, ""))
+    pyroslib.publish("storage/values", composeRecursively(storageMap, ""))
 
 
 def writeStorage(topicSplit, value):
     m = storageMap
-    for i in range(2, len(topicSplit) - 1):
+    for i in range(0, len(topicSplit) - 1):
         key = topicSplit[i]
         if key not in m:
             m[key] = {}
@@ -244,72 +242,68 @@ def writeStorage(topicSplit, value):
 # --- Storage Map code end -------------------------
 
 
-def onConnect(mqttClient, data, rc):
+def servoTopic(topic, payload, groups):
+    servo = int(groups[0])
+    moveServo(servo, payload)
+
+
+def wheelDegTopic(topic, payload, groups):
+    wheelName = groups[0]
+
+    if wheelName in wheelMap:
+        wheel = wheelMap[wheelName]
+        wheelCal = wheelCalibrationMap[wheelName]
+
+        if DEBUG:
+            print("  Turning wheel: " + wheelName + " to " + str(payload) + " degs")
+
+        handleDeg(wheel, wheelCal["deg"], float(payload))
+
+    else:
+        print("ERROR: no wheel with name " + wheelName + " fonund.")
+
+
+def wheelSpeedTopic(topic, payload, groups):
+    wheelName = groups[0]
+
+    if wheelName in wheelMap:
+        wheel = wheelMap[wheelName]
+        wheelCal = wheelCalibrationMap[wheelName]
+
+        if DEBUG:
+            print("  Setting wheel: " + wheelName + " speed to " + str(payload))
+        handleSpeed(wheel, wheelCal["speed"], float(payload))
+    else:
+        print("ERROR: no wheel with name " + wheelName + " fonund.")
+
+
+def storageWriteTopic(topic, payload, groups):
+    writeStorage(groups, payload)
+
+
+def storageReadTopic(topic, payload, groups):
+    if DEBUG:
+        print("Reading out storage")
+    readoutStorage()
+
+
+if __name__ == "__main__":
     try:
-        if rc == 0:
-            mqttClient.subscribe("servo/+", 0)
-            mqttClient.subscribe("wheel/+/deg", 0)
-            mqttClient.subscribe("wheel/+/speed", 0)
-            mqttClient.subscribe("storage/write/#", 0)
-            mqttClient.subscribe("storage/read", 0)
-        else:
-            print("ERROR: Connection returned error result: " + str(rc))
-            sys.exit(rc)
+        print("Starting wheels service...")
+
+        loadStorageMap()
+        initWheels()
+
+        pyroslib.subscribe("servo/+", servoTopic)
+        pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
+        pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
+        pyroslib.subscribe("storage/write/#", storageWriteTopic)
+        pyroslib.subscribe("storage/read", storageReadTopic)
+        pyroslib.init("wheels-service")
+
+        print("Started wheels service.")
+
+        pyroslib.forever(0.02, driveWheels)
+
     except Exception as ex:
-        print("ERROR: Got exception on connect; " + str(ex))
-
-
-def onMessage(mqttClient, data, msg):
-    try:
-        payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
-
-        if topic.startswith("wheel/"):
-            handleWheel(mqttClient, topic, payload)
-        elif topic.startswith("servo/"):
-            handleServo(topic.split("/")[2], payload)
-        else:
-            servoMatch = SERVO_REGEX.match(msg.topic)
-            if servoMatch:
-                servo = int(servoMatch.group(1))
-                # print("servo matched: " + topic + ", servo " + str(servo))
-                moveServo(servo, payload)
-
-            elif topic.startswith("storage/"):
-                topicsplit = topic.split("/")
-                if topicsplit[1] == "read":
-                    if DEBUG:
-                        print("Reading out storage")
-                    readoutStorage()
-                elif topicsplit[1] == "write":
-                    writeStorage(topicsplit, payload)
-
-    except Exception as ex:
-        print("ERROR: Got exception on message; " + str(ex))
-
-
-#
-# Initialisation
-#
-
-print("Starting wheels-service...")
-
-loadStorageMap()
-
-client.on_connect = onConnect
-client.on_message = onMessage
-
-client.connect("localhost", 1883, 60)
-
-initWheels()
-
-print("Started wheels-service.")
-
-while True:
-    try:
-        for it in range(0, 10):
-            time.sleep(0.0015)
-            client.loop(0.0005)
-        driveWheels()
-    except Exception as e:
-        print("ERROR: Got exception in main loop; " + str(e))
+        print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

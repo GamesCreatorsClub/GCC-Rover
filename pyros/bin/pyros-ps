@@ -51,8 +51,8 @@ def processLine(line):
             pass
 
     # print("split=" + str(split))
-    print("{0!s:<15} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
+    print("{0!s:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
 
 pc.printOutCommand(executeCommand, processLine,
-                   "{0:<15} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(
+                   "{0:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(
                        "name", "type", "status", "rc", "len", "date"), "")

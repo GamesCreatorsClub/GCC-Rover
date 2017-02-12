@@ -1,7 +1,7 @@
+#!/usr/bin/python3
 
-import sys
-import paho.mqtt.client as mqtt
-import time
+import traceback
+import pyroslib
 import RPi.GPIO as GPIO
 
 #
@@ -10,17 +10,10 @@ import RPi.GPIO as GPIO
 # This service is responsible switching LEDs on and off.
 #
 
+DEBUG = False
 CAMERA_LIGHT_GPIO = 16
 
 lightsState = False
-
-
-DEBUG = False
-
-client = mqtt.Client("lights-service")
-
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 
 
 def setLights(state):
@@ -30,53 +23,26 @@ def setLights(state):
     GPIO.output(CAMERA_LIGHT_GPIO, state)
 
 
-def onConnect(mqttClient, data, rc):
+def handleLights(topic, payload, groups):
+    if "on" == payload or "ON" == payload or "1" == payload:
+        setLights(True)
+    else:
+        setLights(False)
+
+
+if __name__ == "__main__":
     try:
-        if rc == 0:
-            mqttClient.subscribe("lights/camera", 0)
-        else:
-            print("ERROR: Connection returned error result: " + str(rc))
-            sys.exit(rc)
-    except Exception as ex:
-        print("ERROR: Got exception on connect; " + str(ex))
+        print("Starting lights service...")
 
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 
-def onMessage(mqttClient, data, msg):
-    try:
-        payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
+        pyroslib.subscribe("lights/camera", handleLights)
+        pyroslib.init("light-service")
 
-        # print("Got " + payload + " on " +topic)
+        print("Started lights service.")
 
-        if topic.startswith("lights/"):
-            topicsplit = topic.split("/")
-            if topicsplit[1] == "camera":
-                if "on" == payload or "ON" == payload or "1" == payload:
-                    setLights(True)
-                else:
-                    setLights(False)
+        pyroslib.forever(0.5)
 
     except Exception as ex:
-        print("ERROR: Got exception on message; " + str(ex))
-
-
-#
-# Initialisation
-#
-
-print("Starting lights service...")
-
-client.on_connect = onConnect
-client.on_message = onMessage
-
-client.connect("localhost", 1883, 60)
-
-print("Started lights service.")
-
-while True:
-    try:
-        for i in range(0, 10):
-            time.sleep(0.045)
-            client.loop(0.005)
-    except Exception as e:
-        print("ERROR: Got exception in main loop; " + str(e))
+        print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

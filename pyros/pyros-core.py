@@ -113,6 +113,10 @@ def processFilename(processId):
     return processDir(processId) + "/" + processId + ".py"
 
 
+def processInitFilename(processId):
+    return processDir(processId) + "/__init__.py"
+
+
 def processServiceFilename(processId):
     return processDir(processId) + "/.service"
 
@@ -221,7 +225,14 @@ def runProcess(processId):
         subprocessDir = startedInDir + "/" + os.path.dirname(filename)
         debug("Starting " + filename + " at dir " + subprocessDir)
 
+        new_env = os.environ.copy()
+        if "PYTHONPATH" in new_env:
+            new_env["PYTHONPATH"] = new_env["PYTHONPATH"] + ":" + ".."
+        else:
+            new_env["PYTHONPATH"] = ".."
+
         process = subprocess.Popen(["python3", "-u", processId + ".py"],
+                                   env=new_env,
                                    bufsize=0,
                                    stdout=subprocess.PIPE,
                                    shell=False,
@@ -290,11 +301,13 @@ def storeCode(processId, payload):
     processes[processId]["type"] = "process"
 
     filename = processFilename(processId)
+    initFilename = processInitFilename(processId)
 
     try:
-        textFile = open(filename, "wt")
-        textFile.write(payload)
-        textFile.close()
+        with open(filename, "wt") as textFile:
+            textFile.write(payload)
+        with open(initFilename, "wt") as textFile:
+            textFile.write("from " + processId + "." + processId + " import *\n")
 
         outputStatus(processId, "stored")
     except:
@@ -342,10 +355,12 @@ def removeProcess(processId):
 
         files = os.listdir(pDir)
         for file in files:
-            if not os.remove(file):
-                output(processId, "PyROS ERROR: cannot remove file " + file)
+            os.remove(pDir + "/" + file)
+            if os.path.exists(pDir + "/" + file):
+                output(processId, "PyROS ERROR: cannot remove file " + pDir + "/" + file)
 
-        if not os.remove(pDir):
+        os.removedirs(pDir)
+        if os.path.exists(pDir):
             output(processId, "PyROS ERROR: cannot remove dir " + pDir)
 
         del processes[processId]

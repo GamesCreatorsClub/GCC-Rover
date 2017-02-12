@@ -46,7 +46,7 @@ def executeCommand(client):
     else:
         print("Showing process " + processId + " output:")
         if allSwitch:
-            client.publish("exec/" + processId, "log")
+            client.publish("exec/" + processId, "logs")
     pc.timeout = 0
     return True
 

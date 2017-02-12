@@ -70,6 +70,7 @@ def onConnect(mqttClient, data, rc):
             #
             # Subscribe to the topic goes here
             #
+            client.subscribe("scan/start")
 
         else:
             print("ERROR: Connection returned error result: " + str(rc))
@@ -89,6 +90,12 @@ def onMessage(mqttClient, data, msg):
         #
         # Reading distance and sending data back (publish) goes here
         #
+        if topic == "scan/start":
+            moveServo(float(payload))
+            time.sleep(1)
+            distance = readDistance()
+            print ("   distance =" + str(distance))
+            client.publish("scan/data" , str(distance))
 
     except Exception as ex:
         print("ERROR: Got exception on message; " + str(ex))

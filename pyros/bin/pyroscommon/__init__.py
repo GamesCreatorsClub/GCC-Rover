@@ -137,7 +137,7 @@ def processCommonHostSwitches(arguments):
 
 
 def printOutCommand(executeCommand, processLine, header, footer):
-    global connected, client
+    global connected, client, countdown
 
     client = mqtt.Client("PyROS." + uniqueId)
 
@@ -201,7 +201,9 @@ def printOutCommand(executeCommand, processLine, header, footer):
         countdown = getTimeout()
 
         while connected:
-            client.loop(1)
+            for i in range(0, 50):
+                time.sleep(0.015)
+                client.loop(0.005)
             countdown -= 1
             if countdown == 0:
                 print("ERROR: reached timeout waiting for response")
