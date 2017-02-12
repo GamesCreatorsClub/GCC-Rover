@@ -26,8 +26,8 @@ def onMessage(client, data, msg):
     else:
         print("DriveController: Wrong topic '" + msg.topic + "'")
 
-client.on_connect =  onConnect
-client.on_message =  onMessage
+client.on_connect = onConnect
+client.on_message = onMessage
 client.connect("gcc-rover-4", 1883, 60)
 
 def onKeyDown(key):
@@ -71,7 +71,7 @@ while True:
 
     # if t % 5 == 0:
     #     client.publish("wheel/fl/angle", str(0))
-    #     client.publish("wheel/bl/angle", str(0))
+    #     client.publish("wheel/bl/angle", skeystr(0))
     #     client.publish("wheel/fr/angle", str(0))
     #     client.publish("wheel/br/angle", str(0))
 

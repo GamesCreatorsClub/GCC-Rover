@@ -13,7 +13,7 @@ storageMap = {}
 wheelMap = {}
 
 initialisationDone = False
-
+connected = False
 def onConnect(client, data, rc):
     global connected
     if rc == 0:

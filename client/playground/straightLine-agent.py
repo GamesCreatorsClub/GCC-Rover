@@ -30,7 +30,7 @@ def onMessage(client, data, msg):
         if payload == "forward":
             startDriving()
         if payload == "calibrate":
-            centre = getCentre()
+            calibrateGyro()
             integratedError = 0
         if payload == "stop":
             stopDriving()
@@ -67,7 +67,7 @@ def stopDriving():
 
     driving = False
 
-
+lastTimeGyroRead = 0
 
 i2c_bus=smbus.SMBus(1)
 i2c_address=0x69 # i2c slave address of the L3G4200D
@@ -137,105 +137,115 @@ def getError(gyroAngle):
         return gyroAngle + z - gyroCentre
     return 0.0
 
-calibrateGyro()
-
-SPEED = 250
-
-SPEED_GAIN = 0.3 # 0.4
-SPEED_MAX_CONTROL = 75
-
-CONTROL_STEERING = True
-CONTROL_MOTORS = False
-
-CONTROL_TYPE = CONTROL_STEERING
-
-STEER_GAIN = 0.015
-SPEER_MAX_CONTROL = 4.5
-INTEGRAL_FADE_OUT = 0.95
-
-# P_GAIN = 0.9 and I_GAIN = 0.1
-
-P_GAIN = 0.85
-I_GAIN = 0.15
-D_GAIN = 0.0
 
 
-wheelDeg("fl", 0)
-wheelDeg("fr", 0)
-wheelDeg("bl", 0)
-wheelDeg("br", 0)
-
-rightSideSpeed = 75
-leftSideSpeed = 75
-
-leftDeg = 0
-rightDeg = 0
-
-proportionalError = 0
-integratedError = 0
-
-z = readGyroZ()
-lastTimeGyroRead = time.time()
-
-while True:
-    for i in range(0, 10):
-        time.sleep(0.045)
-        client.loop(0.005)
-
-    z = readGyroZ()
-    thisTimeGyroRead = time.time()
-    if driving:
-
-        integratedError = integratedError * INTEGRAL_FADE_OUT
+try:
 
 
-        proportionalError = getError(z)
-        integratedError = integratedError + proportionalError * (thisTimeGyroRead - lastTimeGyroRead)
+    calibrateGyro()
+    SPEED = 250
+
+    SPEED_GAIN = 0.3 # 0.4
+    SPEED_MAX_CONTROL = 75
+
+    CONTROL_STEERING = True
+    CONTROL_MOTORS = False
+
+    CONTROL_TYPE = CONTROL_STEERING
+
+    STEER_GAIN = 1
+    SPEER_MAX_CONTROL = 4.5
+    INTEGRAL_FADE_OUT = 0.95
+
+    # P_GAIN = 0.9 and I_GAIN = 0.1
+
+    P_GAIN = 0.85
+    I_GAIN = 0.15
+    D_GAIN = 0.0
 
 
-        control = P_GAIN * proportionalError + I_GAIN * integratedError
-
-        controlSpeed = int(control * SPEED_GAIN)
-
-        if controlSpeed > SPEED_MAX_CONTROL:
-            controlSpeed = SPEED_MAX_CONTROL
-        elif controlSpeed < -SPEED_MAX_CONTROL:
-            controlSpeed = -SPEED_MAX_CONTROL
-
-        controlSteer = control * STEER_GAIN
-        if controlSteer > SPEER_MAX_CONTROL:
-            controlSteer = SPEER_MAX_CONTROL
-        elif controlSteer < -SPEER_MAX_CONTROL:
-            controlSteer = -SPEER_MAX_CONTROL
-
-
-        if CONTROL_TYPE == CONTROL_MOTORS:
-            rightSideSpeed = SPEED - controlSpeed
-            leftSideSpeed = SPEED + controlSpeed
-        else:
-            rightSideSpeed = SPEED
-            leftSideSpeed = SPEED
-
-        if CONTROL_TYPE == CONTROL_STEERING:
-            leftDeg = int(controlSteer)
-            rightDeg = int(controlSteer)
-        else:
-            leftDeg = 1
-            rightDeg = 1
-
-    else:
-        rightSideSpeed = 0
-        leftSideSpeed = 0
-
-    client.publish("wheel/fl/speed", leftSideSpeed)
-    client.publish("wheel/bl/speed", leftSideSpeed)
-    client.publish("wheel/fr/speed", rightSideSpeed)
-    client.publish("wheel/br/speed", rightSideSpeed)
-
-    wheelDeg("fl", str(int(leftDeg)))
-    wheelDeg("fr", str(int(rightDeg)))
+    wheelDeg("fl", 0)
+    wheelDeg("fr", 0)
     wheelDeg("bl", 0)
     wheelDeg("br", 0)
 
-    print("Z: " + str(z) + " drift: " + str(proportionalError) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
+    rightSideSpeed = 75
+    leftSideSpeed = 75
 
+    leftDeg = 0
+    rightDeg = 0
+
+    proportionalError = 0
+    integratedError = 0
+
+    z = readGyroZ()
+    lastTimeGyroRead2 = 0
+    thisTimeGyroRead2 = 0
+
+    while True:
+        for i in range(0, 10):
+            time.sleep(0.045)
+            client.loop(0.005)
+
+        z = readGyroZ()
+        thisTimeGyroRead = time.time()
+        if driving:
+
+            integratedError = integratedError * INTEGRAL_FADE_OUT
+
+
+            proportionalError = getError(z)
+            integratedError = integratedError + proportionalError * (thisTimeGyroRead2 - lastTimeGyroRead2)
+
+            lastTimeGyroRead2 = thisTimeGyroRead2
+
+            control = P_GAIN * proportionalError + I_GAIN * integratedError
+
+            controlSpeed = int(control * SPEED_GAIN)
+
+            if controlSpeed > SPEED_MAX_CONTROL:
+                controlSpeed = SPEED_MAX_CONTROL
+            elif controlSpeed < -SPEED_MAX_CONTROL:
+                controlSpeed = -SPEED_MAX_CONTROL
+
+            controlSteer = control * STEER_GAIN
+            if controlSteer > SPEER_MAX_CONTROL:
+                controlSteer = SPEER_MAX_CONTROL
+            elif controlSteer < -SPEER_MAX_CONTROL:
+                controlSteer = -SPEER_MAX_CONTROL
+
+
+            if CONTROL_TYPE == CONTROL_MOTORS:
+                rightSideSpeed = SPEED - controlSpeed
+                leftSideSpeed = SPEED + controlSpeed
+            else:
+                rightSideSpeed = SPEED
+                leftSideSpeed = SPEED
+
+            if CONTROL_TYPE == CONTROL_STEERING:
+                leftDeg = int(-controlSteer)
+                rightDeg = int(-controlSteer)
+            else:
+                leftDeg = 1
+                rightDeg = 1
+
+        else:
+            rightSideSpeed = 0
+            leftSideSpeed = 0
+
+        client.publish("wheel/fl/speed", leftSideSpeed)
+        client.publish("wheel/bl/speed", leftSideSpeed)
+        client.publish("wheel/fr/speed", rightSideSpeed)
+        client.publish("wheel/br/speed", rightSideSpeed)
+
+        wheelDeg("fl", str(int(leftDeg)))
+        wheelDeg("fr", str(int(rightDeg)))
+        wheelDeg("bl", 0)
+        wheelDeg("br", 0)
+
+        print("Z: " + str(z) + " drift: " + str(proportionalError) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
+
+except Exception as ex:
+    print("ERROR: " + str(ex))
+finally:
+    GPIO.cleanup()
