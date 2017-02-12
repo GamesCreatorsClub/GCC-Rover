@@ -75,7 +75,7 @@ i2c_bus.write_byte_data(i2c_address, 0x20, 0x0F) # normal mode and all axes on t
 i2c_bus.write_byte_data(i2c_address, 0x23, 0x20) # full 2000dps to control reg4
 
 def readGyroZ():
-    global lastTimeGyroRead
+    global lastTimeAccelRead
 
     # print("        readGyroZ():")
     thisTimeGyroRead = time.time()
@@ -193,7 +193,6 @@ try:
 
             integratedError = integratedError * INTEGRAL_FADE_OUT
 
-
             proportionalError = getError(z)
             integratedError = integratedError + proportionalError * (thisTimeGyroRead2 - lastTimeGyroRead2)
 
@@ -247,5 +246,3 @@ try:
 
 except Exception as ex:
     print("ERROR: " + str(ex))
-finally:
-    GPIO.cleanup()
