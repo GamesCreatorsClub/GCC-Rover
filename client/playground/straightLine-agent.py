@@ -75,7 +75,7 @@ i2c_bus.write_byte_data(i2c_address, 0x20, 0x0F) # normal mode and all axes on t
 i2c_bus.write_byte_data(i2c_address, 0x23, 0x20) # full 2000dps to control reg4
 
 def readGyroZ():
-    global lastTimeAccelRead
+    global lastTimeAccelRead, lastTimeGyroRead
 
     # print("        readGyroZ():")
     thisTimeGyroRead = time.time()
@@ -134,15 +134,14 @@ def calibrateGyro():
 
 def getError(gyroAngle):
     if gyroAngle > gyroMax or gyroAngle < gyroMin:
+        # return gyroAngle - gyroCentre
         return gyroAngle + z - gyroCentre
     return 0.0
 
+    # return gyroAngle - gyroCentre
 
 
 try:
-
-
-    calibrateGyro()
     SPEED = 250
 
     SPEED_GAIN = 0.3 # 0.4
@@ -153,21 +152,32 @@ try:
 
     CONTROL_TYPE = CONTROL_STEERING
 
-    STEER_GAIN = 1
-    SPEER_MAX_CONTROL = 4.5
+    STEER_GAIN = 1.5
+    STEER_MAX_CONTROL = 30
     INTEGRAL_FADE_OUT = 0.95
+    INTEGRAL_FADE_OUT = 1
+
 
     # P_GAIN = 0.9 and I_GAIN = 0.1
 
     P_GAIN = 0.85
-    I_GAIN = 0.15
-    D_GAIN = 0.0
+    I_GAIN = 0.10
+    D_GAIN = 0.05
 
+    steerGain = STEER_GAIN
+    pGain = P_GAIN
+    iGain = I_GAIN
+    dGain = D_GAIN
+    integralFadeOut = INTEGRAL_FADE_OUT
+    steerMaxControl = STEER_MAX_CONTROL
 
     wheelDeg("fl", 0)
     wheelDeg("fr", 0)
     wheelDeg("bl", 0)
     wheelDeg("br", 0)
+
+    z = readGyroZ()
+    calibrateGyro()
 
     rightSideSpeed = 75
     leftSideSpeed = 75
@@ -177,28 +187,43 @@ try:
 
     proportionalError = 0
     integratedError = 0
+    derivativeError = 0
 
-    z = readGyroZ()
     lastTimeGyroRead2 = 0
     thisTimeGyroRead2 = 0
 
+    previousError = 0
+    control = 0
+    dt = 0
+
+    integratedError = 0
+
     while True:
         for i in range(0, 10):
-            time.sleep(0.045)
-            client.loop(0.005)
+            time.sleep(0.0015)
+            client.loop(0.0005)
 
+        lastTimeGyroRead2 = thisTimeGyroRead2
         z = readGyroZ()
-        thisTimeGyroRead = time.time()
+        thisTimeGyroRead2 = time.time()
         if driving:
 
-            integratedError = integratedError * INTEGRAL_FADE_OUT
+            integratedError = integratedError * integralFadeOut
+
+            dt = thisTimeGyroRead2 - lastTimeGyroRead2
 
             proportionalError = getError(z)
-            integratedError = integratedError + proportionalError * (thisTimeGyroRead2 - lastTimeGyroRead2)
+            # proportionalError = z
+            integratedError = integratedError + proportionalError * dt
 
-            lastTimeGyroRead2 = thisTimeGyroRead2
+            if dt == 0:
+                derivativeError = 0
+            else:
+                derivativeError = (proportionalError - previousError) / dt
 
-            control = P_GAIN * proportionalError + I_GAIN * integratedError
+            previousError = proportionalError
+
+            control = pGain * proportionalError + iGain * integratedError + dGain * derivativeError
 
             controlSpeed = int(control * SPEED_GAIN)
 
@@ -207,11 +232,11 @@ try:
             elif controlSpeed < -SPEED_MAX_CONTROL:
                 controlSpeed = -SPEED_MAX_CONTROL
 
-            controlSteer = control * STEER_GAIN
-            if controlSteer > SPEER_MAX_CONTROL:
-                controlSteer = SPEER_MAX_CONTROL
-            elif controlSteer < -SPEER_MAX_CONTROL:
-                controlSteer = -SPEER_MAX_CONTROL
+            controlSteer = control * steerGain
+            if controlSteer > steerMaxControl:
+                controlSteer = steerMaxControl
+            elif controlSteer < -steerMaxControl:
+                controlSteer = -steerMaxControl
 
 
             if CONTROL_TYPE == CONTROL_MOTORS:
@@ -229,6 +254,16 @@ try:
                 rightDeg = 1
 
         else:
+            leftDeg = 0
+            rightDeg = 0
+
+            proportionalError = 0
+            integratedError = 0
+            derivativeError = 0
+
+            previousError = 0
+            control = 0
+
             rightSideSpeed = 0
             leftSideSpeed = 0
 
@@ -242,7 +277,9 @@ try:
         wheelDeg("bl", 0)
         wheelDeg("br", 0)
 
-        print("Z: " + str(z) + " drift: " + str(proportionalError) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
-
+        # print("Z: " + str(z) + " drift: " + str(proportionalError) + " speed: " + str(leftSideSpeed) + " <-> " + str(rightSideSpeed) + " / " + str(leftDeg) + " <-> " + str(rightDeg))
+        print("Steer: " + str(leftDeg) + ", c=" + str(round(control, 3)) +
+              ", p=" + str(round(proportionalError, 3)) + ", i=" + str(round(integratedError, 3)) +
+              ", d=" + str(round(derivativeError, 3)) + ", dt=" + str(round(dt, 3)))
 except Exception as ex:
     print("ERROR: " + str(ex))

@@ -10,9 +10,14 @@ STRAIGHT = 1
 SLANT = 2
 SIDEWAYS = 3
 
+STARTING_ROTATION_SPEED = 30
+
+current_speed = 0
+
 wheelPosition = STRAIGHT
 gyroReadOut = 0
 
+previousGyroRead = 0
 
 def straightenWheels():
     global wheelPosition, DELAY, STRAIGHT
@@ -52,16 +57,53 @@ def sidewaysWheels():
 
 
 def turnOnSpot():
+    global gyroReadOut
+
+    gyroReadOut = 0
+
     slantWheels()
-    amount = int(currentCommand["args"])
+
+    target = int(currentCommand["args"])
+    setRotationSpeed(STARTING_ROTATION_SPEED)
+
+
+def setRotationSpeed(speed):
+    global current_speed
+
+    current_speed = speed
+    target = int(currentCommand["args"])
+    if target > 0:
+        amount = speed
+    else:
+        amount = -speed
+
     wheelSpeed("fl", amount)
     wheelSpeed("fr", -amount)
     wheelSpeed("bl", amount)
     wheelSpeed("br", -amount)
 
+    current_speed = speed
+
 
 def turnOnSpotControl():
+    global previousGyroRead, current_speed
+
     print("Gyro is " + str(gyroReadOut))
+    target = int(currentCommand["args"])
+    rotational_speed = abs(gyroReadOut - previousGyroRead)
+    if rotational_speed < 0.5:
+        current_speed += 1
+
+        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_speed))
+
+        setRotationSpeed(current_speed)
+    elif rotational_speed > 0.8:
+        current_speed -= 1
+        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_speed))
+
+    if (target > 0 and gyroReadOut >= target) or (target < 0 and gyroReadOut <= target):
+        newCommandMsg("", "", ["stop"])
+
 
 
 def moveMotors(amount):
@@ -135,9 +177,9 @@ def newCommandMsg(topic, message, groups):
 
 
 def handleGyro(topic, message, groups):
-    global gyroReadOut
-
-    gyroReadOut = float(message)
+    global gyroReadOut, previousGyroRead
+    previousGyroRead =  gyroReadOut
+    gyroReadOut += float(message)
 
 
 def loop():

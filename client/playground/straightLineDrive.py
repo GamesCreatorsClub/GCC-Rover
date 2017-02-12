@@ -28,7 +28,7 @@ def onMessage(client, data, msg):
 
 client.on_connect = onConnect
 client.on_message = onMessage
-client.connect("gcc-rover-4", 1883, 60)
+client.connect("gcc-rover-2", 1883, 60)
 
 def onKeyDown(key):
 
@@ -49,6 +49,9 @@ def onKeyUp(key):
 lastkeys = []
 keys = []
 t = 0
+
+client.publish("straight", "calibrate")
+
 while True:
     client.loop(1.0/60)
     t += 1
