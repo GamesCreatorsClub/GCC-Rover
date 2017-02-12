@@ -4,16 +4,14 @@ import time
 import traceback
 import pyroslib
 
-
 DELAY = 0.15
-
-speed = 100
 
 STRAIGHT = 1
 SLANT = 2
 SIDEWAYS = 3
 
 wheelPosition = STRAIGHT
+gyroReadOut = 0
 
 
 def straightenWheels():
@@ -27,6 +25,7 @@ def straightenWheels():
     if wheelPosition != STRAIGHT:
         time.sleep(DELAY)
         wheelPosition = STRAIGHT
+
 
 def slantWheels():
     global wheelPosition, DELAY, SLANT
@@ -61,12 +60,17 @@ def turnOnSpot():
     wheelSpeed("br", -amount)
 
 
+def turnOnSpotControl():
+    print("Gyro is " + str(gyroReadOut))
+
+
 def moveMotors(amount):
     straightenWheels()
     wheelSpeed("fl", amount)
     wheelSpeed("fr", amount)
     wheelSpeed("bl", amount)
     wheelSpeed("br", amount)
+
 
 def crabAlong(amount):
     sidewaysWheels()
@@ -81,47 +85,11 @@ def wheelDeg(wheelName, angle):
     pyroslib.publish(topic, str(angle))
     # print("Published topic=" +  topic + "; msg=" + str(angle))
 
+
 def wheelSpeed(wheelName, speed):
     topic = "wheel/" + wheelName + "/speed"
     pyroslib.publish(topic, str(speed))
     # print("Published topic=" +  topic + "; msg=" + str(speed))
-
-
-#
-# def onMessage(client, data, msg):
-#     payload = str(msg.payload, 'utf-8')
-#
-#     if msg.topic == "drive":
-#         command = payload.split(">")[0]
-#         if len(payload.split(">")) > 1:
-#             command_args_list = payload.split(">")[1].split(",")
-#             args1 = command_args_list[0]
-#         else:
-#             args1 = 0
-#         if command == "forward":
-#             moveMotors(int(args1))
-#         elif command == "back":
-#             moveMotors(-int(args1))
-#         elif command == "motors":
-#             moveMotors(int(args1))
-#         elif command == "align":
-#             straightenWheels()
-#         elif command == "slant":
-#             slantWheels()
-#         elif command == "rotate":
-#             turnOnSpot(int(args1))
-#         elif command == "pivotLeft":
-#             turnOnSpot(-int(args1))
-#         elif command == "pivotRight":
-#             turnOnSpot(int(args1))
-#         elif command == "stop":
-#             stopAllWheels()
-#         elif command == "sideways":
-#             sidewaysWheels()
-#         elif command == "crabLeft":
-#             crabAlong(-int(args1))
-#         elif command == "crabRight":
-#             crabAlong(int(args1))
 
 
 def stopAllWheels():
@@ -129,6 +97,7 @@ def stopAllWheels():
     wheelSpeed("fr", 0)
     wheelSpeed("bl", 0)
     wheelSpeed("br", 0)
+    print("Stopping all wheels!")
 
 
 def nothing():
@@ -140,12 +109,14 @@ commands = {
         "start": stopAllWheels
     },
     "rotate": {
-        "start": turnOnSpot
+        "start": turnOnSpot,
+        "do": turnOnSpotControl
     }
 }
 
-continuousTimeout = 50
 currentCommand = {}
+continuousTimeout = 50
+
 
 def newCommandMsg(topic, message, groups):
     global currentCommand
@@ -162,8 +133,9 @@ def newCommandMsg(topic, message, groups):
     else:
         print("Received unknown command " + groups[0])
 
+
 def handleGyro(topic, message, groups):
-    global gryoReadOut
+    global gyroReadOut
 
     gyroReadOut = float(message)
 
@@ -171,7 +143,7 @@ def handleGyro(topic, message, groups):
 def loop():
     global continuousTimeout
     continuousTimeout -= 1
-    if continuousTimeout == 0:
+    if continuousTimeout <= 0:
         continuousTimeout = 50
         pyroslib.publish("sensor/gyro/continuous", "")
 
@@ -183,7 +155,7 @@ if __name__ == "__main__":
     try:
         print("Starting drive service...")
 
-        pyroslib.subscribe("drive/+", newCommandMsg)
+        pyroslib.subscribe("move/+", newCommandMsg)
         pyroslib.subscribe("sensor/gyro", handleGyro)
         pyroslib.init("drive-service")
 
@@ -193,4 +165,3 @@ if __name__ == "__main__":
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
-
