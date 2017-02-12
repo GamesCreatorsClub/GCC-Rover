@@ -49,13 +49,16 @@ def _onMessage(mqttClient, data, msg):
     payload = str(msg.payload, 'utf-8')
     topic = msg.topic
 
-    for regex in _regexToLambda:
-        matching = regex.match(topic)
-        if matching:
-            method = _regexToLambda[regex]
+    try:
+        for regex in _regexToLambda:
+            matching = regex.match(topic)
+            if matching:
+                method = _regexToLambda[regex]
 
-            method(topic, payload, matching.groups())
-            return
+                method(topic, payload, matching.groups())
+                return
+    except Exception as ex:
+        print("ERROR: Got exception in on message processing; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
 
 def init(name, unique=False):
