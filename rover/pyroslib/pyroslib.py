@@ -80,6 +80,10 @@ def init(name, unique=False):
     print("    " + name + " connected to broker.")
 
 
+def sleep(deltaTime):
+    loop(deltaTime)
+
+
 def loop(deltaTime, inner=None):
     for it in range(0, int(deltaTime / 0.002)):
         time.sleep(0.0015)

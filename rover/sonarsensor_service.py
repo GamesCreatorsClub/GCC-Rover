@@ -2,6 +2,7 @@
 
 import time
 import traceback
+import threading
 import pyroslib
 import RPi.GPIO as GPIO
 
@@ -10,9 +11,14 @@ TRIG = 11  # Originally was 23
 ECHO = 8   # Originally was 24
 
 SERVO_NUMBER = 8
-SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
+SERVO_SPEED = 0.14 * 3  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
 
 lastServoAngle = 0
+
+semaphore = threading.Semaphore()
+pulse_start = 0
+pulse_end = 0
+edge = False
 
 
 def moveServo(angle):
@@ -33,21 +39,34 @@ def moveServo(angle):
     lastServoAngle = angle
 
 
+def edgeDetect(pin):
+    global pulse_start, pulse_end, edge
+
+    t = time.time()
+
+    if edge:
+        pulse_end = t
+        if semaphore is not None:
+            semaphore.release()
+        # print("  < edge down received")
+    else:
+        pulse_start = t
+        edge = True
+        # print("  > edge up received")
+
+
 def readDistance():
+    global semaphore, edge, pulse_start
+
+    edge = False
+
     GPIO.output(TRIG, True)
     time.sleep(0.00001)
     GPIO.output(TRIG, False)
-
-    start = time.time()
-    while GPIO.input(ECHO) == 0 and time.time() - start < 0.1:
-        pass
-
     pulse_start = time.time()
 
-    while GPIO.input(ECHO) == 1 and time.time() - start < 0.3:
-        pass
-
-    pulse_end = time.time()
+    semaphore = threading.Semaphore(0)
+    semaphore.acquire(blocking=True, timeout=1)
 
     pulse_duration = pulse_end - pulse_start
 
@@ -58,11 +77,43 @@ def readDistance():
     return distance
 
 
-def handleScan(topic, payload, groups):
-    moveServo(float(payload))
+def handleRead(topic, payload, groups):
+    angle = float(payload)
+    moveServo(angle)
     distance = readDistance()
     # print ("   distance =" + str(distance))
-    pyroslib.publish("sensor/distance", str(distance))
+    pyroslib.publish("sensor/distance", str(angle) + ":" + str(distance))
+
+
+def handleScan(topic, payload, groups):
+    startScan = True
+
+    distances = {}
+    angle = -90
+    while angle <= 90:
+        moveServo(float(angle))
+        distance = readDistance()
+        distances[angle] = distance
+        angle += 22.5
+
+    angle = 90
+    while angle >= -90:
+        moveServo(float(angle))
+        distance = readDistance()
+
+        if distance < distances[angle]:
+            distances[angle] = distance
+        angle -= 22.5
+
+    angles = list(distances.keys())
+    angles.sort()
+
+    distancesList = []
+    for angle in angles:
+        distancesList.append(str(angle) + ":" + str(distances[angle]))
+
+    # print ("   distance =" + str(distance))
+    pyroslib.publish("sensor/distance", str(",".join(distancesList)))
 
 
 if __name__ == "__main__":
@@ -72,6 +123,7 @@ if __name__ == "__main__":
 
         GPIO.setup(TRIG, GPIO.OUT)
         GPIO.setup(ECHO, GPIO.IN)
+        GPIO.add_event_detect(ECHO, GPIO.BOTH, callback=edgeDetect)
 
         GPIO.output(TRIG, False)
 
@@ -81,6 +133,7 @@ if __name__ == "__main__":
 
         time.sleep(1)
 
+        pyroslib.subscribe("sensor/distance/read", handleRead)
         pyroslib.subscribe("sensor/distance/scan", handleScan)
         pyroslib.init("sonar-sensor-service")
 

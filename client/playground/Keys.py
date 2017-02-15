@@ -65,20 +65,20 @@ client.on_message = onMessage
 connect()
 timer = 0
 
-global speed, wheelPosIndex
-speed = 100
+global current_speed, wheelPosIndex
+current_speed = 100
 
 wheelPos = ["-60", "-45", "-30", "-15", "0", "15", "30", "45", "60"]
 wheelPosIndex = 1
 
 def Left():
-    global speed, wheelPosIndex
+    global current_speed, wheelPosIndex
     wheelPosIndex -= 1
     if wheelPosIndex < 0:
         wheelPosIndex = 0
     wheelsTurn(wheelPos[wheelPosIndex])
 def Right():
-    global speed, wheelPosIndex
+    global current_speed, wheelPosIndex
     wheelPosIndex += 1
     if wheelPosIndex > len(wheelPos) - 1:
         wheelPosIndex = len(wheelPos) - 1
@@ -86,7 +86,7 @@ def Right():
     wheelsTurn(wheelPos[wheelPosIndex])
 
 def UP1():
-    global speed, wheelPosIndex
+    global current_speed, wheelPosIndex
     speed = speed + 50
     if speed > 200:
         speed = 200
@@ -95,7 +95,7 @@ def UP1():
     client.publish("wheel/bl/speed", str(speed))
     client.publish("wheel/br/speed", str(speed))
 def BACK():
-    global speed, wheelPosIndex
+    global current_speed, wheelPosIndex
     speed = speed - 50
     if speed < -200:
         speed = -200
@@ -104,7 +104,7 @@ def BACK():
     client.publish("wheel/bl/speed", "-100")
     client.publish("wheel/br/speed", "-100")
 def STOP():
-    global speed, wheelPosIndex
+    global current_speed, wheelPosIndex
     client.publish("wheel/fl/speed", str(0))
     client.publish("wheel/fr/speed", str(0))
     client.publish("wheel/bl/speed", str(0))
@@ -154,11 +154,11 @@ while True:
             STOP()
 
         if current_keys[pygame.K_o]:
-            speed = speed - 50
-            print("Speed " + str(speed))
+            current_speed = current_speed - 50
+            print("Speed " + str(current_speed))
         if current_keys[pygame.K_p]:
-            speed = speed + 50
-            print("Speed " + str(speed))
+            current_speed = current_speed + 50
+            print("Speed " + str(current_speed))
 
 
     pygame.display.flip()

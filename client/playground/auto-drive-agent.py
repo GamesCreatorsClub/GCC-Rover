@@ -7,7 +7,7 @@ import smbus
 
 DELAY = 0.15
 
-speed = 100
+current_speed = 100
 
 STRAIGHT = 1
 SLANT = 2

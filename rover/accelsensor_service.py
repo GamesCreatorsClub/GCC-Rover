@@ -150,7 +150,7 @@ def loop():
             time.sleep(0.02)
         accelData = getAxes()
 
-        pyroslib.publish("sensor/accel", str(accelData.x) + "," + str(accelData.y) + "," + str(accelData.z) + "," + str(accelData.t))
+        pyroslib.publish("sensor/accel", str(accelData["x"]) + "," + str(accelData["y"]) + "," + str(accelData["z"]) + "," + str(accelData["t"]))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:

@@ -4,20 +4,90 @@ import time
 import traceback
 import pyroslib
 
-DELAY = 0.15
+
+WHEEL_CIRCUMFERENCE = 15  # 15mm
+
+DELAY = 0.50
 
 STRAIGHT = 1
 SLANT = 2
 SIDEWAYS = 3
 
+MODE_NOTHING = 0
+MODE_STARTING = 1
+MODE_DRIVING = 2
+
 STARTING_ROTATION_SPEED = 30
 
 current_speed = 0
+current_motor_speed = 0
 
 wheelPosition = STRAIGHT
-gyroReadOut = 0
 
+gyroReadOut = 0
 previousGyroRead = 0
+
+accelXReadOut = 0
+accelYReadOut = 0
+accelDeltaTime = 0
+totalDistance = 0
+
+previousControlTime = 0
+
+continuousTimeout = 50
+
+_needGyro = False
+_needAccel = False
+
+
+def sign(x):
+    if x > 0:
+        return 1
+    if x == 0:
+        return 0
+    return -1
+
+
+def wheelDeg(wheelName, angle):
+    topic = "wheel/" + wheelName + "/deg"
+    pyroslib.publish(topic, str(angle))
+    # print("Published topic=" +  topic + "; msg=" + str(angle))
+
+
+def wheelSpeed(wheelName, speed):
+    topic = "wheel/" + wheelName + "/speed"
+    pyroslib.publish(topic, str(speed))
+    # print("Published topic=" +  topic + "; msg=" + str(speed))
+
+
+def needGyro():
+    global continuousTimeout, _needGyro
+
+    continuousTimeout = 50
+    _needGyro = True
+
+    pyroslib.publish("sensor/gyro/continuous", "start")
+
+
+def needAccel():
+    global continuousTimeout, _needAccel
+
+    continuousTimeout = 50
+    _needAccel = True
+
+    pyroslib.publish("sensor/accel/continuous", "start")
+
+def dontNeedGyro():
+    global _needGyro
+
+    _needGyro = False
+
+
+def dontNeedAccel():
+    global _needAccel
+
+    _needAccel = False
+
 
 def straightenWheels():
     global wheelPosition, DELAY, STRAIGHT
@@ -56,23 +126,12 @@ def sidewaysWheels():
         wheelPosition = SIDEWAYS
 
 
-def turnOnSpot():
-    global gyroReadOut
-
-    gyroReadOut = 0
-
-    slantWheels()
-
-    target = int(currentCommand["args"])
-    setRotationSpeed(STARTING_ROTATION_SPEED)
-
-
 def setRotationSpeed(speed):
-    global current_speed
+    global current_motor_speed
 
-    current_speed = speed
-    target = int(currentCommand["args"])
-    if target > 0:
+    current_motor_speed = speed
+    direction = currentCommand["direction"]
+    if direction > 0:
         amount = speed
     else:
         amount = -speed
@@ -82,56 +141,147 @@ def setRotationSpeed(speed):
     wheelSpeed("bl", amount)
     wheelSpeed("br", -amount)
 
-    current_speed = speed
+    current_motor_speed = speed
 
 
-def turnOnSpotControl():
-    global previousGyroRead, current_speed
+def setForwardSpeed(speed):
+    global current_motor_speed
 
-    print("Gyro is " + str(gyroReadOut))
-    target = int(currentCommand["args"])
-    rotational_speed = abs(gyroReadOut - previousGyroRead)
-    if rotational_speed < 0.5:
-        current_speed += 1
+    current_motor_speed = speed
+    direction = currentCommand["direction"]
+    if direction > 0:
+        amount = speed
+    else:
+        amount = -speed
 
-        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_speed))
-
-        setRotationSpeed(current_speed)
-    elif rotational_speed > 0.8:
-        current_speed -= 1
-        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_speed))
-
-    if (target > 0 and gyroReadOut >= target) or (target < 0 and gyroReadOut <= target):
-        newCommandMsg("", "", ["stop"])
-
-
-
-def moveMotors(amount):
-    straightenWheels()
     wheelSpeed("fl", amount)
     wheelSpeed("fr", amount)
     wheelSpeed("bl", amount)
     wheelSpeed("br", amount)
 
+    current_motor_speed = speed
 
-def crabAlong(amount):
-    sidewaysWheels()
+
+def setSideSpeed(speed):
+    global current_motor_speed
+
+    current_motor_speed = speed
+    direction = currentCommand["direction"]
+    if direction > 0:
+        amount = speed
+    else:
+        amount = -speed
+
     wheelSpeed("fl", amount)
     wheelSpeed("fr", -amount)
     wheelSpeed("bl", -amount)
     wheelSpeed("br", amount)
 
-
-def wheelDeg(wheelName, angle):
-    topic = "wheel/" + wheelName + "/deg"
-    pyroslib.publish(topic, str(angle))
-    # print("Published topic=" +  topic + "; msg=" + str(angle))
+    current_motor_speed = speed
 
 
-def wheelSpeed(wheelName, speed):
-    topic = "wheel/" + wheelName + "/speed"
-    pyroslib.publish(topic, str(speed))
-    # print("Published topic=" +  topic + "; msg=" + str(speed))
+def crabAlong(amount):
+    sidewaysWheels()
+    setSideSpeed(amount)
+
+
+def turnOnSpot():
+    global gyroReadOut
+
+    needGyro()
+
+    gyroReadOut = 0
+
+    slantWheels()
+
+    target = int(currentCommand["args"])
+    currentCommand["direction"] = sign(target)
+
+    setRotationSpeed(STARTING_ROTATION_SPEED)
+
+
+def turnOnSpotControl():
+    global previousGyroRead, current_motor_speed
+
+    print("Gyro is " + str(gyroReadOut))
+    target = int(currentCommand["args"])
+    rotational_speed = abs(gyroReadOut - previousGyroRead)
+    if rotational_speed < 0.5:
+        current_motor_speed += 1
+
+        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_motor_speed))
+
+        setRotationSpeed(current_motor_speed)
+    elif rotational_speed > 0.8:
+        current_motor_speed -= 1
+        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_motor_speed))
+        setRotationSpeed(current_motor_speed)
+
+    if (target > 0 and gyroReadOut >= target) or (target < 0 and gyroReadOut <= target):
+        newCommandMsg("", "", ["stop"])
+        dontNeedGyro()
+
+
+def moveMotorsForward():
+    moveMotors()
+
+
+def moveMotorsBack():
+    currentCommand["args"] = -int(currentCommand["args"])
+    moveMotors()
+
+
+def moveMotors():
+    global accelYReadOut, current_speed, totalDistance
+
+    needAccel()
+
+    accelYReadOut = 0
+    totalDistance = 0
+    current_speed = 0
+
+    straightenWheels()
+
+    target = int(currentCommand["args"])
+    currentCommand["direction"] = sign(target)
+    currentCommand["mode"] = MODE_STARTING
+    print("currnetCommand=" + str(currentCommand))
+    setForwardSpeed(STARTING_ROTATION_SPEED)
+
+
+def moveMotorsControl():
+    global current_motor_speed, totalDistance, previousControlTime, current_speed
+
+    if currentCommand["mode"] == MODE_STARTING:
+        print("Accel is " + str(accelYReadOut))
+
+        target = int(currentCommand["args"])
+        direction = int(currentCommand["direction"])
+        current_speed += - accelYReadOut * accelDeltaTime * direction
+        if current_speed < 2:
+            current_motor_speed += 1
+
+            print("Total detected speed: ", str(current_speed), " new driving speed: ", str(current_motor_speed), " direction ", str(direction))
+
+            setForwardSpeed(current_motor_speed)
+        else:
+            currentCommand["mode"] = MODE_DRIVING
+    else:
+        now = time.time()
+
+        totalDistance += current_motor_speed * WHEEL_CIRCUMFERENCE * (now - previousControlTime) / 60  # RPM * time
+
+        previousControlTime = now
+
+        target = int(currentCommand["args"])
+        if __name__ == '__main__':
+            if (target > 0 and totalDistance >= target) or (target < 0 and totalDistance >= -target):
+                newCommandMsg("", "", ["stop"])
+                dontNeedAccel()
+
+        # TODO - switching motor at some speed is not enough. Stopping would be far better - or slowing down
+        # Slowing down has another risk - stopping before reaching destination. So slowing down should detec
+        # if stopped - which, with current hardware, I am not sure how to do so.
 
 
 def stopAllWheels():
@@ -153,11 +303,18 @@ commands = {
     "rotate": {
         "start": turnOnSpot,
         "do": turnOnSpotControl
+    },
+    "forward": {
+        "start": moveMotorsForward,
+        "do": moveMotorsControl
+    },
+    "back": {
+        "start": moveMotorsBack,
+        "do": moveMotorsControl
     }
 }
 
 currentCommand = {}
-continuousTimeout = 50
 
 
 def newCommandMsg(topic, message, groups):
@@ -178,8 +335,18 @@ def newCommandMsg(topic, message, groups):
 
 def handleGyro(topic, message, groups):
     global gyroReadOut, previousGyroRead
-    previousGyroRead =  gyroReadOut
+    previousGyroRead = gyroReadOut
     gyroReadOut += float(message)
+
+
+def handleAccel(topic, message, groups):
+    global accelXReadOut, accelYReadOut, accelDeltaTime
+
+    data = message.split(",")
+    # print("Received data " + str(data))
+    accelXReadOut += float(data[0])
+    accelYReadOut += float(data[1])
+    accelDeltaTime = float(data[3])
 
 
 def loop():
@@ -187,7 +354,10 @@ def loop():
     continuousTimeout -= 1
     if continuousTimeout <= 0:
         continuousTimeout = 50
-        pyroslib.publish("sensor/gyro/continuous", "")
+        if _needGyro:
+            pyroslib.publish("sensor/gyro/continuous", "start")
+        if _needAccel:
+            pyroslib.publish("sensor/accel/continuous", "start")
 
     if "do" in currentCommand:
         currentCommand["do"]()
@@ -199,6 +369,7 @@ if __name__ == "__main__":
 
         pyroslib.subscribe("move/+", newCommandMsg)
         pyroslib.subscribe("sensor/gyro", handleGyro)
+        pyroslib.subscribe("sensor/accel", handleAccel)
         pyroslib.init("drive-service")
 
         print("Started drive service.")
