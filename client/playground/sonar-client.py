@@ -40,9 +40,14 @@ def onConnect(client, data, rc):
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");
         connected = True
         client.subscribe ("sensor/distance")
+        client.subscribe("move/response")
     else:
         print("DriveController: Connection returned error result: " + str(rc))
         sys.exit(rc)
+
+def move():
+    return
+
 
 
 def onMessage(client, data, msg):
@@ -54,6 +59,28 @@ def onMessage(client, data, msg):
         print("** distance = " + payload)
         distance = parseDistances(payload)
         received = True
+
+        move()
+        angle = 0
+        largestDist = 0
+        for d in distances:
+            if distances[d] > largestDist:
+                angle = float(d)
+                largestDist = distances[d]
+        print(" LARGEST DISTANCE = angle: " + str(angle) + " | distance: " + str(largestDist))
+        if angle != 0:
+            client.publish("move/rotate", int(angle))
+        else:
+            client.publish("move/forward", "30")
+
+    if topic == "move/response":
+        if payload == "done-move":
+            print("moved")
+            client.publish("sensor/distance/scan", "scan")
+        if payload == "done-turn":
+            print("turned")
+            client.publish("move/forward", "30")
+
 
 
 def _reconnect():

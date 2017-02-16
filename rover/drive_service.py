@@ -220,6 +220,7 @@ def turnOnSpotControl():
     if (target > 0 and gyroReadOut >= target) or (target < 0 and gyroReadOut <= target):
         newCommandMsg("", "", ["stop"])
         dontNeedGyro()
+        pyroslib.publish("move/response", "done-turn")
 
 
 def moveMotorsForward():
@@ -277,6 +278,7 @@ def moveMotorsControl():
         if __name__ == '__main__':
             if (target > 0 and totalDistance >= target) or (target < 0 and totalDistance >= -target):
                 newCommandMsg("", "", ["stop"])
+                pyroslib.publish("move/response", "done-move")
                 dontNeedAccel()
 
         # TODO - switching motor at some speed is not enough. Stopping would be far better - or slowing down
