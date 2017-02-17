@@ -44,6 +44,7 @@ def initWheel(wheelName, motorServo, steerServo):
         "speed": {
             "servo": motorServo,
             "-300": "95",
+            "-0": "155",
             "0": "155",
             "300": "215"
         }
@@ -71,6 +72,8 @@ def initWheel(wheelName, motorServo, steerServo):
         wheelCalibrationMap[wheelName]["speed"]["servo"] = defaultWheelCal["speed"]["servo"]
     if "-300" not in wheelCalibrationMap[wheelName]["speed"]:
         wheelCalibrationMap[wheelName]["-300"]["servo"] = defaultWheelCal["speed"]["-300"]
+    if "-0" not in wheelCalibrationMap[wheelName]["speed"]:
+        wheelCalibrationMap[wheelName]["speed"]["-0"] = defaultWheelCal["speed"]["-0"]
     if "0" not in wheelCalibrationMap[wheelName]["speed"]:
         wheelCalibrationMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
     if "300" not in wheelCalibrationMap[wheelName]["speed"]:
@@ -106,32 +109,6 @@ def handleServo(servoid, angle=0):
     moveServo(servoid, angle)
 
 
-def handleWheel(mqttClient, topic, payload):
-    # wheel/<name>/<deg|speed>
-
-    topicsplit = topic.split("/")
-    wheelName = topicsplit[1]
-    command = topicsplit[2]
-
-    if wheelName in wheelMap:
-        wheel = wheelMap[wheelName]
-        wheelCal = wheelCalibrationMap[wheelName]
-
-        if DEBUG:
-            print("Handing action: " + str(topicsplit) + ", " + str(payload))
-
-        if command == "deg":
-            if DEBUG:
-                print("  Turning wheel: " + wheelName + " to " + str(payload) + " degs")
-            handleDeg(wheel, wheelCal["deg"], float(payload))
-        elif command == "speed":
-            if DEBUG:
-                print("  Setting wheel: " + wheelName + " speed to " + str(payload))
-            handleSpeed(wheel, wheelCal["speed"], float(payload))
-    else:
-        print("ERROR: no wheel with name " + wheelName + " fonund.")
-
-
 def handleDeg(wheel, wheelCal, degrees):
     if degrees >= 0:
         servoPosition = interpolate(degrees / 90.0, wheelCal["0"], wheelCal["90"])
@@ -145,17 +122,27 @@ def handleDeg(wheel, wheelCal, degrees):
     moveServo(servoNumber, servoPosition)
 
 
-def handleSpeed(wheel, wheelCal, speed):
-    if speed >= 0:
-        servoPosition = interpolate(speed / 300, wheelCal["0"], wheelCal["300"])
-    else:
-        servoPosition = interpolate((speed + 300) / 300, wheelCal["-300"], wheelCal["0"])
-
-    wheel["speed"] = speed
-    wheel["speedServoPos"] = servoPosition
+def handleSpeed(wheel, wheelCal, speedStr):
     servoNumber = wheelCal["servo"]
 
-    if str(speed) == "0":
+    if speedStr == "-0":
+        servoPosition = interpolate(0, wheelCal["-0"], wheelCal["-300"])
+        if DEBUG:
+            print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
+        speed = 0
+    else:
+        speed = float(speedStr)
+        if speed >= 0:
+            servoPosition = interpolate(speed / 300, wheelCal["0"], wheelCal["300"])
+        else:
+            servoPosition = interpolate(-speed / 300, wheelCal["-0"], wheelCal["-300"])
+        if DEBUG:
+            print("    got speed " + speedStr + " @ " + str(servoPosition) + " for " + str(servoNumber))
+
+    wheel["speed"] = speedStr
+    wheel["speedServoPos"] = servoPosition
+
+    if speedStr == "0" or speedStr == "-0":
         moveServo(servoNumber, servoPosition)
 
 
@@ -169,13 +156,13 @@ def driveWheel(wheelName):
     wheel = wheelMap[wheelName]
     wheelCal = wheelCalibrationMap[wheelName]["speed"]
 
-    speed = wheel["speed"]
+    speedStr = wheel["speed"]
     if "speedServoPos" in wheel:
         servoPosition = wheel["speedServoPos"]
 
         servoNumber = wheelCal["servo"]
 
-        if str(speed) != "0":
+        if speedStr != "0" and speedStr != "-0":
             moveServo(servoNumber, servoPosition)
 
 
@@ -221,6 +208,7 @@ def readoutStorage():
 
 
 def writeStorage(topicSplit, value):
+    # print("Got storage value " + str(topicSplit))
     m = storageMap
     for i in range(0, len(topicSplit) - 1):
         key = topicSplit[i]
@@ -272,13 +260,13 @@ def wheelSpeedTopic(topic, payload, groups):
 
         if DEBUG:
             print("  Setting wheel: " + wheelName + " speed to " + str(payload))
-        handleSpeed(wheel, wheelCal["speed"], float(payload))
+        handleSpeed(wheel, wheelCal["speed"], payload)
     else:
         print("ERROR: no wheel with name " + wheelName + " fonund.")
 
 
 def storageWriteTopic(topic, payload, groups):
-    writeStorage(groups, payload)
+    writeStorage(groups[0].split("/"), payload)
 
 
 def storageReadTopic(topic, payload, groups):

@@ -7,7 +7,7 @@ client = mqtt.Client("CalibrateController")
 
 roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "gcc-wifi-ap", "gcc-wifi-ap"]
 roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
-selectedRover = 2
+selectedRover = 0
 
 storageMap = {}
 wheelMap = {}
@@ -40,6 +40,10 @@ def onMessage(client, data, msg):
         initialisationDone = True
 
         wheelMap = storageMap["wheels"]["cal"]
+        initWheel("fr", 0, 1)
+        initWheel("fl", 2, 3)
+        initWheel("br", 4, 5)
+        initWheel("bl", 6, 7)
 
     else:
         print("Wrong topic '" + msg.topic + "'")
@@ -101,6 +105,7 @@ def initWheel(wheelName, motorServo, steerServo):
         "speed": {
             "servo": motorServo,
             "-300": "95",
+            "-0": "155",
             "0": "155",
             "300": "215"
         }
@@ -128,6 +133,8 @@ def initWheel(wheelName, motorServo, steerServo):
         wheelMap[wheelName]["speed"]["servo"] = defaultWheelCal["speed"]["servo"]
     if "-300" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["-300"]["servo"] = defaultWheelCal["speed"]["-300"]
+    if "-0" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["-0"] = defaultWheelCal["speed"]["-0"]
     if "0" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
     if "300" not in wheelMap[wheelName]["speed"]:
@@ -286,13 +293,22 @@ buttons = {
         "rect" : pygame.Rect(428, 304, getTextWidth("-"), getTextHeight("-")),
     },
 
-    "speed 0 add" : {
-        "texture" : texts["+"],
-        "rect" : pygame.Rect(540, 424, getTextWidth("+"), getTextHeight("+")),
+    "speed -0 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(540, 394, getTextWidth("+"), getTextHeight("+")),
     },
-    "speed 0 minus" : {
-        "texture" : texts["-"],
-        "rect" : pygame.Rect(428, 424, getTextWidth("-"), getTextHeight("-")),
+    "speed -0 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(428, 394, getTextWidth("-"), getTextHeight("-")),
+    },
+
+    "speed 0 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(540, 454, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed 0 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(428, 454, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed 300 add" : {
@@ -312,8 +328,8 @@ splitingRects = [
     pygame.Rect(302, 130, 296, 468),
 ]
 
-speeds = ["-300","-150","-75","-50","0","50","75","150","300"]
-selectedSpeedIndex = 4
+speeds = ["-300", "-150", "-75", "-50", "-25", "-24", "-23", "-22", "-0", "0", "22", "23", "24", "25", "50", "75", "150", "300"]
+selectedSpeedIndex = 9
 selectedSpeed = speeds[selectedSpeedIndex]
 lastButton = None
 lastPressed = time.time()
@@ -374,7 +390,7 @@ def doCalStuff():
             wheelMap[selectedWheel]["deg"][calDeg] = int(wheelMap[selectedWheel]["deg"][calDeg]) - 1
             client.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelMap[selectedWheel]["deg"][calDeg]))
             client.publish("wheel/" + selectedWheel + "/deg", selectedDeg)
-    todo = ["-300", "0", "300"]
+    todo = ["-300", "-0", "0", "300"]
 
     for calSpeed in todo:
         buttona = buttons["speed " + calSpeed + " add"]
@@ -505,6 +521,7 @@ while True:
     drawButton(screen, buttons["90deg select"], selectedDeg == "90")
 
     drawText(screen,"-300", (328, buttons["speed -300 minus"]["rect"].y), bigFont)
+    drawText(screen, "-0", (328, buttons["speed -0 minus"]["rect"].y), bigFont)
     drawText(screen, "0", (328, buttons["speed 0 minus"]["rect"].y), bigFont)
     drawText(screen, "300", (328, buttons["speed 300 minus"]["rect"].y), bigFont)
     if not selectedWheel == "all" :
