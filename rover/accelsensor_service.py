@@ -28,13 +28,14 @@ DATA_FORMAT = 0x31
 BW_RATE = 0x2C
 POWER_CTL = 0x2D
 
-BW_RATE_1600HZ = 0x0F
-BW_RATE_800HZ = 0x0E
-BW_RATE_400HZ = 0x0D
-BW_RATE_200HZ = 0x0C
-BW_RATE_100HZ = 0x0B
-BW_RATE_50HZ = 0x0A
-BW_RATE_25HZ = 0x09
+BW_RATE_1600HZ = 0x0E
+BW_RATE_800HZ = 0x0D
+BW_RATE_400HZ = 0x0C
+BW_RATE_200HZ = 0x0B
+BW_RATE_100HZ = 0x0A
+BW_RATE_50HZ = 0x09
+BW_RATE_25HZ = 0x08
+BW_RATE_12HZ = 0x07
 
 RANGE_2G = 0x00
 RANGE_4G = 0x01
@@ -58,8 +59,10 @@ def initAccel():
     global i2c_bus
     i2c_bus = smbus.SMBus(I2C_BUS)
 
-    setBandwidthRate(BW_RATE_50HZ)
-    setRange(RANGE_2G)
+    # setBandwidthRate(BW_RATE_50HZ)
+    # setRange(RANGE_2G)
+    setBandwidthRate(BW_RATE_25HZ)
+    setRange(RANGE_16G)
     enableMeasurement()
 
 
@@ -93,16 +96,33 @@ def getAxes(gforce=False):
     readBytes = i2c_bus.read_i2c_block_data(I2C_ADDRESS, AXES_DATA, 6)
 
     x = readBytes[0] | (readBytes[1] << 8)
-    if x & (1 << 16 - 1):
-        x -= (1 << 16)
+    if x & (1 << 15):
+        x |= ~65535
+    else:
+        x &= 65535
+    # if x & (1 << 16 - 1):
+    #     x -= (1 << 16)
 
+    # y = ((readBytes[3] & 0x03) * 256) + readBytes[2]
+    # if y > 511:
+    #     y -= 1024
     y = readBytes[2] | (readBytes[3] << 8)
-    if y & (1 << 16 - 1):
-        y -= (1 << 16)
+    if y & (1 << 15):
+        y |= ~65535
+    else:
+        y &= 65535
+
+    # if y & (1 << 16 - 1):
+    #     y -= (1 << 16)
 
     z = readBytes[4] | (readBytes[5] << 8)
-    if z & (1 << 16 - 1):
-        z -= (1 << 16)
+    if z & (1 << 15):
+        z |= ~65535
+    else:
+        z &= 65535
+
+    # if z & (1 << 16 - 1):
+    #     z -= (1 << 16)
 
     x *= SCALE_MULTIPLIER
     y *= SCALE_MULTIPLIER
