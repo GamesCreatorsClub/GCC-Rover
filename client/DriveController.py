@@ -13,7 +13,7 @@ roverAddress = ["172.24.1.184", "172.24.1.185", "172.24.1.186", "gcc-wifi-ap", "
 roverPort = [1883, 1883, 1883, 1884, 1885, 1886]
 selectedRover = 2
 
-speeds = [20, 30, 35, 40, 42, 43, 44, 45, 50, 75, 100, 125, 150, 175, 200, 250, 300]
+speeds = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 20, 30, 35, 40, 42, 43, 44, 45, 50, 75, 100, 125, 150, 175, 200, 250, 300]
 selectedSpeed = 4
 connected = False
 
@@ -74,7 +74,7 @@ straight = True
 stopped = True
 
 danceTimer = 0
-current_speed = 50
+currentSpeed = 50
 
 while True:
     for event in pygame.event.get():
@@ -90,27 +90,27 @@ while True:
     if keys[pygame.K_ESCAPE]:
         sys.exit(1)
     elif keys[pygame.K_w]:
-        client.publish("drive", "forward>" + str(current_speed))
+        client.publish("drive", "forward>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["UP"])
         stopped = False
     elif keys[pygame.K_s]:
-        client.publish("drive", "back>" + str(current_speed))
+        client.publish("drive", "back>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["DOWN"])
         stopped = False
     elif keys[pygame.K_a]:
-        client.publish("drive", "crabLeft>" + str(current_speed))
+        client.publish("drive", "crabLeft>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
         stopped = False
     elif keys[pygame.K_d]:
-        client.publish("drive", "crabRight>" + str(current_speed))
+        client.publish("drive", "crabRight>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
         stopped = False
     elif keys[pygame.K_q]:
-        client.publish("drive", "pivotLeft>" + str(current_speed))
+        client.publish("drive", "pivotLeft>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
         stopped = False
     elif keys[pygame.K_e]:
-        client.publish("drive", "pivotRight>" + str(current_speed))
+        client.publish("drive", "pivotRight>" + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
         stopped = False
     elif keys[pygame.K_x]:
@@ -135,19 +135,19 @@ while True:
         elif danceTimer <= 10:
             client.publish("drive", "align")
     elif keys[pygame.K_UP]:
-        client.publish("drive", "motors>" + str(current_speed))
+        client.publish("drive", "motors>" + str(currentSpeed))
         stopped = False
     elif keys[pygame.K_DOWN]:
-        client.publish("drive", "motors>" + str(-current_speed))
+        client.publish("drive", "motors>" + str(-currentSpeed))
         stopped = False
     elif keys[pygame.K_LEFTBRACKET]:
         if selectedSpeed > 0:
             selectedSpeed = selectedSpeed - 1
-        current_speed = speeds[selectedSpeed]
+        currentSpeed = speeds[selectedSpeed]
     elif keys[pygame.K_RIGHTBRACKET]:
         if selectedSpeed < len(speeds) - 1:
             selectedSpeed = selectedSpeed + 1
-        current_speed = speeds[selectedSpeed]
+        currentSpeed = speeds[selectedSpeed]
     elif keys[pygame.K_2]:
         selectedRover = 0
         connect()
@@ -171,7 +171,7 @@ while True:
             client.publish("drive", "stop")
             stopped = True
 
-    value = current_speed + 155
+    value = currentSpeed + 155
     if (value > 255):
         value = 255
     elif value < 1:
@@ -189,7 +189,7 @@ while True:
         text = bigFont.render("Connecting to rover: " + selectedRoverTxt + " @ " + roverAddress[selectedRover], 1, (255, 128, 128))
     screen.blit(text, pygame.Rect(0, 0, 0, 0))
 
-    text = bigFont.render("Speed: " + str(current_speed), 1, (255, 255, 255))
+    text = bigFont.render("Speed: " + str(currentSpeed), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 40, 0, 0))
 
     text = bigFont.render("Stopped: " + str(stopped), 1, (255, 255, 255))
