@@ -1,50 +1,50 @@
 
-returncodes = {}
+import pyros
 
-def init(client, filename, id = None):
+_returncodes = {}
+
+
+def init(client, filename, agentId=None):
     # print("Connected to Rover " + str(client))
-    if id == None:
+    if agentId is None:
         if filename.endswith(".py"):
-            id = filename[ : len(filename) - 3]
+            agentId = filename[: len(filename) - 3]
         else:
-            id = filename
-        id = id.replace("/", "-")
+            agentId = filename
+            agentId = agentId.replace("/", "-")
 
     file = open(filename)
     fileContent = file.read()
     file.close()
 
-    returncodes[id] = None
+    _returncodes[agentId] = None
 
-    client.subscribe("exec/" + str(id) + "/out", 0)
-    client.subscribe("exec/" + str(id) + "/status", 0)
-    client.publish("exec/" + str(id), "stop")
-    client.publish("exec/" + str(id) + "/process", fileContent)
+    pyros.subscribe("exec/" + str(agentId) + "/out", process)
+    pyros.subscribe("exec/" + str(agentId) + "/status", process)
+    pyros.publish("exec/" + str(agentId), "stop")
+    pyros.publish("exec/" + str(agentId) + "/process", fileContent)
 
 
-def process(client, msg):
-    global returncode
+def process(topic, message, groups):
 
-    payload = str(msg.payload, 'utf-8')
-
-    if msg.topic.startswith("exec/"):
-        if msg.topic.endswith("/out"):
-            if len(payload) > 0:
-                id = msg.topic[5 : len(msg.topic) - 4]
-                if payload.endswith("\n"):
-                    print(id + ": " + payload, end="")
+    if topic.startswith("exec/"):
+        if topic.endswith("/out"):
+            if len(message) > 0:
+                agentId = topic[5: len(topic) - 4]
+                if message.endswith("\n"):
+                    print(agentId + ": " + message, end="")
                 else:
-                    print(id + ": " + payload)
+                    print(agentId + ": " + message)
             return True
-        elif msg.topic.endswith("/status"):
-            id = msg.topic[5: len(msg.topic) - 7]
-            if payload == "stored":
-                client.publish("exec/" + str(id), "restart")
-            elif payload.startswith("exit"):
-                if len(payload) > 5:
-                    returncodes[id] = payload[5:]
+        elif topic.endswith("/status"):
+            agentId = topic[5: len(topic) - 7]
+            if message == "stored":
+                pyros.publish("exec/" + str(agentId), "restart")
+            elif message.startswith("exit"):
+                if len(message) > 5:
+                    _returncodes[agentId] = message[5:]
                 else:
-                    returncodes[id] = "-1"
+                    _returncodes[agentId] = "-1"
 
             return True
 
@@ -52,7 +52,8 @@ def process(client, msg):
 
 
 def stopAgent(client, processId):
-    client.publish("exec/" + processId, "stop")
+    pyros.publish("exec/" + processId, "stop")
 
-def returncode(id):
-    return returncodes[id]
+
+def returncode(agentId):
+    return _returncodes[agentId]

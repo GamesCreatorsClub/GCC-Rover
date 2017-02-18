@@ -49,15 +49,15 @@ AXES_DATA = 0x32
 lastTimeAccelRead = 0
 lastTimeReceivedRequestForContMode = 0
 
-i2c_bus = None
+i2cBus = None
 
-readAccel = False
+doReadAccel = False
 continuousMode = False
 
 
 def initAccel():
-    global i2c_bus
-    i2c_bus = smbus.SMBus(I2C_BUS)
+    global i2cBus
+    i2cBus = smbus.SMBus(I2C_BUS)
 
     # setBandwidthRate(BW_RATE_50HZ)
     # setRange(RANGE_2G)
@@ -67,22 +67,28 @@ def initAccel():
 
 
 def enableMeasurement():
-    i2c_bus.write_byte_data(I2C_ADDRESS, POWER_CTL, MEASURE)
+    i2cBus.write_byte_data(I2C_ADDRESS, POWER_CTL, MEASURE)
 
 
 def setBandwidthRate(rate_flag):
-    i2c_bus.write_byte_data(I2C_ADDRESS, BW_RATE, rate_flag)
+    i2cBus.write_byte_data(I2C_ADDRESS, BW_RATE, rate_flag)
 
 
 # set the measurement range for 10-bit readings
 def setRange(range_flag):
-    value = i2c_bus.read_byte_data(I2C_ADDRESS, DATA_FORMAT)
+    value = i2cBus.read_byte_data(I2C_ADDRESS, DATA_FORMAT)
 
     value &= ~0x0F
     value |= range_flag
     value |= 0x08
 
-    i2c_bus.write_byte_data(I2C_ADDRESS, DATA_FORMAT, value)
+    i2cBus.write_byte_data(I2C_ADDRESS, DATA_FORMAT, value)
+
+
+def bytesToInt(msb, lsb):
+    if not msb & 0x80:
+        return msb << 8 | lsb
+    return - (((msb ^ 255) << 8) | (lsb ^ 255) + 1)
 
 
 # returns the current reading from the sensor for each axis
@@ -90,39 +96,14 @@ def setRange(range_flag):
 # parameter gforce:
 #    False (default): result is returned in m/s^2
 #    True           : result is returned in gs
-def getAxes(gforce=False):
+def readAccel(gforce=False):
     global lastTimeAccelRead
 
-    readBytes = i2c_bus.read_i2c_block_data(I2C_ADDRESS, AXES_DATA, 6)
+    readBytes = i2cBus.read_i2c_block_data(I2C_ADDRESS, AXES_DATA, 6)
 
-    x = readBytes[0] | (readBytes[1] << 8)
-    if x & (1 << 15):
-        x |= ~65535
-    else:
-        x &= 65535
-    # if x & (1 << 16 - 1):
-    #     x -= (1 << 16)
-
-    # y = ((readBytes[3] & 0x03) * 256) + readBytes[2]
-    # if y > 511:
-    #     y -= 1024
-    y = readBytes[2] | (readBytes[3] << 8)
-    if y & (1 << 15):
-        y |= ~65535
-    else:
-        y &= 65535
-
-    # if y & (1 << 16 - 1):
-    #     y -= (1 << 16)
-
-    z = readBytes[4] | (readBytes[5] << 8)
-    if z & (1 << 15):
-        z |= ~65535
-    else:
-        z &= 65535
-
-    # if z & (1 << 16 - 1):
-    #     z -= (1 << 16)
+    x = bytesToInt(readBytes[1], readBytes[0])
+    y = bytesToInt(readBytes[3] & 0x03, readBytes[2])
+    z = bytesToInt(readBytes[5] & 0x03, readBytes[4])
 
     x *= SCALE_MULTIPLIER
     y *= SCALE_MULTIPLIER
@@ -142,42 +123,42 @@ def getAxes(gforce=False):
 
     lastTimeAccelRead = now
 
-    return {"x": x, "y": y, "z": z, "t": elapsedTime}
+    return x, y, z, elapsedTime
 
 
 def handleRead(topic, message, groups):
-    global readAccel
+    global doReadAccel
 
-    readAccel = True
+    doReadAccel = True
     print("  Got request to start accel.")
 
 
 def handleContinuous(topic, message, groups):
-    global readAccel, continuousMode, lastTimeReceivedRequestForContMode
+    global doReadAccel, continuousMode, lastTimeReceivedRequestForContMode
 
     continuousMode = True
-    readAccel = True
+    doReadAccel = True
     print("  Started continuous mode...")
     lastTimeReceivedRequestForContMode = time.time()
 
 
 def loop():
-    global readAccel, lastTimeAccelRead, continuousMode
+    global doReadAccel, lastTimeAccelRead, continuousMode
 
-    if readAccel:
+    if doReadAccel:
         if time.time() - lastTimeAccelRead > MAX_ACCEL_TIMEOUT:
-            accelData = getAxes()
+            readAccel()
             time.sleep(0.02)
-        accelData = getAxes()
+        accelData = readAccel()
 
-        pyroslib.publish("sensor/accel", str(accelData["x"]) + "," + str(accelData["y"]) + "," + str(accelData["z"]) + "," + str(accelData["t"]))
+        pyroslib.publish("sensor/accel", str(accelData[0]) + "," + str(accelData[1]) + "," + str(accelData[2]) + "," + str(accelData[3]))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousMode = False
                 print("  Stopped continuous mode.")
         else:
-            readAccel = False
+            doReadAccel = False
 
 
 if __name__ == "__main__":

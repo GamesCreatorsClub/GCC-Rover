@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
-import paho.mqtt.client as mqtt
 import time
+import traceback
+import pyroslib
 
 DELAY = 0.15
 
@@ -12,8 +13,6 @@ SLANT = 2
 SIDEWAYS = 3
 
 wheelPosition = STRAIGHT
-
-client = mqtt.Client("DriveAgent")
 
 
 def straightenWheels():
@@ -84,28 +83,26 @@ def crabAlong(amount):
 
 def wheelDeg(wheelName, angle):
     topic = "wheel/" + wheelName + "/deg"
-    client.publish(topic, str(angle))
+    pyroslib.publish(topic, str(angle))
     # print("Published topic=" +  topic + "; msg=" + str(angle))
 
 def wheelSpeed(wheelName, speed):
     topic = "wheel/" + wheelName + "/speed"
-    client.publish(topic, str(speed))
+    pyroslib.publish(topic, str(speed))
     # print("Published topic=" +  topic + "; msg=" + str(speed))
 
 
-def onConnect(client, data, rc):
-    client.subscribe("drive/#")
+def coonnected():
     print("DriverAgent: Connected to rover")
     straightenWheels()
 
 
-def onMessage(client, data, msg):
-    payload = str(msg.payload, 'utf-8')
+def handleMessage(topic, message, groups):
 
-    if msg.topic == "drive":
-        command = payload.split(">")[0]
-        if len(payload.split(">")) > 1:
-            command_args_list = payload.split(">")[1].split(",")
+    if topic == "drive":
+        command = message.split(">")[0]
+        if len(message.split(">")) > 1:
+            command_args_list = message.split(">")[1].split(",")
             args1 = command_args_list[0]
         else:
             args1 = 0
@@ -134,16 +131,18 @@ def onMessage(client, data, msg):
         elif command == "crabRight":
             crabAlong(int(args1))
 
+if __name__ == "__main__":
+    try:
+        print("Starting drive agent...")
 
-client.on_connect = onConnect
-client.on_message = onMessage
+        pyroslib.subscribe("drive", handleMessage)
+        pyroslib.init("drive-agent")
 
-print("DriverAgent: Starting...")
+        print("Started drive agent.")
 
-client.connect("localhost", 1883, 60)
+        pyroslib.forever(0.02)
 
-while True:
-    for it in range(0, 10):
-        time.sleep(0.0015)
-        client.loop(0.0005)
+    except Exception as ex:
+        print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
 

@@ -673,7 +673,8 @@ def processCommand(command, args):
 def handleGyro(topic, message, groups):
     global gyroReadOut, previousGyroRead
     previousGyroRead = gyroReadOut
-    gyroReadOut += float(message)
+    data = message.split(",")
+    gyroReadOut += float(data[2])
 
 
 def handleAccel(topic, message, groups):

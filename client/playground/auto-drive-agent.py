@@ -21,10 +21,10 @@ gyroCentre = 0
 gyroMin = 0
 gyroMax = 0
 
-i2c_bus=smbus.SMBus(1)
+i2cBus=smbus.SMBus(1)
 i2c_address=0x69 # i2c slave address of the L3G4200D
-i2c_bus.write_byte_data(i2c_address, 0x20, 0x0F) # normal mode and all axes on to control reg1
-i2c_bus.write_byte_data(i2c_address, 0x23, 0x20) # full 2000dps to control reg4
+i2cBus.write_byte_data(i2c_address, 0x20, 0x0F) # normal mode and all axes on to control reg1
+i2cBus.write_byte_data(i2c_address, 0x23, 0x20) # full 2000dps to control reg4
 
 lastTimeGyroRead = time.time()
 
@@ -37,12 +37,12 @@ def readGyroZ():
     thisTimeGyroRead = time.time()
 
     # print("          reading first byte... ")
-    i2c_bus.write_byte(i2c_address, 0x2C)
-    zl = i2c_bus.read_byte(i2c_address)
+    i2cBus.write_byte(i2c_address, 0x2C)
+    zl = i2cBus.read_byte(i2c_address)
     # print("          reading first byte - zl=" + str(zl))
 
-    i2c_bus.write_byte(i2c_address, 0x2D)
-    zh = i2c_bus.read_byte(i2c_address)
+    i2cBus.write_byte(i2c_address, 0x2D)
+    zh = i2cBus.read_byte(i2c_address)
     # print("          reading second byte - zh=" + str(zh))
 
     z = zh << 8 | zl

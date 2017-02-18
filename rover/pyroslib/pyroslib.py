@@ -4,10 +4,20 @@ import re
 import time
 import random
 import traceback
+import threading
 import paho.mqtt.client as mqtt
 
 client = None
 
+_name = "undefined"
+_host = None
+_port = 1883
+
+
+def doNothing():
+    pass
+
+_onConnected = doNothing
 _connected = False
 
 _subscribers = []
@@ -33,12 +43,18 @@ def subscribe(topic, method):
         client.subscribe(topic, 0)
 
 
+def _onDisconnect(mqttClient, data, rc):
+    _connect()
+
+
 def _onConnect(mqttClient, data, rc):
     global _connected
     if rc == 0:
         _connected = True
         for subscriber in _subscribers:
             mqttClient.subscribe(subscriber, 0)
+        if _onConnected is not None:
+            _onConnected()
 
     else:
         print("ERROR: Connection returned error result: " + str(rc))
@@ -61,23 +77,65 @@ def _onMessage(mqttClient, data, msg):
         print("ERROR: Got exception in on message processing; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
 
-def init(name, unique=False):
-    global client, _connected
+def _reconnect():
+    try:
+        client.reconnect()
+    except:
+        pass
+
+def _connect():
+    global _connected
+    _connected = False
+
+    if client is not None:
+        try:
+            client.disconnect()
+        except:
+            pass
+
+    # print("DriveController: Connecting to rover " + str(selectedRover + 2) + " @ " + roverAddress[selectedRover] + "...");
+
+    client.connect_async(_host, _port, 60)
+    thread = threading.Thread(target=_reconnect)
+    thread.daemon = True
+    thread.start()
+
+
+def onDisconnect(mqttClient, data, rc):
+    _connect()
+
+
+def init(name, unique=False, host="localhost", port=1883, onConnected=None):
+    global client, _connected, _onConnected, _name
+
+    _onConnected = onConnected
 
     if unique:
         name += "-" + str(random.randint(10000, 99999))
 
+    _name = name
     client = mqtt.Client(name)
 
+    client.on_disconnect = _onDisconnect
     client.on_connect = _onConnect
     client.on_message = _onMessage
 
-    client.connect("localhost", 1883, 60)
+    connect(host, port)
 
-    print("    " + name + " waiting to connect to broker...")
-    while not _connected:
-        loop(0.02)
-    print("    " + name + " connected to broker.")
+
+def connect(host, port=1883, waitToConnect=True):
+    global _host, _port
+
+    _host = host
+    _port = port
+
+    _connect()
+
+    if waitToConnect:
+        print("    " + _name + " waiting to connect to broker...")
+        while not _connected:
+            loop(0.02)
+        print("    " + _name + " connected to broker.")
 
 
 def sleep(deltaTime):

@@ -15,54 +15,49 @@ I2C_ADDRESS = 0x69
 lastTimeGyroRead = 0
 lastTimeReceivedRequestForContMode = 0
 
-i2c_bus = None
+i2cBus = None
 
 gyroCentre = 0
 gyroMin = 0
 gyroMax = 0
 
-readGyro = False
+doReadGyro = False
 continuousMode = False
 
 
 def initGyro():
-    global i2c_bus
-    i2c_bus = smbus.SMBus(I2C_BUS)
-    i2c_bus.write_byte_data(I2C_ADDRESS, 0x20, 0x0F)  # normal mode and all axes on to control reg1
-    i2c_bus.write_byte_data(I2C_ADDRESS, 0x23, 0x20)  # full 2000dps to control reg4
+    global i2cBus
+    i2cBus = smbus.SMBus(I2C_BUS)
+    i2cBus.write_byte_data(I2C_ADDRESS, 0x20, 0x0F)  # normal mode and all axes on to control reg1
+    i2cBus.write_byte_data(I2C_ADDRESS, 0x23, 0x20)  # full 2000dps to control reg4
 
 
-def readGyroZ():
+def readGyro():
     global lastTimeGyroRead
 
-    # print("        readGyroZ():")
     thisTimeGyroRead = time.time()
 
-    # print("          reading first byte... ")
-    i2c_bus.write_byte(I2C_ADDRESS, 0x2C)
-    zl = i2c_bus.read_byte(I2C_ADDRESS)
-    # print("          reading first byte - zl=" + str(zl))
+    i2cBus.write_byte(I2C_ADDRESS, 0x2C)
+    zl = i2cBus.read_byte(I2C_ADDRESS)
 
-    i2c_bus.write_byte(I2C_ADDRESS, 0x2D)
-    zh = i2c_bus.read_byte(I2C_ADDRESS)
-    # print("          reading second byte - zh=" + str(zh))
+    i2cBus.write_byte(I2C_ADDRESS, 0x2D)
+    zh = i2cBus.read_byte(I2C_ADDRESS)
 
-    zValue = zh << 8 | zl
-    if zValue & (1 << 15):
-        zValue |= ~65535
+    z = zh << 8 | zl
+    if z & (1 << 15):
+        z |= ~65535
     else:
-        zValue &= 65535
+        z &= 65535
 
-    degreesPerSecond = zValue * 70.00 / 1000
+    degreesPerSecond = z * 70.00 / 1000
     degrees = degreesPerSecond * (lastTimeGyroRead - thisTimeGyroRead)
 
     # degrees = degreesPerSecond
-
     # print("          done: z=" + str(z) + " degrees=" + str(degrees) + " dps=" + str(degreesPerSecond) + " time=" + str(lastTimeGyroRead - thisTimeGyroRead))
-
+    elapsedTime = thisTimeGyroRead - lastTimeGyroRead
     lastTimeGyroRead = thisTimeGyroRead
 
-    return degrees
+    return 0, 0, degrees, elapsedTime
 
 
 def calibrateGyro():
@@ -71,10 +66,10 @@ def calibrateGyro():
     c = 0
     avg = 0
 
-    minZ = readGyroZ()
-    maxZ = readGyroZ()
+    minZ = readGyro()[2]
+    maxZ = readGyro()[2]
     while c < 50:
-        zValue = readGyroZ()
+        zValue = readGyro()[2]
 
         avg += zValue
 
@@ -92,38 +87,38 @@ def calibrateGyro():
 
 
 def handleRead(topic, message, groups):
-    global readGyro
+    global doReadGyro
 
-    readGyro = True
+    doReadGyro = True
     print("  Got request to start gyro.")
 
 
 def handleContinuous(topic, message, groups):
-    global readGyro, continuousMode, lastTimeReceivedRequestForContMode
+    global doReadGyro, continuousMode, lastTimeReceivedRequestForContMode
 
     continuousMode = True
-    readGyro = True
+    doReadGyro = True
     print("  Started continuous mode...")
     lastTimeReceivedRequestForContMode = time.time()
 
 
 def loop():
-    global readGyro, lastTimeGyroRead, continuousMode
+    global doReadGyro, lastTimeGyroRead, continuousMode
 
     if readGyro:
         if time.time() - lastTimeGyroRead > MAX_GYRO_TIMEOUT:
-            z = readGyroZ()
+            readGyro()
             time.sleep(0.02)
-        z = readGyroZ()
+        gyroData = readGyro()
 
-        pyroslib.publish("sensor/gyro", str(z))
+        pyroslib.publish("sensor/gyro", str(gyroData[0]) + "," + str(gyroData[1]) + "," + str(gyroData[2]) + "," + str(gyroData[3]))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousMode = False
                 print("  Stopped continuous mode.")
         else:
-            readGyro = False
+            doReadGyro = False
 
 
 if __name__ == "__main__":
