@@ -34,23 +34,23 @@ pyros $1 upload -s camera       camera_service.py
 echo Restarting    camera
 pyros $1 restart   camera
 
-echo ""
-echo Uploading     gyrosensor
-pyros $1 upload -s gyrosensor  gyrosensor_l3g4200d_service.py
-echo Restarting    gyrosensor
-pyros $1 restart   gyrosensor
+# echo ""
+# echo Uploading     gyrosensor
+# pyros $1 upload -s gyrosensor  gyrosensor_l3g4200d_service.py
+# echo Restarting    gyrosensor
+# pyros $1 restart   gyrosensor
 
-echo ""
-echo Uploading     accelsensor
-pyros $1 upload -s accelsensor  accelsensor_adxl345_service.py
-echo Restarting    accelsensor
-pyros $1 restart   accelsensor
+# echo ""
+# echo Uploading     accelsensor
+# pyros $1 upload -s accelsensor  accelsensor_adxl345_service.py
+# echo Restarting    accelsensor
+# pyros $1 restart   accelsensor
 
-#echo ""
-#echo Uploading     9dofsensor
-#pyros $1 upload -s 9dofsensor  9dofsensor_mpu9250_service.py
-#echo Restarting    9dofsensor
-#pyros $1 restart   9dofsensor
+# echo ""
+# echo Uploading     9dofsensor
+# pyros $1 upload -s 9dofsensor  9dofsensor_mpu9250_service.py
+# echo Restarting    9dofsensor
+# pyros $1 restart   9dofsensor
 
 echo ""
 echo Uploading     sonarsensor

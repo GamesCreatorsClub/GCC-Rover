@@ -7,7 +7,7 @@ import pyros.gcc
 import pyros.pygamehelper
 
 pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
+bigFont = pygame.font.SysFont("arial", 18)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 600))
 arrow_image = pygame.image.load("arrow.png")
@@ -39,7 +39,7 @@ def onKeyUp(key):
 
 
 pyros.subscribe("sensor/gyro", handleGyroData)
-pyros.init("gyro-display-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort())
+pyros.init("gyro-display-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
 resubscribe = time.time()

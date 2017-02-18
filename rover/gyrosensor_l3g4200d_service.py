@@ -25,6 +25,12 @@ doReadGyro = False
 continuousMode = False
 
 
+def bytesToInt(msb, lsb):
+    if not msb & 0x80:
+        return msb << 8 | lsb
+    return - (((msb ^ 255) << 8) | (lsb ^ 255) + 1)
+
+
 def initGyro():
     global i2cBus
     i2cBus = smbus.SMBus(I2C_BUS)
@@ -43,11 +49,7 @@ def readGyro():
     i2cBus.write_byte(I2C_ADDRESS, 0x2D)
     zh = i2cBus.read_byte(I2C_ADDRESS)
 
-    z = zh << 8 | zl
-    if z & (1 << 15):
-        z |= ~65535
-    else:
-        z &= 65535
+    z = bytesToInt(zh, zl)
 
     degreesPerSecond = z * 70.00 / 1000
     degrees = degreesPerSecond * (lastTimeGyroRead - thisTimeGyroRead)
@@ -109,9 +111,9 @@ def loop():
         if time.time() - lastTimeGyroRead > MAX_GYRO_TIMEOUT:
             readGyro()
             time.sleep(0.02)
-        gyroData = readGyro()
+        data = readGyro()
 
-        pyroslib.publish("sensor/gyro", str(gyroData[0]) + "," + str(gyroData[1]) + "," + str(gyroData[2]) + "," + str(gyroData[3]))
+        pyroslib.publish("sensor/gyro", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:

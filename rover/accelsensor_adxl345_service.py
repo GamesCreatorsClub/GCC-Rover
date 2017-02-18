@@ -23,6 +23,11 @@ I2C_ADDRESS = 0x53
 # ADXL345 constants
 EARTH_GRAVITY_MS2 = 9.80665
 SCALE_MULTIPLIER = 0.004
+SCALE_MULTIPLIER_2G = 0.00390625
+SCALE_MULTIPLIER_4G = 0.0078
+SCALE_MULTIPLIER_8G = 0.0156
+SCALE_MULTIPLIER_16G = 0.00312
+
 
 DATA_FORMAT = 0x31
 BW_RATE = 0x2C
@@ -45,6 +50,9 @@ RANGE_16G = 0x03
 MEASURE = 0x08
 AXES_DATA = 0x32
 
+ALPHA = 0.5
+
+scaleMultiplier = SCALE_MULTIPLIER_2G
 
 lastTimeAccelRead = 0
 lastTimeReceivedRequestForContMode = 0
@@ -54,6 +62,10 @@ i2cBus = None
 doReadAccel = False
 continuousMode = False
 
+xg = 0.0
+yg = 0.0
+zg = 0.0
+
 
 def initAccel():
     global i2cBus
@@ -61,8 +73,8 @@ def initAccel():
 
     # setBandwidthRate(BW_RATE_50HZ)
     # setRange(RANGE_2G)
-    setBandwidthRate(BW_RATE_25HZ)
-    setRange(RANGE_16G)
+    setBandwidthRate(BW_RATE_50HZ)
+    setRange(RANGE_2G)
     enableMeasurement()
 
 
@@ -97,7 +109,7 @@ def bytesToInt(msb, lsb):
 #    False (default): result is returned in m/s^2
 #    True           : result is returned in gs
 def readAccel(gforce=False):
-    global lastTimeAccelRead
+    global lastTimeAccelRead, xg, yg, zg
 
     readBytes = i2cBus.read_i2c_block_data(I2C_ADDRESS, AXES_DATA, 6)
 
@@ -108,6 +120,15 @@ def readAccel(gforce=False):
     x *= SCALE_MULTIPLIER
     y *= SCALE_MULTIPLIER
     z *= SCALE_MULTIPLIER
+
+    x = x * ALPHA + (xg * (1.0 - ALPHA))
+    xg = x
+
+    y = y * ALPHA + (yg * (1.0 - ALPHA))
+    yg = y
+
+    z = z * ALPHA + (zg * (1.0 - ALPHA))
+    zg = z
 
     if not gforce:
         x *= EARTH_GRAVITY_MS2

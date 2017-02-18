@@ -114,7 +114,7 @@ def onKeyUp(key):
             stopped = True
 
 
-pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort())
+pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
 while True:
@@ -141,7 +141,6 @@ while True:
         text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
     else:
         text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-
     screen.blit(text, (0, 0))
 
     text = bigFont.render("Speed: " + str(currentSpeed), 1, (255, 255, 255))

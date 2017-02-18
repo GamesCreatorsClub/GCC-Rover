@@ -75,7 +75,7 @@ startedCommandTime = 0
 startedMovingTime = 0
 
 
-sine = [0, 1, 0, -1, 0, -1]
+# sine = [0, 1, 0, -1, 0, -1]
 
 sine = [0, 1, 0, -1]
 
@@ -377,7 +377,7 @@ def turnOnSpot():
         else:
             setCurrentSpeed(leftMovingSpeed * BREAKING_FACTOR)
         log("startBreaking", "gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target @ speed " + str(currentSpeed))
-        timeout(10, stopBreaking)
+        timeout(5, stopBreaking)
 
     def stopBreaking():
         log("stopBreaking", "end to rotation " + str(gyroReadOut))
@@ -475,7 +475,6 @@ def driveStraight():
         else:
             nextState(waitToStartMoving)
         sineSpeed(currentSpeed)
-
 
     def waitToStartMoving():
         global currentSpeed, backMovingSpeed, forwardMovingSpeed, _timeout, startedMovingTime
