@@ -114,8 +114,8 @@ def readAccel(gforce=False):
     readBytes = i2cBus.read_i2c_block_data(I2C_ADDRESS, AXES_DATA, 6)
 
     x = bytesToInt(readBytes[1], readBytes[0])
-    y = bytesToInt(readBytes[3] & 0x03, readBytes[2])
-    z = bytesToInt(readBytes[5] & 0x03, readBytes[4])
+    y = bytesToInt(readBytes[3], readBytes[2])
+    z = bytesToInt(readBytes[5], readBytes[4])
 
     x *= SCALE_MULTIPLIER
     y *= SCALE_MULTIPLIER

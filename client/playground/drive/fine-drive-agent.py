@@ -285,9 +285,9 @@ def turnOnSpot():
         elif abs(gyroReadOut) > 2.0:
             log("waitToStartMoving", "stared too fast " + str(currentSpeed) + ", gyro " + str(gyroReadOut))
             if originalDirection == LEFT:
-                setCurrentSpeed(currentSpeed * 0.5)
+                setCurrentSpeed(int(currentSpeed * 0.5))
             else:
-                setCurrentSpeed(currentSpeed * 0.5)
+                setCurrentSpeed(int(currentSpeed * 0.5))
             timeout(25, startAgain)
         else:
             increaseSpeed()
