@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 
-import os
 import traceback
 import re
-import pickle
+import copy
 import pyroslib
+import storagelib
 
 
 #
@@ -21,8 +21,22 @@ DEBUG = False
 STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
 SERVO_REGEX = re.compile("servo/(\d+)")
 
+PROTOTYPE_WHEEL_CALIBRATION = {
+    "deg": {
+        "servo": "",
+        "90": "70",
+        "0": "160",
+        "-90": "230"
+    },
+    "speed": {
+        "servo": "",
+        "-300": "95",
+        "-0": "155",
+        "0": "155",
+        "300": "215"
+    }
+}
 
-storageMap = {}
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
@@ -34,67 +48,46 @@ def initWheel(wheelName, motorServo, steerServo):
         "speed": 0
     }
 
-    defaultWheelCal = {
-        "deg": {
-            "servo": steerServo,
-            "90": "70",
-            "0": "160",
-            "-90": "230"
-        },
-        "speed": {
-            "servo": motorServo,
-            "-300": "95",
-            "-0": "155",
-            "0": "155",
-            "300": "215"
-        }
-    }
-
-    if wheelName not in wheelCalibrationMap:
-        wheelCalibrationMap[wheelName] = defaultWheelCal
-
-    if "deg" not in wheelCalibrationMap[wheelName]:
-        wheelCalibrationMap[wheelName]["deg"] = defaultWheelCal["deg"]
-
-    if "speed" not in wheelCalibrationMap[wheelName]:
-        wheelCalibrationMap[wheelName]["speed"] = defaultWheelCal["speed"]
-
-    if "servo" not in wheelCalibrationMap[wheelName]["deg"]:
-        wheelCalibrationMap[wheelName]["deg"]["servo"] = defaultWheelCal["deg"]["servo"]
-    if "90" not in wheelCalibrationMap[wheelName]["deg"]:
-        wheelCalibrationMap[wheelName]["deg"]["90"] = defaultWheelCal["deg"]["90"]
-    if "0" not in wheelCalibrationMap[wheelName]["deg"]:
-        wheelCalibrationMap[wheelName]["deg"]["0"] = defaultWheelCal["deg"]["0"]
-    if "-90" not in wheelCalibrationMap[wheelName]["deg"]:
-        wheelCalibrationMap[wheelName]["deg"]["-90"] = defaultWheelCal["deg"]["-90"]
-
-    if "servo" not in wheelCalibrationMap[wheelName]["speed"]:
-        wheelCalibrationMap[wheelName]["speed"]["servo"] = defaultWheelCal["speed"]["servo"]
-    if "-300" not in wheelCalibrationMap[wheelName]["speed"]:
-        wheelCalibrationMap[wheelName]["-300"]["servo"] = defaultWheelCal["speed"]["-300"]
-    if "-0" not in wheelCalibrationMap[wheelName]["speed"]:
-        wheelCalibrationMap[wheelName]["speed"]["-0"] = defaultWheelCal["speed"]["-0"]
-    if "0" not in wheelCalibrationMap[wheelName]["speed"]:
-        wheelCalibrationMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
-    if "300" not in wheelCalibrationMap[wheelName]["speed"]:
-        wheelCalibrationMap[wheelName]["speed"]["300"] = defaultWheelCal["speed"]["300"]
-
 
 def initWheels():
     global wheelCalibrationMap
 
-    if "wheels" not in storageMap:
-        storageMap["wheels"] = {}
+    if "wheels" not in storagelib.storageMap:
+        storagelib.storageMap["wheels"] = {}
 
-    if "cal" not in storageMap["wheels"]:
-        storageMap["wheels"]["cal"] = {}
+    if "cal" not in storagelib.storageMap["wheels"]:
+        storagelib.storageMap["wheels"]["cal"] = {}
 
-    wheelCalibrationMap = storageMap["wheels"]["cal"]
+    wheelCalibrationMap = storagelib.storageMap["wheels"]["cal"]
 
     initWheel("fr", 0, 1)
     initWheel("fl", 2, 3)
     initWheel("br", 4, 5)
     initWheel("bl", 6, 7)
+
+
+def subscribeWheels():
+    storagelib.subscribeWithPrototype("wheels/cal/fl", PROTOTYPE_WHEEL_CALIBRATION)
+    storagelib.subscribeWithPrototype("wheels/cal/fr", PROTOTYPE_WHEEL_CALIBRATION)
+    storagelib.subscribeWithPrototype("wheels/cal/bl", PROTOTYPE_WHEEL_CALIBRATION)
+    storagelib.subscribeWithPrototype("wheels/cal/br", PROTOTYPE_WHEEL_CALIBRATION)
+
+
+def ensureWheelData(name, motorServo, steerServo):
+    calMap = copy.deepcopy(PROTOTYPE_WHEEL_CALIBRATION)
+    calMap["speed"]["servo"] = str(moveServo)
+    calMap["deg"]["servo"] = str(steerServo)
+    storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calMap)
+
+
+def loadStorage():
+    storagelib.subscribeToPath("x/y/z")
+    storagelib.waitForData()
+    ensureWheelData("fr", 0, 1)
+    ensureWheelData("fl", 2, 3)
+    ensureWheelData("br", 4, 5)
+    ensureWheelData("bl", 6, 7)
+    print("  Storage details loaded.")
 
 
 def moveServo(servoid, angle):
@@ -173,63 +166,6 @@ def driveWheels():
     driveWheel("br")
 
 
-# --- Storage Map code -------------------------
-def loadStorageMap():
-    if os.path.exists(STORAGE_MAP_FILE):
-        file = open(STORAGE_MAP_FILE, "rb")
-        loaded = pickle.load(file)
-        file.close()
-
-        if DEBUG:
-            print("  Loaded " + str(loaded))
-
-        for key in loaded:
-            storageMap[key] = loaded[key]
-
-        print("  Storage map is " + str(storageMap))
-    else:
-        print("  No storage map found @ " + STORAGE_MAP_FILE)
-
-
-def composeRecursively(m, prefix):
-    res = ""
-    for key in m:
-        if type(m[key]) is dict:
-            newPrefix = prefix + key + "/"
-            res += composeRecursively(m[key], newPrefix)
-        else:
-            res += prefix + key + "=" + str(m[key]) + "\n"
-
-    return res
-
-
-def readoutStorage():
-    pyroslib.publish("storage/values", composeRecursively(storageMap, ""))
-
-
-def writeStorage(topicSplit, value):
-    # print("Got storage value " + str(topicSplit))
-    m = storageMap
-    for i in range(0, len(topicSplit) - 1):
-        key = topicSplit[i]
-        if key not in m:
-            m[key] = {}
-        m = m[key]
-    key = topicSplit[len(topicSplit) - 1]
-    m[key] = value
-
-    if DEBUG:
-        print("Storing to storage " + str(topicSplit) + " = " + value)
-
-    file = open(STORAGE_MAP_FILE, 'wb')
-
-    pickle.dump(storageMap, file, 0)
-
-    file.close()
-
-# --- Storage Map code end -------------------------
-
-
 def servoTopic(topic, payload, groups):
     servo = int(groups[0])
     moveServo(servo, payload)
@@ -265,29 +201,19 @@ def wheelSpeedTopic(topic, payload, groups):
         print("ERROR: no wheel with name " + wheelName + " fonund.")
 
 
-def storageWriteTopic(topic, payload, groups):
-    writeStorage(groups[0].split("/"), payload)
-
-
-def storageReadTopic(topic, payload, groups):
-    if DEBUG:
-        print("Reading out storage")
-    readoutStorage()
-
-
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
 
-        loadStorageMap()
         initWheels()
 
         pyroslib.subscribe("servo/+", servoTopic)
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
-        pyroslib.subscribe("storage/write/#", storageWriteTopic)
-        pyroslib.subscribe("storage/read", storageReadTopic)
         pyroslib.init("wheels-service")
+
+        print("  Loading storage details")
+        loadStorage()
 
         print("Started wheels service.")
 
