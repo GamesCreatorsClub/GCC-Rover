@@ -1,5 +1,10 @@
 package org.ah.gcc.rover;
 
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.internal.wire.MqttAck;
+
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
@@ -63,6 +68,14 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         rightjoystick.draw(shapeRenderer);
         shapeRenderer.end();
         
+//        try {
+//            MqttClient client = new MqttClient("gcc-rover-2", "my-myself-and-i");
+//            client.publish("move/drive", new MqttMessage("0 50".getBytes()));
+//        } catch (MqttException e) {
+//            // TODO Auto-generated catch block
+//            e.printStackTrace();
+//        }
+
 //        batch.setProjectionMatrix(camera.combined);
 //        
 //        

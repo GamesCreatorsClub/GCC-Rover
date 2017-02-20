@@ -24,6 +24,7 @@ allprojects {
         box2DLightsVersion = '1.4'
         ashleyVersion = '1.7.0'
         aiVersion = '1.8.0'
+        pahoVersion = '1.0.2'
     }
 
     repositories {
@@ -103,6 +104,7 @@ project(":core") {
 
 
     dependencies {
+        compile "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$pahoVersion"
         compile "com.badlogicgames.gdx:gdx:$gdxVersion"
         compile "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
     }
