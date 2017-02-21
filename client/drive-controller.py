@@ -5,6 +5,7 @@ import pyros
 import pyros.gcc
 import pyros.agent as agent
 import pyros.pygamehelper
+import math
 
 
 pygame.init()
@@ -41,27 +42,27 @@ def onKeyDown(key):
     if key == pygame.K_ESCAPE:
         sys.exit()
     elif key == pygame.K_w:
-        pyros.publish("drive", "forward>" + str(currentSpeed))
+        pyros.publish("move/drive", "0 " + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["UP"])
         stopped = False
     elif key == pygame.K_s:
-        pyros.publish("drive", "back>" + str(currentSpeed))
+        pyros.publish("move/drive", "180 " + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["DOWN"])
         stopped = False
     elif key == pygame.K_a:
-        pyros.publish("drive", "crabLeft>" + str(currentSpeed))
+        pyros.publish("move/drive", "-90 " + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
         stopped = False
     elif key == pygame.K_d:
-        pyros.publish("drive", "crabRight>" + str(currentSpeed))
+        pyros.publish("move/drive", "90 " + str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
         stopped = False
     elif key == pygame.K_q:
-        pyros.publish("drive", "pivotLeft>" + str(currentSpeed))
+        pyros.publish("move/rotate", str(-currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
         stopped = False
     elif key == pygame.K_e:
-        pyros.publish("drive", "pivotRight>" + str(currentSpeed))
+        pyros.publish("move/rotate", str(currentSpeed))
         pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
         stopped = False
     elif key == pygame.K_x:
@@ -77,14 +78,7 @@ def onKeyDown(key):
         pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
         pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
     elif key == pygame.K_SPACE:
-        if danceTimer >= 10:
-            pyros.publish("drive", "slant")
-            pygame.draw.rect(screen, (255, 255, 255), rects["UP"])
-            pygame.draw.rect(screen, (255, 255, 255), rects["DOWN"])
-            pygame.draw.rect(screen, (255, 255, 255), rects["LEFT"])
-            pygame.draw.rect(screen, (255, 255, 255), rects["RIGHT"])
-        elif danceTimer <= 10:
-            pyros.publish("drive", "align")
+        pyros.publish("move", "stop")
     elif key == pygame.K_UP:
         pyros.publish("drive", "motors>" + str(currentSpeed))
         stopped = False
@@ -105,29 +99,56 @@ def onKeyDown(key):
 
 def onKeyUp(key):
     global stopped
-    if key == pygame.K_w or key == pygame.K_s or key == pygame.K_a or key == pygame.K_d \
-            or key == pygame.K_q or key == pygame.K_e or key == pygame.K_x or key == pygame.K_c \
-            or key == pygame.K_v or key == pygame.K_SPACE or key == pygame.K_UP or key == pygame.K_DOWN:
+    if not stopped:
+        pyros.publish("move", "stop")
+        print("stop")
+        stopped = True
 
-        if not stopped:
-            pyros.publish("drive", "stop")
-            stopped = True
+
 
 
 pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
+mousePos = [0, 0]
+mouseDown = False
+
+angleFromCentre = 0
+distanceFromCentre = 0
+
+centre = [300, 300]
 
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+        if event.type == pygame.MOUSEMOTION:
+            mousePos = pygame.mouse.get_pos()
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouseDown = True
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            mouseDown = False
 
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
 
     screen.fill((0, 0, 0))
+
+
+    if mouseDown:
+        stopped = False
+        angleFromCentre = math.atan2((mousePos[0] - centre[0]), (mousePos[1] - centre[1]) * 180 / math.pi)
+        distanceFromCentre = math.sqrt((mousePos[0] - centre[0]) * (mousePos[0] - centre[0]) + (mousePos[1] - centre[1]) * (mousePos[1] - centre[1]))
+
+
+        print("angle: " + str(angleFromCentre) + "   distance" + str(distanceFromCentre))
+
+        pyros.publish("move/drive", str(angleFromCentre) + str(distanceFromCentre))
+    else:
+        stopped = True
+
+
 
     value = currentSpeed + 155
     if value > 255:

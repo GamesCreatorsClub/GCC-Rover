@@ -409,7 +409,6 @@ while True:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouseDown = True
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-
             mouseDown = False
 
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)

@@ -225,11 +225,13 @@ def turnOnSpotControl():
 
 def moveMotorsForward():
     moveMotors()
+    return
 
 
 def moveMotorsBack():
     currentCommand["args"] = -int(currentCommand["args"])
     moveMotors()
+    return
 
 
 def moveMotors():
@@ -284,6 +286,34 @@ def moveMotorsControl():
         # TODO - switching motor at some speed is not enough. Stopping would be far better - or slowing down
         # Slowing down has another risk - stopping before reaching destination. So slowing down should detec
         # if stopped - which, with current hardware, I am not sure how to do so.
+    return
+
+
+def drive():
+    args = currentCommand["args"].split(" ")
+    try:
+        angle = float(args[0])
+        speed = int(args[1])
+
+        if angle < -90:
+            angle += 180
+            speed = -speed
+        elif angle > 90:
+            angle -= 180
+            speed = -speed
+
+        wheelDeg("fl", angle)
+        wheelDeg("fr", angle)
+        wheelDeg("bl", angle)
+        wheelDeg("br", angle)
+
+        wheelSpeed("fl", speed)
+        wheelSpeed("fr", speed)
+        wheelSpeed("bl", speed)
+        wheelSpeed("br", speed)
+
+    except:
+        return
 
 
 def stopAllWheels():
@@ -292,6 +322,7 @@ def stopAllWheels():
     wheelSpeed("bl", 0)
     wheelSpeed("br", 0)
     print("Stopping all wheels!")
+    return
 
 
 def nothing():
@@ -313,6 +344,10 @@ commands = {
     "back": {
         "start": moveMotorsBack,
         "do": moveMotorsControl
+    },
+    "drive": {
+        "start": drive,
+        "do": nothing
     }
 }
 
@@ -338,7 +373,8 @@ def newCommandMsg(topic, message, groups):
 def handleGyro(topic, message, groups):
     global gyroReadOut, previousGyroRead
     previousGyroRead = gyroReadOut
-    gyroReadOut += float(message)
+    data = message.split(",")
+    gyroReadOut += float(data[2])
 
 
 def handleAccel(topic, message, groups):
