@@ -27,10 +27,18 @@ public class JoyStick {
         shapeRenderer.set(ShapeType.Line);
         
         shapeRenderer.circle(centreX, centreY, 64f);
-        shapeRenderer.circle(centreX, centreY, 48f);
+        shapeRenderer.circle(centreX, centreY, 32f);
         
         shapeRenderer.set(ShapeType.Filled);
-        shapeRenderer.circle(x, y, 32f);
+        shapeRenderer.circle(x, y, 24f);
+    }
+    
+    public float getDistanceFromCentre() {
+        return RoverController.getDistance(x, y, centreX, centreY);
+    }
+    
+    public double getAngleFromCentre() {
+        return Math.atan2((x - centreX), -(y - centreY)) * 180 / Math.PI;
     }
     
     public void dragged(int screenX, int screenY, int pointer) {
@@ -41,7 +49,7 @@ public class JoyStick {
     }
     
     public void touchDown(int screenX, int screenY, int pointer) {
-        if (Math.sqrt((screenX - x) * (screenX - x) + (screenY - y) * (screenY - y)) < 32) {
+        if (RoverController.getDistance(screenX, screenY, x, y) < 32) {
             this.pointer = pointer;
             
         }

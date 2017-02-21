@@ -100,11 +100,9 @@ def onKeyDown(key):
 def onKeyUp(key):
     global stopped
     if not stopped:
-        pyros.publish("move", "stop")
+        pyros.publish("move/drive", str(round(angleFromCentre, 1) + " 0"))
         print("stop")
         stopped = True
-
-
 
 
 pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
@@ -135,20 +133,17 @@ while True:
 
     screen.fill((0, 0, 0))
 
-
     if mouseDown:
         stopped = False
-        angleFromCentre = math.atan2((mousePos[0] - centre[0]), (mousePos[1] - centre[1]) * 180 / math.pi)
-        distanceFromCentre = math.sqrt((mousePos[0] - centre[0]) * (mousePos[0] - centre[0]) + (mousePos[1] - centre[1]) * (mousePos[1] - centre[1]))
+        angleFromCentre = math.atan2((mousePos[0] - centre[0]), -(mousePos[1] - centre[1])) * 180 / math.pi
+        distanceFromCentre = math.sqrt((mousePos[0] - centre[0]) * (mousePos[0] - centre[0]) + (mousePos[1] - centre[1]) * (mousePos[1] - centre[1])) / 10
 
+        print("angle: " + str(angleFromCentre) + "   distance: " + str(distanceFromCentre))
 
-        print("angle: " + str(angleFromCentre) + "   distance" + str(distanceFromCentre))
-
-        pyros.publish("move/drive", str(angleFromCentre) + str(distanceFromCentre))
+        pyros.publish("move/drive", str(round(angleFromCentre, 1)) + " " + str(int(distanceFromCentre)))
     else:
         stopped = True
-
-
+        pyros.publish("move/drive", str(round(angleFromCentre, 1)) + " 0")
 
     value = currentSpeed + 155
     if value > 255:

@@ -19,7 +19,7 @@ android {
     }
     defaultConfig {
         applicationId "org.ah.gcc.rover"
-        minSdkVersion 8
+        minSdkVersion 7
         targetSdkVersion 23
     }
 }
