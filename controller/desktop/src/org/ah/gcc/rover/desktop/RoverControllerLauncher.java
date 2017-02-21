@@ -10,6 +10,6 @@ public class RoverControllerLauncher {
         LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
         config.width = 800;
         config.height = 500;
-        new LwjglApplication(new RoverController(), config);
+        new LwjglApplication(new RoverController(new DesktopRoverControl()), config);
     }
 }

@@ -13,7 +13,7 @@ public class JoyStick {
     private int x;
     private int y;
     
-    public JoyStick(int x, int y) {
+    public JoyStick(int size, int x, int y) {
         centreX = x;
         centreY = y;
         

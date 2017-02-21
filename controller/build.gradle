@@ -38,9 +38,9 @@ allprojects {
 project(":desktop") {
     apply plugin: "java"
 
-
     dependencies {
         compile project(":core")
+        compile "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$pahoVersion"
         compile "com.badlogicgames.gdx:gdx-backend-lwjgl:$gdxVersion"
         compile "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
         compile "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"
@@ -52,8 +52,10 @@ project(":android") {
 
     configurations { natives }
 
+
     dependencies {
         compile project(":core")
+        compile "org.eclipse.paho:org.eclipse.paho.android.service:$pahoVersion"
         compile "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
         natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi"
         natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
@@ -104,7 +106,6 @@ project(":core") {
 
 
     dependencies {
-        compile "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$pahoVersion"
         compile "com.badlogicgames.gdx:gdx:$gdxVersion"
         compile "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
     }
