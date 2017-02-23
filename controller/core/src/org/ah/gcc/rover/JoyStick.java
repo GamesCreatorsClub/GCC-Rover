@@ -37,7 +37,16 @@ public class JoyStick {
     }
     
     public float getDistanceFromCentre() {
-        return RoverController.getDistance(x, y, centreX, centreY);
+        float distance = RoverController.getDistance(x, y, centreX, centreY);
+        distance -= spaceSize;
+        
+        distance =  distance / (spaceSize * 2);
+        
+        if (distance < 0) {
+            return 0;
+        } else {
+            return distance;
+        }
     }
     
     public double getAngleFromCentre() {

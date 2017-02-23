@@ -80,10 +80,23 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     }
 
     public void processJoysticks() {
-        if (rightjoystick.getDistanceFromCentre() > 8f) {
-            roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), rightjoystick.getDistanceFromCentre() / 4));
+        if (rightjoystick.getDistanceFromCentre() > 0.02f) {
+            if (switch1.isOn()) {
+                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), rightjoystick.getDistanceFromCentre() * 300));
+            } else {
+                roverControl.publish("move/orbit", rightjoystick.getDistanceFromCentre() * 300 + "");
+            }
         } else {
-            roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
+            if (leftjoystick.getDistanceFromCentre() > 8f) {
+                if (leftjoystick.getAngleFromCentre() < 180) {
+                    roverControl.publish("move/rotate", (leftjoystick.getDistanceFromCentre() * 300) + "");
+                } else {
+                    roverControl.publish("move/rotate", (-leftjoystick.getDistanceFromCentre() * 300) + "");
+                }
+            } else {
+                roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
+                roverControl.publish("move/stop", "0");
+            }
         }
     }
 

@@ -3,6 +3,7 @@
 import time
 import traceback
 import pyroslib
+import math
 
 
 WHEEL_CIRCUMFERENCE = 15  # 15mm
@@ -289,6 +290,33 @@ def moveMotorsControl():
     return
 
 
+distance = 150.0
+
+def angle1(distance):
+    x= math.atan2(36.5,(distance-69))
+    math.degrees(x)
+
+    return math.degrees(x) - 90.0
+
+def angle2(distance):
+    x= math.atan2(36.5, (distance+69))
+    math.degrees(x)
+
+    return math.degrees(x) - 90.0
+
+def orbit():
+    global distance
+    wheelDeg("fl", str(angle1(distance)))
+    wheelDeg("fr", str(-angle1(distance)))
+    wheelDeg("bl", str(angle2(distance)))
+    wheelDeg("br", str(-angle2(distance)))
+    speed = int(currentCommand["args"])
+    wheelSpeed("fl", str(speed))
+    wheelSpeed("fr", str(speed))
+    wheelSpeed("bl", str(speed))
+    wheelSpeed("br", str(speed))
+
+
 def drive():
     args = currentCommand["args"].split(" ")
     try:
@@ -345,8 +373,14 @@ commands = {
         "start": moveMotorsBack,
         "do": moveMotorsControl
     },
+
     "drive": {
         "start": drive,
+        "do": nothing
+    },
+
+    "orbit": {
+        "start": orbit,
         "do": nothing
     }
 }
