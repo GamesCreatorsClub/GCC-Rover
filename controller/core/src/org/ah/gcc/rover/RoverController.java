@@ -65,6 +65,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
         
         switch1 = new Switch((int) cellSize, 3, 10, Orientation.HORIZONTAL);
+        switch1.setState(true);
         switch2 = new Switch((int) cellSize, 17, 10, Orientation.VERTICAL);
 
         
@@ -80,14 +81,14 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     }
 
     public void processJoysticks() {
-        if (rightjoystick.getDistanceFromCentre() > 0.02f) {
+        if (rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (switch1.isOn()) {
                 roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), rightjoystick.getDistanceFromCentre() * 300));
             } else {
                 roverControl.publish("move/orbit", rightjoystick.getDistanceFromCentre() * 300 + "");
             }
         } else {
-            if (leftjoystick.getDistanceFromCentre() > 8f) {
+            if (leftjoystick.getDistanceFromCentre() > 0.1f) {
                 if (leftjoystick.getAngleFromCentre() < 180) {
                     roverControl.publish("move/rotate", (leftjoystick.getDistanceFromCentre() * 300) + "");
                 } else {
