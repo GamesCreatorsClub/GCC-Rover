@@ -78,6 +78,7 @@ def needAccel():
 
     pyroslib.publish("sensor/accel/continuous", "start")
 
+
 def dontNeedGyro():
     global _needGyro
 
@@ -292,25 +293,69 @@ def moveMotorsControl():
 
 distance = 150.0
 
-def angle1(distance):
-    x= math.atan2(36.5,(distance-69))
-    math.degrees(x)
+
+def faceAngleFront(dist):
+    x = math.atan2(36.5, dist - 69)
 
     return math.degrees(x) - 90.0
 
-def angle2(distance):
-    x= math.atan2(36.5, (distance+69))
-    math.degrees(x)
+
+def faceAngleBack(dist):
+    x = math.atan2(36.5, dist + 69)
 
     return math.degrees(x) - 90.0
+
 
 def orbit():
-    global distance
-    wheelDeg("fl", str(angle1(distance)))
-    wheelDeg("fr", str(-angle1(distance)))
-    wheelDeg("bl", str(angle2(distance)))
-    wheelDeg("br", str(-angle2(distance)))
-    speed = int(currentCommand["args"])
+    args = currentCommand["args"].split(" ")
+    d = int(args[0])
+    speed = int(args[1])
+
+    wheelDeg("fl", str(faceAngleFront(d)))
+    wheelDeg("fr", str(-faceAngleFront(d)))
+    wheelDeg("bl", str(faceAngleBack(d)))
+    wheelDeg("br", str(-faceAngleBack(d)))
+
+    wheelSpeed("fl", str(speed))
+    wheelSpeed("fr", str(speed))
+    wheelSpeed("bl", str(speed))
+    wheelSpeed("br", str(speed))
+
+
+def sideAngleFront(dist):
+    x = math.atan2(69, dist - 36.5)
+
+    return math.degrees(x)
+
+
+def sideAngleBack(dist):
+    x = math.atan2(69, dist + 36.5)
+
+    return math.degrees(x)
+
+
+def steer():
+    args = currentCommand["args"].split(" ")
+
+    d = int(args[0])
+    speed = int(args[1])
+    frontAngle = sideAngleFront(abs(d))
+    backAngle = sideAngleBack(abs(d))
+
+    print("d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) +  " ba= " + str(backAngle))
+
+    if d >= 0:
+        wheelDeg("fl", str(frontAngle))
+        wheelDeg("bl", str(-frontAngle))
+        wheelDeg("fr", str(backAngle))
+        wheelDeg("br", str(-backAngle))
+    else:
+        wheelDeg("fl", str(-frontAngle))
+        wheelDeg("bl", str(frontAngle))
+        wheelDeg("fr", str(-backAngle))
+        wheelDeg("br", str(backAngle))
+
+
     wheelSpeed("fl", str(speed))
     wheelSpeed("fr", str(speed))
     wheelSpeed("bl", str(speed))
@@ -373,14 +418,16 @@ commands = {
         "start": moveMotorsBack,
         "do": moveMotorsControl
     },
-
     "drive": {
         "start": drive,
         "do": nothing
     },
-
     "orbit": {
         "start": orbit,
+        "do": nothing
+    },
+    "steer": {
+        "start": steer,
         "do": nothing
     }
 }

@@ -51,7 +51,7 @@ public class AndroidRoverControl implements RoverControl {
 
     @Override
     public void publish(String topic, String message) {
-        if (client != null && connected) {
+        if (isConnected()) {
             try {
                 client.publish(topic, new MqttMessage(message.getBytes()));
             } catch (MqttPersistenceException e) {

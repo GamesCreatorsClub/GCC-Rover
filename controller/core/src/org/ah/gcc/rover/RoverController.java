@@ -33,7 +33,11 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     private JoyStick leftjoystick;
     private JoyStick rightjoystick;
 
-    private int counter = 10;
+    private int retryCounter = 0;
+    private int messageCounter = 10;
+    
+    private int roverSpeed = 0;
+    private int roverTurningDistance = 0;
 
     private double cellSize;
 
@@ -58,8 +62,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         cellSize = Gdx.graphics.getWidth() / 20;
 
         shapeRenderer = new ShapeRenderer();
-        leftjoystick = new JoyStick((int) cellSize, 3, 3);
-        rightjoystick = new JoyStick((int) cellSize, 17, 3);
+        
+        leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
+        rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
         
         button1 = new Button((int) cellSize, 12, 3, 0.5f);
 
@@ -73,44 +78,51 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         inputMultiplexer.addProcessor(this);
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
-        roverControl.connect("tcp://172.24.1.184:1883");
-    }
-    
-    public static float getDistance(float x1, float y1, float x2, float y2) {
-        return (float) Math.sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
     }
 
     public void processJoysticks() {
-        if (rightjoystick.getDistanceFromCentre() > 0.1f) {
+        if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (switch1.isOn()) {
-                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), rightjoystick.getDistanceFromCentre() * 300));
+                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
+                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
-                roverControl.publish("move/orbit", rightjoystick.getDistanceFromCentre() * 300 + "");
+                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
+                roverControl.publish("move/orbit", roverSpeed + "");
             }
+        } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
+            roverSpeed = -calcRoverSpeed(rightjoystick.getYValue());
+            roverTurningDistance = calcRoverDistance(leftjoystick.getXValue());
+            roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
+        } else if (leftjoystick.getDistanceFromCentre() > 0.1f) {
+            roverSpeed = calcRoverSpeed(leftjoystick.getXValue()) / 4;
+            roverControl.publish("move/rotate", Integer.toString(roverSpeed));
+            //            if (leftjoystick.getAngleFromCentre() < 180) {
+            //                roverSpeed = calcRoverSpeed(leftjoystick.getDistanceFromCentre()) / 4;
+            //                roverControl.publish("move/rotate", roverSpeed + "");
+            //            } else {
+            //                roverSpeed = calcRoverSpeed(-leftjoystick.getDistanceFromCentre()) / 4;
+            //                roverControl.publish("move/rotate", roverSpeed + "");
+            //            }
         } else {
-            if (leftjoystick.getDistanceFromCentre() > 0.1f) {
-                if (leftjoystick.getAngleFromCentre() < 180) {
-                    roverControl.publish("move/rotate", (leftjoystick.getDistanceFromCentre() * 300) + "");
-                } else {
-                    roverControl.publish("move/rotate", (-leftjoystick.getDistanceFromCentre() * 300) + "");
-                }
-            } else {
-                roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
-                roverControl.publish("move/stop", "0");
-            }
+            roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
+            roverSpeed = 0;
+            roverControl.publish("move/stop", "0");
         }
     }
 
     @Override
     public void render() {
+        loop();
+        testConnection();
+        
         String connectedStr = "Not connected";
         if (roverControl.isConnected()) {
             connectedStr = "Connected";
         }
 
-        counter--;
-        if (counter < 0) {
-            counter = 5;
+        messageCounter--;
+        if (messageCounter < 0) {
+            messageCounter = 5;
             processJoysticks();
         }
 
@@ -124,7 +136,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         shapeRenderer.setAutoShapeType(true);
 
         batch.begin();
-        font.draw(batch, connectedStr, 100, 100);
+        font.draw(batch, connectedStr, 50, 50);
+        font.draw(batch, "Speed: " + roverSpeed + " : " + rightjoystick.getYValue(), 300, 50);
+        font.draw(batch, "Distance: " + roverTurningDistance + " : " + leftjoystick.getXValue(), 500, 50);
         batch.end();
 
         shapeRenderer.begin();
@@ -146,6 +160,49 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         
         shapeRenderer.end();
     }
+    
+    private int calcRoverSpeed(float speed) {
+        return (int)(speed * 150);
+        //        return (int)(speed * speed * 300);
+    }
+    
+    private int calcRoverDistance(float distance) {
+        if (distance >= 0) {
+            // distance = distance * distance;
+            distance = Math.abs(distance);
+            distance = 1.0f - distance;
+            distance = distance + 0.1f;
+            distance = distance * 500f;
+        } else {
+            // distance = distance * distance;
+            distance = Math.abs(distance);
+            distance = 1.0f - distance;
+            distance = distance + 0.1f;
+            distance = - distance * 500f;
+        }
+        
+        return (int)distance;
+    }    
+    
+    private void connectToRover() {
+        System.out.println("Connecting to rover");
+        roverControl.connect("tcp://172.24.1.184:1883");
+    }
+    
+    private void loop() {
+        
+    }
+    
+    private void testConnection() {
+        if (!roverControl.isConnected()) {
+            retryCounter -= 1;
+            if (retryCounter < 0) {
+                retryCounter = 120;
+                connectToRover();
+            }
+        }
+    }
+    
 
     @Override
     public void dispose() {
