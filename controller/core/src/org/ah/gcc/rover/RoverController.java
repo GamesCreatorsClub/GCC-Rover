@@ -35,6 +35,14 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     private int counter = 10;
 
+    private double cellSize;
+
+    private Switch switch1;
+
+    private Switch switch2;
+
+    private Button button1;
+
     public RoverController(RoverControl roverControl) {
         this.roverControl = roverControl;
     }
@@ -47,17 +55,24 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         img = new Texture("badlogic.jpg");
         camera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         
-        double size = Gdx.graphics.getWidth() * 0.4;
+        cellSize = Gdx.graphics.getWidth() / 20;
 
         shapeRenderer = new ShapeRenderer();
-        leftjoystick = new JoyStick((int)size, 78, Gdx.graphics.getHeight() - 78);
-        rightjoystick = new JoyStick((int)size, Gdx.graphics.getWidth() - 78, Gdx.graphics.getHeight() - 78);
+        leftjoystick = new JoyStick((int) cellSize, 3, 3);
+        rightjoystick = new JoyStick((int) cellSize, 17, 3);
+        
+        button1 = new Button((int) cellSize, 12, 3, 0.5f);
+
+        
+        switch1 = new Switch((int) cellSize, 3, 10, Orientation.HORIZONTAL);
+        switch2 = new Switch((int) cellSize, 17, 10, Orientation.VERTICAL);
+
         
         inputMultiplexer = new InputMultiplexer();
         inputMultiplexer.addProcessor(this);
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
-        roverControl.connect("tcp://172.24.1.184:1883");
+        //roverControl.connect("tcp://172.24.1.184:1883");
     }
     
     public static float getDistance(float x1, float y1, float x2, float y2) {
@@ -99,8 +114,22 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         batch.end();
 
         shapeRenderer.begin();
+        shapeRenderer.setColor(Color.FIREBRICK);
+        for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
+            shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
+        }
+        for (int y = Gdx.graphics.getHeight(); y > 0 ; y = (int) (y - cellSize)) {
+            shapeRenderer.line(0, y, Gdx.graphics.getWidth(), y);
+        }
+        
+        shapeRenderer.setColor(Color.BLACK);
+        
         leftjoystick.draw(shapeRenderer);
         rightjoystick.draw(shapeRenderer);
+        button1.draw(shapeRenderer);
+        switch1.draw(shapeRenderer);
+        switch2.draw(shapeRenderer);
+        
         shapeRenderer.end();
     }
 
@@ -132,6 +161,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         leftjoystick.touchDown(screenX, screenY, pointer);
         rightjoystick.touchDown(screenX, screenY, pointer);
+        switch1.touchDown(screenX, screenY, pointer);
+        switch2.touchDown(screenX, screenY, pointer);
+        button1.touchDown(screenX, screenY, pointer);
         return false;
     }
 
@@ -139,6 +171,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
         leftjoystick.touchUp(screenX, screenY, pointer);
         rightjoystick.touchUp(screenX, screenY, pointer);
+        button1.touchUp(screenX, screenY, pointer);
         return false;
     }
 
@@ -146,6 +179,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public boolean touchDragged(int screenX, int screenY, int pointer) {
         leftjoystick.dragged(screenX, screenY, pointer);
         rightjoystick.dragged(screenX, screenY, pointer);
+        button1.touchDragged(screenX, screenY, pointer);
         return false;
     }
 

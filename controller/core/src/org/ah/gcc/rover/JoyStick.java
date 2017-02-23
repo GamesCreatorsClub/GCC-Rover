@@ -1,5 +1,6 @@
 package org.ah.gcc.rover;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.Vector2;
@@ -12,13 +13,15 @@ public class JoyStick {
     
     private int x;
     private int y;
+    private int spaceSize;
     
     public JoyStick(int size, int x, int y) {
-        centreX = x;
-        centreY = y;
+        this.spaceSize = size;
+        centreX =  x * size;
+        centreY =  Gdx.graphics.getHeight() - y * size;
         
-        this.x = x;
-        this.y = y;
+        this.x = x * size;
+        this.y = Gdx.graphics.getHeight() - y * size;
     }
     
     public void draw(ShapeRenderer shapeRenderer) {
@@ -26,11 +29,11 @@ public class JoyStick {
         
         shapeRenderer.set(ShapeType.Line);
         
-        shapeRenderer.circle(centreX, centreY, 64f);
-        shapeRenderer.circle(centreX, centreY, 32f);
+        shapeRenderer.circle(centreX, centreY, spaceSize * 2);
+        shapeRenderer.circle(centreX, centreY, spaceSize);
         
         shapeRenderer.set(ShapeType.Filled);
-        shapeRenderer.circle(x, y, 24f);
+        shapeRenderer.circle(x, y, spaceSize * 0.75f);
     }
     
     public float getDistanceFromCentre() {
@@ -49,7 +52,7 @@ public class JoyStick {
     }
     
     public void touchDown(int screenX, int screenY, int pointer) {
-        if (RoverController.getDistance(screenX, screenY, x, y) < 32) {
+        if (RoverController.getDistance(screenX, screenY, x, y) < spaceSize) {
             this.pointer = pointer;
             
         }
