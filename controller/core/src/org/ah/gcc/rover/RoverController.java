@@ -72,7 +72,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         inputMultiplexer.addProcessor(this);
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
-        //roverControl.connect("tcp://172.24.1.184:1883");
+        roverControl.connect("tcp://172.24.1.184:1883");
     }
     
     public static float getDistance(float x1, float y1, float x2, float y2) {
