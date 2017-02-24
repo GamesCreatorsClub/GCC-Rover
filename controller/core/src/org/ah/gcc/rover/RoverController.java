@@ -46,6 +46,16 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     private Switch switch2;
 
     private Button button1;
+    
+    private boolean logos = true;
+    
+    private long alpha = 0;
+
+    private Texture gccimg;
+
+    private Texture creativesphereimg;
+
+    private Texture bobimg;
 
     public RoverController(RoverControl roverControl) {
         this.roverControl = roverControl;
@@ -57,6 +67,11 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         font.setColor(Color.BLACK);
         batch = new SpriteBatch();
         img = new Texture("badlogic.jpg");
+        
+        gccimg = new Texture("GCCLogo.png");
+        creativesphereimg = new Texture("creative-sphere.png");
+        bobimg = new Texture("bobclub.png");
+        
         camera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         
         cellSize = Gdx.graphics.getWidth() / 20;
@@ -112,53 +127,85 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     @Override
     public void render() {
-        loop();
-        testConnection();
-        
-        String connectedStr = "Not connected";
-        if (roverControl.isConnected()) {
-            connectedStr = "Connected";
+        alpha++;
+        if (logos) {
+            camera.setToOrtho(false);
+            
+            Gdx.gl.glClearColor(1, 1, 1, 1);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    
+            batch.setProjectionMatrix(camera.combined);
+            batch.begin();
+
+            if (alpha < 30) {
+                float scale = Gdx.graphics.getWidth() / gccimg.getWidth();
+                int y = (int) ((Gdx.graphics.getHeight() - (gccimg.getHeight() * scale)) / 2);
+                int x = (int) ((Gdx.graphics.getWidth() - (gccimg.getWidth() * scale)) / 2);
+                batch.draw(gccimg, x, y, gccimg.getWidth() * scale, gccimg.getHeight() * scale);
+            } else if (alpha < 60) {
+                float scale = Gdx.graphics.getWidth() / creativesphereimg.getWidth();
+                int y = (int) ((Gdx.graphics.getHeight() - (creativesphereimg.getHeight() * scale)) / 2);
+                int x = (int) ((Gdx.graphics.getWidth() - (creativesphereimg.getWidth() * scale)) / 2);
+                batch.draw(creativesphereimg, x, y, creativesphereimg.getWidth() * scale, creativesphereimg.getHeight() * scale);
+            } else if (alpha < 90) {
+                float scale = Gdx.graphics.getWidth() / bobimg.getWidth();
+                int y = (int) ((Gdx.graphics.getHeight() - (bobimg.getHeight() * scale)) / 2);
+                int x = (int) ((Gdx.graphics.getWidth() - (bobimg.getWidth() * scale)) / 2);
+                batch.draw(bobimg, x, y, bobimg.getWidth() * scale, bobimg.getHeight() * scale);
+            } else if (alpha > 120) {
+                logos = false;
+            }
+            
+            batch.end();
+        } else {
+            loop();
+            testConnection();
+            
+            String connectedStr = "Not connected";
+            if (roverControl.isConnected()) {
+                connectedStr = "Connected";
+            }
+    
+            messageCounter--;
+            if (messageCounter < 0) {
+                messageCounter = 5;
+                processJoysticks();
+            }
+    
+            camera.setToOrtho(true);
+            
+            Gdx.gl.glClearColor(1, 1, 1, 1);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    
+            batch.setProjectionMatrix(camera.combined);
+            shapeRenderer.setProjectionMatrix(camera.combined);
+            shapeRenderer.setAutoShapeType(true);
+    
+            batch.begin();
+            font.draw(batch, connectedStr, 50, 50);
+            font.draw(batch, "Speed: " + roverSpeed + " : " + rightjoystick.getYValue(), 300, 50);
+            font.draw(batch, "Distance: " + roverTurningDistance + " : " + leftjoystick.getXValue(), 500, 50);
+            batch.end();
+    
+            shapeRenderer.begin();
+            shapeRenderer.setColor(Color.FIREBRICK);
+            for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
+                shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
+            }
+            for (int y = Gdx.graphics.getHeight(); y > 0 ; y = (int) (y - cellSize)) {
+                shapeRenderer.line(0, y, Gdx.graphics.getWidth(), y);
+            }
+            
+            shapeRenderer.setColor(Color.BLACK);
+            
+            leftjoystick.draw(shapeRenderer);
+            rightjoystick.draw(shapeRenderer);
+            button1.draw(shapeRenderer);
+            switch1.draw(shapeRenderer);
+            switch2.draw(shapeRenderer);
+            
+            shapeRenderer.end();
         }
-
-        messageCounter--;
-        if (messageCounter < 0) {
-            messageCounter = 5;
-            processJoysticks();
-        }
-
-        camera.setToOrtho(true);
-        
-        Gdx.gl.glClearColor(1, 1, 1, 1);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        batch.setProjectionMatrix(camera.combined);
-        shapeRenderer.setProjectionMatrix(camera.combined);
-        shapeRenderer.setAutoShapeType(true);
-
-        batch.begin();
-        font.draw(batch, connectedStr, 50, 50);
-        font.draw(batch, "Speed: " + roverSpeed + " : " + rightjoystick.getYValue(), 300, 50);
-        font.draw(batch, "Distance: " + roverTurningDistance + " : " + leftjoystick.getXValue(), 500, 50);
-        batch.end();
-
-        shapeRenderer.begin();
-        shapeRenderer.setColor(Color.FIREBRICK);
-        for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
-            shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
-        }
-        for (int y = Gdx.graphics.getHeight(); y > 0 ; y = (int) (y - cellSize)) {
-            shapeRenderer.line(0, y, Gdx.graphics.getWidth(), y);
-        }
-        
-        shapeRenderer.setColor(Color.BLACK);
-        
-        leftjoystick.draw(shapeRenderer);
-        rightjoystick.draw(shapeRenderer);
-        button1.draw(shapeRenderer);
-        switch1.draw(shapeRenderer);
-        switch2.draw(shapeRenderer);
-        
-        shapeRenderer.end();
     }
     
     private int calcRoverSpeed(float speed) {
