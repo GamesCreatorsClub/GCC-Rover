@@ -5,6 +5,7 @@ import static org.ah.gcc.rover.MathUtil.calcDistance;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
 public class Button {
     private int spaceSize;
@@ -27,6 +28,8 @@ public class Button {
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
+        shapeRenderer.set(ShapeType.Filled);
+
         if (pressed) {
             shapeRenderer.setColor(Color.DARK_GRAY);
         } else {

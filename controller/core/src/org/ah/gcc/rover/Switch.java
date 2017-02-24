@@ -3,6 +3,7 @@ package org.ah.gcc.rover;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
 import sun.print.resources.serviceui;
 
@@ -23,6 +24,7 @@ public class Switch {
     }
     
     public void draw(ShapeRenderer shapeRenderer) {
+        shapeRenderer.set(ShapeType.Filled);
         if (orientation == Orientation.HORIZONTAL) {
             if (on) {
                 shapeRenderer.setColor(Color.GREEN);

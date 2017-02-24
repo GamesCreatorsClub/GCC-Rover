@@ -33,6 +33,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     private JoyStick leftjoystick;
     private JoyStick rightjoystick;
 
+    private ExpoGraph leftExpo;
+    private ExpoGraph rightExpo;
+
     private int retryCounter = 0;
     private int messageCounter = 10;
     
@@ -81,12 +84,18 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
         rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
         
+        leftExpo = new ExpoGraph((int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        rightExpo = new ExpoGraph((int)cellSize * 16, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+
+        leftExpo.setPercentage(0.75f);
+        rightExpo.setPercentage(0.90f);
+        
         button1 = new Button((int) cellSize, 12, 3, 0.5f);
 
         
-        switch1 = new Switch((int) cellSize, 3, 10, Orientation.HORIZONTAL);
+        switch1 = new Switch((int) cellSize, 5, 10, Orientation.HORIZONTAL);
         switch1.setState(true);
-        switch2 = new Switch((int) cellSize, 17, 10, Orientation.VERTICAL);
+        switch2 = new Switch((int) cellSize, 13, 10, Orientation.VERTICAL);
 
         
         inputMultiplexer = new InputMultiplexer();
@@ -98,18 +107,36 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public void processJoysticks() {
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (switch1.isOn()) {
-                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
+                float distance = rightjoystick.getDistanceFromCentre();
+                rightExpo.setValue(distance);
+                
+                rightExpo.setValue(distance);
+                distance = leftExpo.calculate(distance);
+
+                roverSpeed = calcRoverSpeed(distance);
                 roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
                 roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
                 roverControl.publish("move/orbit", roverSpeed + "");
             }
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            roverSpeed = -calcRoverSpeed(rightjoystick.getYValue());
-            roverTurningDistance = calcRoverDistance(leftjoystick.getXValue());
+            float rightY = rightjoystick.getYValue();
+            float leftX = leftjoystick.getXValue();
+            
+            rightExpo.setValue(rightY);
+            rightY = rightExpo.calculate(rightY);
+
+            leftExpo.setValue(leftX);
+            leftX = leftExpo.calculate(leftX);
+
+            roverSpeed = -calcRoverSpeed(rightY);
+            roverTurningDistance = calcRoverDistance(leftX);
             roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f) {
-            roverSpeed = calcRoverSpeed(leftjoystick.getXValue()) / 4;
+            float leftX = leftjoystick.getXValue();
+            leftExpo.setValue(leftX);
+            leftX = leftExpo.calculate(leftX);
+            roverSpeed = calcRoverSpeed(leftX) / 4;
             roverControl.publish("move/rotate", Integer.toString(roverSpeed));
             //            if (leftjoystick.getAngleFromCentre() < 180) {
             //                roverSpeed = calcRoverSpeed(leftjoystick.getDistanceFromCentre()) / 4;
@@ -138,17 +165,17 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             batch.begin();
 
             if (alpha < 30) {
-                float scale = Gdx.graphics.getWidth() / gccimg.getWidth();
+                float scale = calculateScale(gccimg);
                 int y = (int) ((Gdx.graphics.getHeight() - (gccimg.getHeight() * scale)) / 2);
                 int x = (int) ((Gdx.graphics.getWidth() - (gccimg.getWidth() * scale)) / 2);
                 batch.draw(gccimg, x, y, gccimg.getWidth() * scale, gccimg.getHeight() * scale);
             } else if (alpha < 60) {
-                float scale = Gdx.graphics.getWidth() / creativesphereimg.getWidth();
+                float scale = Gdx.graphics.getHeight() / creativesphereimg.getHeight();
                 int y = (int) ((Gdx.graphics.getHeight() - (creativesphereimg.getHeight() * scale)) / 2);
                 int x = (int) ((Gdx.graphics.getWidth() - (creativesphereimg.getWidth() * scale)) / 2);
                 batch.draw(creativesphereimg, x, y, creativesphereimg.getWidth() * scale, creativesphereimg.getHeight() * scale);
             } else if (alpha < 90) {
-                float scale = Gdx.graphics.getWidth() / bobimg.getWidth();
+                float scale = Gdx.graphics.getHeight() / bobimg.getHeight();
                 int y = (int) ((Gdx.graphics.getHeight() - (bobimg.getHeight() * scale)) / 2);
                 int x = (int) ((Gdx.graphics.getWidth() - (bobimg.getWidth() * scale)) / 2);
                 batch.draw(bobimg, x, y, bobimg.getWidth() * scale, bobimg.getHeight() * scale);
@@ -200,6 +227,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             
             leftjoystick.draw(shapeRenderer);
             rightjoystick.draw(shapeRenderer);
+            leftExpo.draw(shapeRenderer);
+            rightExpo.draw(shapeRenderer);
+
             button1.draw(shapeRenderer);
             switch1.draw(shapeRenderer);
             switch2.draw(shapeRenderer);
@@ -215,16 +245,14 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     
     private int calcRoverDistance(float distance) {
         if (distance >= 0) {
-            // distance = distance * distance;
             distance = Math.abs(distance);
             distance = 1.0f - distance;
-            distance = distance + 0.1f;
+            distance = distance + 0.01f;
             distance = distance * 500f;
         } else {
-            // distance = distance * distance;
             distance = Math.abs(distance);
             distance = 1.0f - distance;
-            distance = distance + 0.1f;
+            distance = distance + 0.01f;
             distance = - distance * 500f;
         }
         
@@ -250,7 +278,16 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         }
     }
     
-
+    private float calculateScale(Texture texture) {
+        float scaleX = Gdx.graphics.getWidth() / texture.getWidth();
+        float scaleY = Gdx.graphics.getHeight() / texture.getHeight();
+        if (scaleX > scaleY) {
+            return scaleY;
+        }
+        return scaleX;
+    }
+    
+    
     @Override
     public void dispose() {
         batch.dispose();
