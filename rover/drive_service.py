@@ -350,10 +350,10 @@ def steer():
         wheelDeg("fr", str(backAngle))
         wheelDeg("br", str(-backAngle))
     else:
-        wheelDeg("fl", str(-frontAngle))
-        wheelDeg("bl", str(frontAngle))
-        wheelDeg("fr", str(-backAngle))
-        wheelDeg("br", str(backAngle))
+        wheelDeg("fl", str(-backAngle))
+        wheelDeg("bl", str(backAngle))
+        wheelDeg("fr", str(-frontAngle))
+        wheelDeg("br", str(frontAngle))
 
 
     wheelSpeed("fl", str(speed))

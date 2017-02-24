@@ -247,12 +247,12 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         if (distance >= 0) {
             distance = Math.abs(distance);
             distance = 1.0f - distance;
-            distance = distance + 0.01f;
+            distance = distance + 0.2f;
             distance = distance * 500f;
         } else {
             distance = Math.abs(distance);
             distance = 1.0f - distance;
-            distance = distance + 0.01f;
+            distance = distance + 0.2f;
             distance = - distance * 500f;
         }
         
