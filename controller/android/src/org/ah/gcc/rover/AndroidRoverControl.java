@@ -70,4 +70,17 @@ public class AndroidRoverControl implements RoverControl {
     }
 
 
+    @Override
+    public void disconnect() {
+        if (client != null) {
+            try {
+                client.disconnect();
+            } catch (Throwable ignore) { }
+            try {
+                client.close();
+            } catch (Throwable ignore) { }
+            connected = false;
+            client = null;
+        }
+    }
 }

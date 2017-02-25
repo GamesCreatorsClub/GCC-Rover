@@ -5,22 +5,20 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
-import sun.print.resources.serviceui;
-
 public class Switch {
-    private int spaceSize;
+    private int width;
     private int x;
     private int y;
     private Orientation orientation;
     
     private boolean on = false;
 
-    public Switch(int cellsize, int x, int y, Orientation orientation) {
-        this.spaceSize = cellsize;
+    public Switch(int x, int y, int width, Orientation orientation) {
+        this.width = width;
         this.orientation = orientation;
         
-        this.x = x * cellsize;
-        this.y = Gdx.graphics.getHeight() - y * cellsize;
+        this.x = x;
+        this.y = Gdx.graphics.getHeight() - y;
     }
     
     public void draw(ShapeRenderer shapeRenderer) {
@@ -28,30 +26,30 @@ public class Switch {
         if (orientation == Orientation.HORIZONTAL) {
             if (on) {
                 shapeRenderer.setColor(Color.GREEN);
-                shapeRenderer.rect(x, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
                 
                 shapeRenderer.setColor(Color.DARK_GRAY);
-                shapeRenderer.rect(x + spaceSize, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x + width / 2, y, width / 2, width / 2);
             } else {
                 shapeRenderer.setColor(Color.DARK_GRAY);
-                shapeRenderer.rect(x, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
                 
                 shapeRenderer.setColor(Color.RED);
-                shapeRenderer.rect(x + spaceSize, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x + width / 2, y, width / 2, width / 2);
             }
         } else if (orientation == Orientation.VERTICAL) {
             if (on) {
                 shapeRenderer.setColor(Color.GREEN);
-                shapeRenderer.rect(x, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
                 
                 shapeRenderer.setColor(Color.DARK_GRAY);
-                shapeRenderer.rect(x, spaceSize + y, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y + width / 2, width / 2, width / 2);
             } else {
                 shapeRenderer.setColor(Color.DARK_GRAY);
-                shapeRenderer.rect(x, y, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
                 
                 shapeRenderer.setColor(Color.RED);
-                shapeRenderer.rect(x, y + spaceSize, spaceSize, spaceSize);
+                shapeRenderer.rect(x, y + width / 2, width / 2, width / 2);
             }
         }
         
@@ -59,15 +57,15 @@ public class Switch {
     
     public void touchDown(int screenX, int screenY, int pointer) {
            if (orientation == Orientation.VERTICAL) {
-               if (screenX > x && screenX < x + spaceSize 
-                       && screenY > y && screenY < y + spaceSize * 2) {
+               if (screenX > x && screenX < x + width / 2
+                       && screenY > y && screenY < y + width) {
                    on = !on;
                }
            }
            
            if (orientation == Orientation.HORIZONTAL) {
-               if (screenX > x && screenX < x + spaceSize * 2
-                       && screenY > y && screenY < y + spaceSize) {
+               if (screenX > x && screenX < x + width
+                       && screenY > y && screenY < y + width / 2) {
                    on = !on;
                }
            }

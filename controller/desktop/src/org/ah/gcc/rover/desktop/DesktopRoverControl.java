@@ -4,10 +4,10 @@ import org.ah.gcc.rover.RoverControl;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 public class DesktopRoverControl implements RoverControl {
 
@@ -17,8 +17,7 @@ public class DesktopRoverControl implements RoverControl {
     @Override
     public void connect(String url) {
         try {
-//            disconnect();
-            client = new MqttAsyncClient("tcp://172.24.1.184:1883", MqttAsyncClient.generateClientId());
+            client = new MqttAsyncClient(url, MqttAsyncClient.generateClientId(), new MemoryPersistence());
             client.connect(
                 null,
                 new IMqttActionListener() {
@@ -59,18 +58,17 @@ public class DesktopRoverControl implements RoverControl {
         return client != null && connected;
     }
 
+    @Override
     public void disconnect() {
         if (client != null) {
             try {
                 client.disconnect();
-            } catch (MqttException ignore) {
-
-            }
+            } catch (Throwable ignore) { }
             try {
                 client.close();
-            } catch (MqttException ignore) {
-
-            }
+            } catch (Throwable ignore) { }
+            connected = false;
+            client = null;
         }
     }
 
