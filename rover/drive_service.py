@@ -334,6 +334,18 @@ def sideAngleBack(dist):
     return math.degrees(x)
 
 
+def calcInnerSpeed(spd, dist):
+    midc = 2 * math.pi * dist
+    inc = 2 * math.pi * (dist - 36.5)
+    return spd * (inc / midc)
+
+
+def calcOuterSpeed(spd, dist):
+    midc = 2 * math.pi * dist
+    outc = 2 * math.pi * (dist + 36.5)
+    return spd * (outc / midc)
+
+
 def steer():
     args = currentCommand["args"].split(" ")
 
@@ -344,22 +356,27 @@ def steer():
 
     print("d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) +  " ba= " + str(backAngle))
 
+    innerSpeed = calcInnerSpeed(speed, d)
+    outerSpeed = calcOuterSpeed(speed, d)
+
     if d >= 0:
         wheelDeg("fl", str(frontAngle))
         wheelDeg("bl", str(-frontAngle))
         wheelDeg("fr", str(backAngle))
         wheelDeg("br", str(-backAngle))
+        wheelSpeed("fl", str(outerSpeed))
+        wheelSpeed("fr", str(innerSpeed))
+        wheelSpeed("bl", str(outerSpeed))
+        wheelSpeed("br", str(innerSpeed))
     else:
         wheelDeg("fl", str(-backAngle))
         wheelDeg("bl", str(backAngle))
         wheelDeg("fr", str(-frontAngle))
         wheelDeg("br", str(frontAngle))
-
-
-    wheelSpeed("fl", str(speed))
-    wheelSpeed("fr", str(speed))
-    wheelSpeed("bl", str(speed))
-    wheelSpeed("br", str(speed))
+        wheelSpeed("fl", str(innerSpeed))
+        wheelSpeed("fr", str(outerSpeed))
+        wheelSpeed("bl", str(innerSpeed))
+        wheelSpeed("br", str(outerSpeed))
 
 
 def drive():
