@@ -70,10 +70,6 @@ public class ExpoGraph {
     }
     
     public float calculate(float input) {
-        if (input >= 0) {
-            return input * input * percentage + input * (1.0f - percentage);
-        } else {
-            return - input * input * percentage + input * (1.0f - percentage);
-        }
+        return MathUtil.calculateExpo(input, percentage);
     }
 }

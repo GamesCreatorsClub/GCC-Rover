@@ -97,18 +97,20 @@ public class JoyStick {
         return calcAngleAtPointFromCentre(x, y) * 180 / Math.PI;
     }
 
+    public void setValues(float nx, float ny) {
+        if (Math.abs(nx) > 0.02f || Math.abs(ny) > 0.02f) {
+            updateCoordinates(
+                    (int) (centreX + (nx * (spaceSize - inactiveSize) / 2 + Math.signum(nx) * padSize / 2)),
+                    (int) (centreY + (ny * (spaceSize - inactiveSize) / 2 + Math.signum(ny) * padSize / 2)));
+        } else {
+            this.x = centreX;
+            this.y = centreY;
+        }
+    }
+
     public void dragged(int screenX, int screenY, int pointer) {
         if (this.pointer == pointer) {
-            float distance = calcDistanceFromTheCentre(screenX, screenY);
-            if (distance < spaceSize / 2 - padSize / 2) {
-                x = screenX;
-                y = screenY;
-            } else {
-                double angle = calcAngleAtPointFromCentre(screenX, screenY);
-                distance = spaceSize / 2 - padSize / 2;
-                x = (int)(-distance * Math.sin(-angle)) + centreX;
-                y = (int)(-distance * Math.cos(-angle)) + centreY;
-            }
+            updateCoordinates(screenX, screenY);
         }
     }
 
@@ -126,6 +128,19 @@ public class JoyStick {
         }
     }
 
+    private void updateCoordinates(int nx, int ny) {
+        float distance = calcDistanceFromTheCentre(nx, ny);
+        if (distance < spaceSize / 2 - padSize / 2) {
+            x = nx;
+            y = ny;
+        } else {
+            double angle = calcAngleAtPointFromCentre(nx, ny);
+            distance = spaceSize / 2 - padSize / 2;
+            x = (int)(-distance * Math.sin(-angle)) + centreX;
+            y = (int)(-distance * Math.cos(-angle)) + centreY;
+        }
+    }
+
     private double calcAngleAtPointFromCentre(int x, int y) {
         return Math.atan2((x - centreX), -(y - centreY));
     }
@@ -133,4 +148,5 @@ public class JoyStick {
     private float calcDistanceFromTheCentre(float x, float y) {
         return calcDistance(centreX, centreY, x, y);
     }
+
 }

@@ -27,9 +27,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             new RoverDetails("Rover 4p", "gcc-wifi-ap", 1886)
     };
 
-    private int selectedRover = 0;
-    private int newSelectedRover = 0;
-
+    private PlatformSpecific platformSpecific;
     private RoverControl roverControl;
 
     private SpriteBatch batch;
@@ -50,6 +48,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     private ExpoGraph leftExpo;
     private ExpoGraph rightExpo;
 
+    private int selectedRover = 0;
+    private int newSelectedRover = 0;
+
     private int retryCounter = 0;
     private int messageCounter = 10;
 
@@ -68,6 +69,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     private boolean logos = true;
 
+    private boolean mouseDown = false;
+
     private long alpha = 0;
 
     private Texture gccimg;
@@ -76,12 +79,15 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     private Texture bobimg;
 
-    public RoverController(RoverControl roverControl) {
-        this.roverControl = roverControl;
+    public RoverController(PlatformSpecific platformSpecific) {
+        this.platformSpecific = platformSpecific;
+        this.roverControl = platformSpecific.getRoverControl();
     }
 
     @Override
     public void create() {
+        platformSpecific.init();
+
         font = new BitmapFont(Gdx.files.internal("fonts/din-alternate-bold-64.fnt"), true);
         glyphLayout = new GlyphLayout();
 
@@ -135,6 +141,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     @Override
     public void render() {
+
+        updatePhysicalJoystick();
+
         alpha++;
         if (logos) {
             camera.setToOrtho(false);
@@ -312,6 +321,17 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         return scaleX;
     }
 
+    private void updatePhysicalJoystick() {
+        if (!mouseDown) {
+            float plx = platformSpecific.getLeftJoystick().getXValue();
+            float ply = platformSpecific.getLeftJoystick().getYValue();
+            float prx = platformSpecific.getRightJoystick().getXValue();
+            float pry = platformSpecific.getRightJoystick().getYValue();
+            System.out.println(String.format("L: (%.2f, %.2f) R: (%.2f, %.2f)", plx, ply, prx, pry));
+            leftjoystick.setValues(plx, ply);
+            rightjoystick.setValues(prx, pry);
+        }
+    }
 
     @Override
     public void dispose() {
@@ -342,6 +362,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         switch2.touchDown(screenX, screenY, pointer);
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
+        mouseDown = true;
         return false;
     }
 
@@ -351,6 +372,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         rightjoystick.touchUp(screenX, screenY, pointer);
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
+        mouseDown = false;
         return false;
     }
 
