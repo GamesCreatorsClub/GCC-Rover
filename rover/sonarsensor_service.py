@@ -6,6 +6,7 @@ import threading
 import pyroslib
 import RPi.GPIO as GPIO
 
+DEBUG = False
 
 TRIG = 11  # Originally was 23
 ECHO = 8   # Originally was 24
@@ -32,9 +33,13 @@ def moveServo(angle):
     f.close()
 
     angleDistance = abs(lastServoAngle - angle)
+    sleepAmount = SERVO_SPEED * angleDistance / 60.0
+
+    if DEBUG:
+        print("Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
     # wait for servo to reach the destination
-    time.sleep(SERVO_SPEED * angleDistance / 60.0)
+    time.sleep(sleepAmount)
 
     lastServoAngle = angle
 
@@ -79,6 +84,9 @@ def readDistance():
 
 def handleRead(topic, payload, groups):
     angle = float(payload)
+    if DEBUG:
+        print("Got read - moving to angle " + str(angle))
+
     moveServo(angle)
     distance = readDistance()
     # print ("   distance =" + str(distance))
@@ -87,6 +95,9 @@ def handleRead(topic, payload, groups):
 
 def handleScan(topic, payload, groups):
     startScan = True
+
+    if DEBUG:
+        print("Got scan...")
 
     distances = {}
     angle = -90
@@ -114,6 +125,7 @@ def handleScan(topic, payload, groups):
 
     # print ("   distance =" + str(distance))
     pyroslib.publish("sensor/distance", str(",".join(distancesList)))
+
 
 
 if __name__ == "__main__":

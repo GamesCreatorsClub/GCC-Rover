@@ -81,7 +81,7 @@ def ensureWheelData(name, motorServo, steerServo):
 
 
 def loadStorage():
-    storagelib.subscribeToPath("x/y/z")
+    subscribeWheels()
     storagelib.waitForData()
     ensureWheelData("fr", 0, 1)
     ensureWheelData("fl", 2, 3)

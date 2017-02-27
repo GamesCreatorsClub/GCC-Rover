@@ -5,6 +5,16 @@ echo Uploading     pyroslib
 pyros $1 upload    pyroslib  pyroslib/pyroslib.py
 
 echo ""
+echo Uploading     storagelib
+pyros $1 upload    storagelib   storagelib/storagelib.py
+
+echo ""
+echo Uploading     storage
+pyros $1 upload -s storage      storage_service.py
+echo Restarting    storage
+pyros $1 restart   storage
+
+echo ""
 echo Uploading     wheels
 pyros $1 upload -s wheels       wheels_service.py
 echo Restarting    wheels
