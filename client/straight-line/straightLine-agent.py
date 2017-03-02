@@ -119,10 +119,11 @@ STEER_MAX_CONTROL = 30
 INTEGRAL_FADE_OUT = 1
 
 # P_GAIN = 0.9 and I_GAIN = 0.1
+# P_GAIN = 0.7, I_GAIN = 0.3, GAIN = 2
 
 P_GAIN = 0.70
-I_GAIN = 0.25
-D_GAIN = 0.05
+I_GAIN = 0.30
+D_GAIN = 0.00
 
 steerGain = STEER_GAIN
 pGain = P_GAIN
@@ -162,7 +163,7 @@ def handleGyro(topic, message, groups):
         if dt == 0:
             derivativeError = 0
         else:
-            derivativeError = (proportionalError - previousError) / dt
+            derivativeError = (proportionalError - previousError)  # / dt
 
         previousError = proportionalError
 
