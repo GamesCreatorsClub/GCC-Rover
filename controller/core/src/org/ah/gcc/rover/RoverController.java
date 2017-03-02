@@ -294,7 +294,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     }
 
     private void connectToRover() {
-        System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
+        // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
         roverControl.connect(ROVERS[selectedRover].getFullAddress());
     }
 
@@ -327,7 +327,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             float ply = platformSpecific.getLeftJoystick().getYValue();
             float prx = platformSpecific.getRightJoystick().getXValue();
             float pry = platformSpecific.getRightJoystick().getYValue();
-            System.out.println(String.format("L: (%.2f, %.2f) R: (%.2f, %.2f)", plx, ply, prx, pry));
+            // System.out.println(String.format("L: (%.2f, %.2f) R: (%.2f, %.2f)", plx, ply, prx, pry));
             leftjoystick.setValues(plx, ply);
             rightjoystick.setValues(prx, pry);
         }
