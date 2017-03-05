@@ -20,6 +20,7 @@ distances = {}
 
 
 def parseDistances(p):
+    distances.clear()
     for pair in p.split(","):
         split = pair.split(":")
         distances[float(split[0])] = float(split[1])
@@ -35,6 +36,7 @@ def handleSensorDistance(topic, message, groups):
     angle = 0
     largestDist = 0
     for d in distances:
+
         if distances[d] > largestDist:
             angle = float(d)
             largestDist = distances[d]
