@@ -7,11 +7,11 @@ import pyroslib
 
 
 #
-# Accelerometer sensor service
+# MPU 9250 sensor service
 #
 # Based on https://github.com/FaBoPlatform/FaBo9AXIS-MPU9250-Python/blob/master/FaBo9Axis_MPU9250/MPU9250.py
 #
-# This service is responsible reading accelerometer.
+# This service is responsible reading gyroscope and accelerometer.
 #
 
 CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
