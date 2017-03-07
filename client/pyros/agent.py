@@ -13,6 +13,10 @@ def init(client, filename, agentId=None):
             agentId = filename
             agentId = agentId.replace("/", "-")
 
+        if "/" in agentId:
+            segments = agentId.split("/")
+            agentId = segments[len(segments) - 1]
+
     file = open(filename)
     fileContent = file.read()
     file.close()

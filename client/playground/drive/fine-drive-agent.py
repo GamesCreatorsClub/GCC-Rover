@@ -384,7 +384,7 @@ def turnOnSpot():
         setCurrentSpeed(0)
         processCommand("stop", "stop")
         dontNeedGyro()
-        pyroslib.publish(TOPIC + "/feedback", "done")
+        pyroslib.publish(TOPIC + "/feedback", "done-turn")
 
     targetGyro = int(currentCommand["args"])
     if targetGyro < gyroReadOut:
@@ -556,7 +556,7 @@ def driveStraight():
         setCurrentSpeed(0)
         processCommand("stop", "stop")
         dontNeedGyro()
-        pyroslib.publish(TOPIC + "/feedback", "done")
+        pyroslib.publish(TOPIC + "/feedback", "done-move")
 
     targetDistance = int(currentCommand["args"])
     if targetDistance < 0:

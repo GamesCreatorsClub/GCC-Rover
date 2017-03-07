@@ -4,61 +4,115 @@ import math
 import pygame
 import pyros
 import pyros.gcc
+import pyros.agent
 import pyros.pygamehelper
 
+SMALLEST_DISTANCE = 50
+DISTANCE = 10
 SCALE = 10
 
+angle = 0
+distanceAtAngle = 0
+
+driveAngle = 0
 pygame.init()
 bigFont = pygame.font.SysFont("arial", 32)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 600))
 
-stopped = False
+stopped = True
 received = True
+oneStep = True
 
 distances = {}
 
 
+def connected():
+    pyros.agent.init(pyros.client, "playground/drive/fine-drive-agent.py")
+
+
+def sanitise(distance):
+    distance -= 100
+    if distance < 50:
+        distance = 50
+    return distance
+
+
 def parseDistances(p):
+    distances.clear()
     for pair in p.split(","):
         split = pair.split(":")
-        distances[float(split[0])] = float(split[1])
+        distances[float(split[0])] = sanitise(float(split[1]))
 
 
 def handleMoveResponse(topic, message, groups):
+    global oneStep
 
-    if message == "done-move":
-        print("moved")
-        pyros.publish("sensor/distance/scan", "scan")
-    if message == "done-turn":
-        print("turned")
-        pyros.publish("move/forward", "30")
+    if not stopped or oneStep:
+        if message == "done-turn":
+            print("** Turned!")
+            move()
+        oneStep = False
+
+    if not stopped:
+        if message == "done-move":
+            print("** Moved!")
+            pyros.publish("sensor/distance/scan", "scan")
+            print("** Asked for distance scan")
 
 
 def handleSensorDistance(topic, message, groups):
-    global received, angle
+    global received, angle, driveAngle, distanceAtAngle
+    global smallestDist, smallestDistAngle, largestDist, largestDistAngle
 
     print("** distance = " + message)
-    parseDistances(message)
-    received = True
+    if "," in message:
+        parseDistances(message)
+    else:
+        split = message.split(":")
+        distances[float(split[0])] = sanitise(float(split[1]))
+        print("** Got " + message)
+        distanceAtAngle = distances[angle]
 
-    move()
-    angle = 0
+    received = True
     largestDist = 0
+    largestDistAngle = 0
+    smallestDist = 2000
+    smallestDistAngle = 0
     for d in distances:
         if distances[d] > largestDist:
-            angle = float(d)
+            largestDistAngle = float(d)
             largestDist = distances[d]
-    print(" LARGEST DISTANCE = angle: " + str(angle) + " | distance: " + str(largestDist))
+        if distances[d] < smallestDist:
+            smallestDistAngle = float(d)
+            smallestDist = distances[d]
 
-    if angle != 0:
-        pyros.publish("move/rotate", int(angle))
-    else:
-        pyros.publish("move/forward", "30")
+    print("** LARGEST  DISTANCE @ angle: " + str(largestDistAngle) + " | distance: " + str(largestDist))
+    print("** SMALLEST DISTANCE @ angle: " + str(smallestDistAngle) + " | distance: " + str(smallestDist))
+
+    driveAngle = largestDistAngle / 1.5
+
+    if not stopped:
+        goOneStep()
+
+
+def goOneStep():
+
+    if smallestDist < SMALLEST_DISTANCE:
+        if smallestDistAngle > 0:
+            driveAngle = smallestDistAngle - 45
+        else:
+            driveAngle = smallestDistAngle + 45
+
+    if not stopped:
+        if driveAngle != 0:
+            pyros.publish("finemove/rotate", int(driveAngle))
+        else:
+            move()
 
 
 def move():
-    pass
+    pyros.publish("finemove/forward", DISTANCE)
 
 
 def drawRadar():
@@ -85,40 +139,60 @@ def drawRadar():
 
             pygame.draw.line(screen, (colour, colour, 255), (x1, y1), (x2, y2))
 
-        colour -= 20
+        # colour -= 20
         prevAngle = a
+
+    aAngleRadians = math.pi * (180 - angle) / 180
+
+    x = 300 + 500 / SCALE * math.sin(aAngleRadians)
+    y = 300 + 500 / SCALE * math.cos(aAngleRadians)
+
+    pygame.draw.line(screen, (128, 255, 128), (300, 300), (x, y), 4)
+
+    dAngleRadians = math.pi * (180 - driveAngle) / 180
+
+    x = 300 + 2200 / SCALE * math.sin(dAngleRadians)
+    y = 300 + 2200 / SCALE * math.cos(dAngleRadians)
+
+    pygame.draw.line(screen, (255, 128, 128), (300, 300), (x, y), 2)
 
 
 def onKeyDown(key):
-    global stopped, received, angle
+    global stopped, received, angle, oneStep
 
     if key == pygame.K_ESCAPE:
-        pyros.publish("drive", "stop")
+        pyros.publish("finemove/stop", "stop")
         pyros.loop(0.7)
         sys.exit()
     elif key == pygame.K_SPACE:
-        if not stopped:
-            pyros.publish("drive", "stop")
-            stopped = True
-        if not stopped:
-            stopped = True
+        pyros.publish("finemove/stop", "stop")
+        stopped = True
     elif key == pygame.K_RETURN:
-        if received:
-            pyros.publish("sensor/distance/scan", "scan")
-            print("** asked for distance")
+        print("** Starting...")
+        pyros.publish("sensor/distance/scan", "scan")
+        print("** Asked for distance scan")
+        stopped = False
+    elif key == pygame.K_g:
+        oneStep = True
+        goOneStep()
     elif key == pygame.K_s:
-        if received:
-            received = False
-            pyros.publish("sensor/distance/read", str(angle))
-            print("** asked for distance")
+        pyros.publish("sensor/distance/scan", "")
+        print("** Asked for scan")
+    elif key == pygame.K_r:
+        pyros.publish("sensor/distance/read", str(angle))
+        print("** Asked for distance")
     elif key == pygame.K_o:
-        angle -= 1
+        angle -= 22.5
         if angle < -90:
             angle = -90
+        pyros.publish("sensor/distance/read", str(angle))
+        print("** Asked for distance")
     elif key == pygame.K_p:
-        angle += 1
+        angle += 22.5
         if angle > 90:
             angle = 90
+        pyros.publish("sensor/distance/read", str(angle))
+        print("** Asked for distance")
     else:
         pyros.gcc.handleConnectKeys(key)
 
@@ -127,11 +201,10 @@ def onKeyUp(key):
     return
 
 
-angle = 0
-
-pyros.subscribe("move/response", handleMoveResponse)
+pyros.subscribe("finemove/feedback", handleMoveResponse)
+# pyros.subscribe("move/response", handleMoveResponse)
 pyros.subscribe("sensor/distance", handleSensorDistance)
-pyros.init("maze-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.init("maze-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False, onConnected=connected)
 
 while True:
     for event in pygame.event.get():
@@ -154,6 +227,12 @@ while True:
 
     text = bigFont.render("Stopped: " + str(stopped), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 80, 0, 0))
+
+    text = bigFont.render("Angle: " + str(angle), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(0, 120, 0, 0))
+
+    text = bigFont.render("Dist: " + str(distanceAtAngle), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(0, 160, 0, 0))
 
     drawRadar()
 
