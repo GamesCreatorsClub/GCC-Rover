@@ -133,7 +133,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             }
         });
 
-        button1 = new RoundButton((int)cellSize * 12, (int)cellSize * 3, (int)cellSize / 2);
+        button1 = new RoundButton((int)cellSize * 6, (int)cellSize * 11, (int)cellSize / 2);
 
         switchLT = new Switch((int)cellSize * 0, (int)(cellSize * 1), (int)cellSize * 4, Orientation.HORIZONTAL);
         switchLT.setState(true);

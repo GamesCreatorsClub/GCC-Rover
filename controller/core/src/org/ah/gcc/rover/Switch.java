@@ -13,7 +13,7 @@ public class Switch {
     private boolean on = false;
 
     public Switch(int x, int y, int width, Orientation orientation) {
-        this.width = width;
+        this.width = width * 2;
         this.orientation = orientation;
 
         this.x = x;
@@ -29,6 +29,7 @@ public class Switch {
                 shapeRenderer.rect(x, y, width / 2, width / 2);
 
                 shapeRenderer.set(ShapeType.Line);
+
                 shapeRenderer.setColor(Color.DARK_GRAY);
                 shapeRenderer.rect(x + width / 2, y, width / 2, width / 2);
             } else {
@@ -44,12 +45,14 @@ public class Switch {
             if (on) {
                 shapeRenderer.setColor(Color.GREEN);
                 shapeRenderer.rect(x, y, width, width / 2);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
 
                 shapeRenderer.setColor(Color.DARK_GRAY);
                 shapeRenderer.rect(x, y + width / 2, width, width / 2);
             } else {
                 shapeRenderer.setColor(Color.DARK_GRAY);
                 shapeRenderer.rect(x, y, width, width / 2);
+                shapeRenderer.rect(x, y, width / 2, width / 2);
 
                 shapeRenderer.setColor(Color.RED);
                 shapeRenderer.rect(x, y + width / 2, width, width / 2);
