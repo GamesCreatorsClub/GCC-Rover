@@ -1,5 +1,8 @@
 package org.ah.gcc.rover;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
@@ -59,7 +62,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     private double cellSize;
 
-    private Switch switch1;
+    private Switch switchLB;
+
+    private Switch switchLT;
 
     private Switch switch2;
 
@@ -78,6 +83,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     private Texture creativesphereimg;
 
     private Texture bobimg;
+
+    private Map<ControllerButton, Boolean> controllerButtons = new EnumMap<ControllerButton, Boolean>(ControllerButton.class);
 
     public RoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
@@ -108,8 +115,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
         rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
 
-        leftExpo = new ExpoGraph((int)cellSize * 1, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
-        rightExpo = new ExpoGraph((int)cellSize * 17, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        leftExpo = new ExpoGraph((int)cellSize * 8, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        rightExpo = new ExpoGraph((int)cellSize * 10, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
 
         leftExpo.setPercentage(0.75f);
         rightExpo.setPercentage(0.90f);
@@ -128,9 +135,11 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
         button1 = new RoundButton((int)cellSize * 12, (int)cellSize * 3, (int)cellSize / 2);
 
-        switch1 = new Switch((int)cellSize * 5, (int)cellSize * 10, (int)cellSize, Orientation.HORIZONTAL);
-        switch1.setState(true);
-        switch2 = new Switch((int)cellSize * 13, (int)cellSize * 10, (int)cellSize, Orientation.VERTICAL);
+        switchLT = new Switch((int)cellSize * 0, (int)(cellSize * 1), (int)cellSize * 4, Orientation.HORIZONTAL);
+        switchLT.setState(true);
+        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 3), (int)cellSize * 4, Orientation.HORIZONTAL);
+        switchLB.setState(true);
+        switch2 = new Switch((int)cellSize * 13, (int)cellSize, (int)cellSize * 2, Orientation.VERTICAL);
 
 
         inputMultiplexer = new InputMultiplexer();
@@ -211,7 +220,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             rightExpo.draw(shapeRenderer);
 
             button1.draw(shapeRenderer);
-            switch1.draw(shapeRenderer);
+            switchLB.draw(shapeRenderer);
+            switchLT.draw(shapeRenderer);
             switch2.draw(shapeRenderer);
             roverSelectButton.draw(shapeRenderer);
 
@@ -234,7 +244,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     public void processJoysticks() {
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            if (switch1.isOn()) {
+            if (switchLB.isOn()) {
                 float distance = rightjoystick.getDistanceFromCentre();
                 rightExpo.setValue(distance);
 
@@ -330,6 +340,15 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             // System.out.println(String.format("L: (%.2f, %.2f) R: (%.2f, %.2f)", plx, ply, prx, pry));
             leftjoystick.setValues(plx, ply);
             rightjoystick.setValues(prx, pry);
+
+            platformSpecific.updateControllerButtons(controllerButtons);
+
+            if (controllerButtons.containsKey(ControllerButton.BUTTON_LB)) {
+                switchLB.setState(controllerButtons.get(ControllerButton.BUTTON_LB));
+            }
+            if (controllerButtons.containsKey(ControllerButton.BUTTON_LS)) {
+                switchLT.setState(controllerButtons.get(ControllerButton.BUTTON_LS));
+            }
         }
     }
 
@@ -358,7 +377,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         leftjoystick.touchDown(screenX, screenY, pointer);
         rightjoystick.touchDown(screenX, screenY, pointer);
-        switch1.touchDown(screenX, screenY, pointer);
+        switchLB.touchDown(screenX, screenY, pointer);
+        switchLT.touchDown(screenX, screenY, pointer);
         switch2.touchDown(screenX, screenY, pointer);
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);

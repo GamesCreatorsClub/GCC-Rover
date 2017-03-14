@@ -2,6 +2,9 @@ package org.ah.gcc.rover.desktop;
 
 import static org.ah.gcc.rover.MathUtil.calculateExpo;
 
+import java.util.Map;
+
+import org.ah.gcc.rover.ControllerButton;
 import org.ah.gcc.rover.DummyJoystickInterface;
 import org.ah.gcc.rover.JoystickInterface;
 import org.ah.gcc.rover.PlatformSpecific;
@@ -13,22 +16,22 @@ import com.badlogic.gdx.controllers.Controllers;
 public class DesktopPlatformSpecfic implements PlatformSpecific {
 
     private DesktopRoverControl roverControl;
-    private Controller c;
+    private Controller selectedController;
 
     private JoystickInterface leftJoystick = new JoystickInterface() {
         @Override
-        public float getXValue() { return sanitise(c.getAxis(0)); }
+        public float getXValue() { return sanitise(selectedController.getAxis(0)); }
 
         @Override
-        public float getYValue() { return sanitise(c.getAxis(1)); }
+        public float getYValue() { return sanitise(selectedController.getAxis(1)); }
     };
 
     private JoystickInterface rightJoystick = new JoystickInterface() {
         @Override
-        public float getXValue() { return sanitise(c.getAxis(3)); }
+        public float getXValue() { return sanitise(selectedController.getAxis(3)); }
 
         @Override
-        public float getYValue() { return sanitise(c.getAxis(4)); }
+        public float getYValue() { return sanitise(selectedController.getAxis(4)); }
     };
 
     public DesktopPlatformSpecfic() {
@@ -39,10 +42,10 @@ public class DesktopPlatformSpecfic implements PlatformSpecific {
     public void init() {
         if (Controllers.getControllers().size > 0) {
             if (Controllers.getControllers().first() != null) {
-                c = Controllers.getControllers().first();
+                selectedController = Controllers.getControllers().first();
             }
         }
-        if (c == null) {
+        if (selectedController == null) {
             leftJoystick = new DummyJoystickInterface();
             rightJoystick = new DummyJoystickInterface();
         }
@@ -61,6 +64,12 @@ public class DesktopPlatformSpecfic implements PlatformSpecific {
     @Override
     public JoystickInterface getRightJoystick() {
         return rightJoystick;
+    }
+
+    public void updateControllerButtons(Map<ControllerButton, Boolean> buttons) {
+        for (ControllerButton button : ControllerButton.values()) {
+            buttons.put(button, selectedController.getButton(button.getButtonCode()));
+        }
     }
 
     private float sanitise(float input) {
