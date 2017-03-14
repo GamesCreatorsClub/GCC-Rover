@@ -28,6 +28,8 @@ BACK = 4
 BREAKING_FACTOR = 0.1
 
 STARTING_ROTATION_SPEED = 28
+ROTATIONAL_SPEED_OVERSHOOT_FACTOR = 6
+RAMP_UP_TIMEOUT = 20
 
 CHANGE_TIMEOUT = 10
 MIN_ACCEL = 1.5
@@ -47,12 +49,6 @@ accelDeltaTime = 0
 targetDistance = 0
 accelDistance = 0
 
-calibrateAccel = False
-minAccel = 0
-maxAccel = 0
-midAccel = 0
-midAccelCount = 0
-
 previousControlTime = 0
 
 continuousTimeout = 50
@@ -62,8 +58,8 @@ _needGyro = False
 _needAccel = False
 
 originalDirection = None
-leftMovingSpeed = -2
-rightMovingSpeed = 2
+leftMovingSpeed = -1
+rightMovingSpeed = 1
 lastRotationalSpeed = 0
 
 forwardMovingSpeed = 2
@@ -77,11 +73,17 @@ startedMovingTime = 0
 
 # sine = [0, 1, 0, -1, 0, -1]
 
-sine = [0, 1, 0, -1]
+# sine_p1 = [0, 1, 0, -1]
+# sine_p2 = [0, -1, 0, 1]
 
 # sine = [0, 1, 2, 1, 0, -1, -2, -3, -4, -4 -4, -4, -4, -4, -4, -4, -3, -2, -1]
 
-# sine = [0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, -1, -1, -2, -1, -1]
+# sine_p1 = [0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, -1, -1, -2, -1, -1]
+# sine_p2 = [1, 1, 2, 1, 1, 0, 0, 0, 0, -1, -1, -2, -1, -1, 0, 0, 0, 0]
+
+sine_p1 = [0, 0]
+sine_p2 = [0, 0]
+
 
 sineIndex = 0
 
@@ -211,18 +213,42 @@ def sidewaysWheels():
         wheelPosition = SIDEWAYS
 
 
+def applySine(speed, sineMap):
+    if speed > 0:
+        speed += sineMap[sineIndex]
+        if speed < 0:
+            return 0
+    else:
+        speed += sineMap[sineIndex]
+        if speed > 0:
+            return 0
+    return speed
+
+
 def setRotationSpeed(speed):
-    wheelSpeed("fl", speed)
-    wheelSpeed("fr", -speed)
-    wheelSpeed("bl", speed)
-    wheelSpeed("br", -speed)
+    global sineIndex
+
+    wheelSpeed("fl", applySine(speed, sine_p1))
+    wheelSpeed("fr", applySine(-speed, sine_p2))
+    wheelSpeed("bl", applySine(speed, sine_p2))
+    wheelSpeed("br", applySine(-speed, sine_p1))
+
+    sineIndex += 1
+    if sineIndex >= len(sine_p1):
+        sineIndex = 0
 
 
 def setForwardSpeed(speed):
-    wheelSpeed("fl", speed)
-    wheelSpeed("fr", speed)
-    wheelSpeed("bl", speed)
-    wheelSpeed("br", speed)
+    global sineIndex
+
+    wheelSpeed("fl", applySine(speed, sine_p1))
+    wheelSpeed("fr", applySine(speed, sine_p2))
+    wheelSpeed("bl", applySine(speed, sine_p2))
+    wheelSpeed("br", applySine(speed, sine_p1))
+
+    sineIndex += 1
+    if sineIndex >= len(sine_p1):
+        sineIndex = 0
 
 
 def turnOnSpot():
@@ -240,14 +266,6 @@ def turnOnSpot():
         setRotationSpeed(speed)
         currentSpeed = speed
 
-    def sineSpeed(speed):
-        global sineIndex
-
-        setRotationSpeed(speed + sine[sineIndex])
-        sineIndex += 1
-        if sineIndex >= len(sine):
-            sineIndex = 0
-
     def increaseSpeed():
         if originalDirection == LEFT:
             setCurrentSpeed(currentSpeed - 1)
@@ -261,34 +279,35 @@ def turnOnSpot():
         else:
             setCurrentSpeed(currentSpeed - 1)
 
+    def calibrateGyro():
+        pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
+        timeout(51, fetchCalibrated)
+
+    def fetchCalibrated():
+        pyroslib.publish("sensor/gyro/continuous", "start")
+        nextState(startUp)
+
     def startUp():
         setCurrentSpeed(currentSpeed)
         timeout(10, waitToStartMoving)
-        log("startUp", "speed=" + str(currentSpeed))
-
-    def startAgain():
-        global gyroReadOut, targetGyro
-        targetGyro -= gyroReadOut
-        log("startAgain", "speed=" + str(currentSpeed) + " adjusted target to " + str(targetGyro))
-        gyroReadOut = 0
-        nextState(waitToStartMoving)
+        log("startUp", "speed=" + str(currentSpeed) + ", gyro " + str(gyroReadOut))
 
     def waitToStartMoving():
         global currentSpeed, leftMovingSpeed, rightMovingSpeed, startSpeed, _timeout
-        sineSpeed(currentSpeed)
 
-        if abs(gyroReadOut) < 1:
-            log("waitToStartMoving", "increasing speed to " + str(currentSpeed) + ", gyro " + str(gyroReadOut))
+        if abs(gyroReadOut) < 0.5:
             increaseSpeed()
-            _timeout = 20
+            log("waitToStartMoving", "increasing speed to " + str(currentSpeed) + ", gyro " + str(gyroReadOut) + " <=> " + str(targetGyro))
+            _timeout = RAMP_UP_TIMEOUT
             nextState(waitToStartMovingNoIncrease)
         elif abs(gyroReadOut) > 2.0:
-            log("waitToStartMoving", "stared too fast " + str(currentSpeed) + ", gyro " + str(gyroReadOut))
+            log("waitToStartMoving", "stared too fast " + str(currentSpeed) + ", gyro " + str(gyroReadOut) + " <=> " + str(targetGyro))
             if originalDirection == LEFT:
                 setCurrentSpeed(int(currentSpeed * 0.5))
             else:
                 setCurrentSpeed(int(currentSpeed * 0.5))
-            timeout(25, startAgain)
+            _timeout = RAMP_UP_TIMEOUT
+            nextState(waitToStartMovingNoIncrease)
         else:
             increaseSpeed()
             if originalDirection == LEFT:
@@ -303,20 +322,13 @@ def turnOnSpot():
 
     def waitToStartMovingNoIncrease():
         global currentSpeed, leftMovingSpeed, rightMovingSpeed, startSpeed, _timeout
-        sineSpeed(currentSpeed)
+        setCurrentSpeed(currentSpeed)
 
         if abs(gyroReadOut) < 1:
             if _timeout > 0:
                 _timeout -= 1
             else:
                 nextState(waitToStartMoving)
-        elif abs(gyroReadOut) > 2.0:
-            log("waitToStartMovingNI", "stared too fast " + str(currentSpeed) + ", gyro " + str(gyroReadOut))
-            if originalDirection == LEFT:
-                setCurrentSpeed(currentSpeed + 10)
-            else:
-                setCurrentSpeed(currentSpeed - 10)
-            timeout(25, startAgain)
         else:
             if originalDirection == LEFT:
                 leftMovingSpeed = currentSpeed
@@ -331,37 +343,38 @@ def turnOnSpot():
     def turnControl():
         global _timeout
         rotational_speed = gyroReadOut - previousGyroRead
-        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * 3:
-            log("turnControl", "getting close gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControl", "getting close @ " + str(rotational_speed) + " gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
             setCurrentSpeed(0)
             timeout(5, startBreaking)
-        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * 3:
-            log("turnControl", "getting close gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControl", "getting close @ " + str(rotational_speed) + " gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
             setCurrentSpeed(0)
             timeout(5, startBreaking)
-        elif abs(rotational_speed) < 0.5:
-            log("turnControl", "increasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+        elif abs(rotational_speed) < 0.05:
             increaseSpeed()
+            log("turnControl", "increasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
             _timeout = 10
             nextState(turnControlNoIncrease)
         elif abs(rotational_speed) > 1.5 and abs(currentSpeed - startSpeed) > 1:
-            log("turnControl", "decreasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target" + ", threshold " + str(abs(currentSpeed - startSpeed)))
             decreaseSpeed()
+            log("turnControl", "decreasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target" + ", threshold " + str(abs(currentSpeed - startSpeed)))
             _timeout = 10
             nextState(turnControlNoIncrease)
         else:
+            setCurrentSpeed(currentSpeed)
             log("turnControl", " coasting @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
 
     def turnControlNoIncrease():
         global _timeout
 
         rotational_speed = gyroReadOut - previousGyroRead
-        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * 3:
-            log("turnControlNI", "getting close gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControlNI", "getting close @ " + str(rotational_speed) + " gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
             setCurrentSpeed(0)
             timeout(5, startBreaking)
-        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * 3:
-            log("turnControlNI", "getting close gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControlNI", "getting close @ " + str(rotational_speed) + " gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
             setCurrentSpeed(0)
             timeout(5, startBreaking)
         elif _timeout == 0:
@@ -384,25 +397,29 @@ def turnOnSpot():
         setCurrentSpeed(0)
         processCommand("stop", "stop")
         dontNeedGyro()
-        pyroslib.publish(TOPIC + "/feedback", "done-turn")
+        pyroslib.publish(TOPIC + "/feedback", "done-turn," + str(gyroReadOut))
 
-    targetGyro = int(currentCommand["args"])
+    targetGyro = float(currentCommand["args"])
     if targetGyro < gyroReadOut:
         originalDirection = LEFT
         currentSpeed = leftMovingSpeed + 2
+        if currentSpeed > 0:
+            currentSpeed = 0
         startSpeed = currentSpeed
     else:
         originalDirection = RIGHT
         currentSpeed = rightMovingSpeed - 2
+        if currentSpeed < 0:
+            currentSpeed = 0
         startSpeed = currentSpeed
 
     needGyro()
 
     if wheelPosition != SLANT:
         slantWheels()
-        timeout(50, startUp)
+        timeout(50, calibrateGyro)
     else:
-        nextState(startUp)
+        nextState(calibrateGyro)
 
 
 def driveStraightBack():
@@ -428,9 +445,9 @@ def driveStraight():
     def sineSpeed(speed):
         global sineIndex
 
-        setForwardSpeed(speed + sine[sineIndex])
+        setForwardSpeed(speed + sine_p1[sineIndex])
         sineIndex += 1
-        if sineIndex >= len(sine):
+        if sineIndex >= len(sine_p1):
             sineIndex = 0
 
     def increaseSpeed():
@@ -447,26 +464,22 @@ def driveStraight():
             setCurrentSpeed(currentSpeed - 1)
 
     def startUp():
-        global _timeout, midAccelCount, minAccel, maxAccel, midAccel, calibrateAccel
+        global _timeout
         log("startUp", "calibrating accel")
-        midAccelCount = 0
-        minAccel = 0
-        maxAccel = 0
-        midAccel = 0
-        calibrateAccel = True
+        pyroslib.publish("sensor/accel/continuous", "calibrate,50")
         timeout(50, fetchCalibrated)
 
     def fetchCalibrated():
-        global calibrateAccel, accelYReadOut, midAccel, accelDistance, _timeout
-        calibrateAccel = False
-        accelDistance = 0
-        accelYReadOut = 0
-        midAccel /= midAccelCount
-        log("fetchCalibrated", "got accel offset " + str(midAccel) + ", speed " + str(currentSpeed))
+        global _timeout
+
+        log("fetchCalibrated", "calibrated accel")
+        pyroslib.publish("sensor/accel/continuous", "start")
         setCurrentSpeed(currentSpeed)
-        _timeout = 10
-        nextState(initialTimeout)
+        # _timeout = 10
+        # nextState(initialTimeout)
         # timeout(10, waitToStartMoving)
+        nextState(waitToStartMoving)
+        sineSpeed(currentSpeed)
 
     def initialTimeout():
         global _timeout
@@ -530,18 +543,24 @@ def driveStraight():
     def driveControl():
         global _timeout
 
-        sineSpeed(currentSpeed)
-
-        now = time.time()
-        deltaTime = now - startedMovingTime
-        distance = deltaTime * abs(currentSpeed * 20) * WHEEL_CIRCUMFERENCE / 60
-
-        if distance >= abs(targetDistance) or abs(accelDistance) >= abs(targetDistance):
-            log("driveControl", " reached distance @ " + str(currentSpeed) + " distance " + str(distance) + " <=> " + str(targetDistance) + " target")
-            setCurrentSpeed(0)
-            timeout(5, startBreaking)
+        if targetDistance == 0:
+            log("driveControl", "started moving. Done.")
+            dontNeedAccel()
+            pyroslib.publish(TOPIC + "/feedback", "done-move " + str(currentSpeed))
+            nextState(doNothing)
         else:
-            log("driveControl", " coasting @ " + str(currentSpeed) + " distance " + str(distance) + " <=> " + str(targetDistance) + " target")
+            sineSpeed(currentSpeed)
+
+            now = time.time()
+            deltaTime = now - startedMovingTime
+            distance = deltaTime * abs(currentSpeed * 20) * WHEEL_CIRCUMFERENCE / 60
+
+            if distance >= abs(targetDistance) or abs(accelDistance) >= abs(targetDistance):
+                log("driveControl", " reached distance @ " + str(currentSpeed) + " distance " + str(distance) + " <=> " + str(targetDistance) + " target")
+                setCurrentSpeed(0)
+                timeout(5, startBreaking)
+            else:
+                log("driveControl", " coasting @ " + str(currentSpeed) + " distance " + str(distance) + " <=> " + str(targetDistance) + " target")
 
     def startBreaking():
         log("startBreaking", "")
@@ -555,16 +574,16 @@ def driveStraight():
         log("stopBreaking", "end moving.")
         setCurrentSpeed(0)
         processCommand("stop", "stop")
-        dontNeedGyro()
+        dontNeedAccel()
         pyroslib.publish(TOPIC + "/feedback", "done-move")
 
     targetDistance = int(currentCommand["args"])
     if targetDistance < 0:
         originalDirection = BACK
-        currentSpeed = backMovingSpeed + 2
+        currentSpeed = backMovingSpeed + 1
     else:
         originalDirection = FORWARD
-        currentSpeed = forwardMovingSpeed - 2
+        currentSpeed = forwardMovingSpeed - 1
 
     needAccel()
 
@@ -575,40 +594,13 @@ def driveStraight():
         nextState(startUp)
 
 
-def driveStraightContBack():
-    targetAccel = int(currentCommand["args"])
-    currentCommand["args"] = str(-targetAccel)
-    driveStraightCont()
-
-
-def driveStraightCont():
-    global currentSpeed
-
-    currentSpeed = int(currentCommand["args"])
-
-    def sineSpeed(speed):
-        global sineIndex
-
-        setForwardSpeed(speed + sine[sineIndex])
-        sineIndex += 1
-        if sineIndex >= len(sine):
-            sineIndex = 0
-
-    def driveControl():
-        global _timeout
-
-        sineSpeed(currentSpeed)
-
-    nextState(driveControl)
-
-
 def stopAll():
     wheelSpeed("fl", 0)
     wheelSpeed("fr", 0)
     wheelSpeed("bl", 0)
     wheelSpeed("br", 0)
     log("stopAll", "Stopping all wheels!")
-    pyroslib.publish(TOPIC + "/feedback", "done")
+    pyroslib.publish(TOPIC + "/feedback", "done-stop")
 
 
 def nothing():
@@ -630,14 +622,6 @@ commands = {
     },
     "back": {
         "start": driveStraightBack,
-        "do": processCurrentState
-    },
-    "forwardcont": {
-        "start": driveStraightCont,
-        "do": processCurrentState
-    },
-    "backcont": {
-        "start": driveStraightContBack,
         "do": processCurrentState
     }
 }
@@ -684,25 +668,12 @@ def handleAccel(topic, message, groups):
     accelX = float(data[0])
     accelY = -float(data[1])
     accelDeltaTime = float(data[3])
-    if calibrateAccel:
-        if accelY < minAccel:
-            minAccel = accelY
-        if accelY > maxAccel:
-            maxAccel = accelY
-        midAccel += accelY
-        midAccelCount += 1
-        # log("Accel", "y:{0:>10} m:{1:>10} c:{2:>10}".format(round(accelY, 3), round(midAccel, 3), midAccelCount))
-    else:
-        # if minAccel <= accelY <= maxAccel:
-        #     acceYAdj = 0
-        # else:
-        #     acceYAdj = (accelY - midAccel)
-        acceYAdj = (accelY - midAccel)
-        accelXReadOut += accelX
-        accelYReadOut += acceYAdj
-        accelYReadOut *= 0.97
-        accelDistance += accelYReadOut * accelDeltaTime
-        # log("Accel", "y:{0:>10} a:{1:>10} n:{2:>10}".format(round(accelY, 3), round(acceYAdj, 3), round(accelYReadOut, 3)))
+
+    accelXReadOut += accelX
+    accelYReadOut += accelY
+    accelYReadOut *= 0.97
+    accelDistance += accelYReadOut * accelDeltaTime
+    # log("Accel", "y:{0:>10} a:{1:>10} n:{2:>10}".format(round(accelY, 3), round(acceYAdj, 3), round(accelYReadOut, 3)))
 
 
 def loop():

@@ -15,24 +15,28 @@ frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((640, 480))
 
 feedback = ""
+status = ""
 
-angle = 15
+angle = 22.5
 distance = 10
 speed = 10
-
+foundSpeed = 0
 
 def connected():
     pyros.agent.init(pyros.client, "fine-drive-agent.py")
 
 
 def feedbackMessage(topic, message, groups):
-    global feedback
+    global feedback, foundSpeed
 
     feedback = message
+    if message.startswith("done-move "):
+        split = message.split(" ")
+        foundSpeed = int(float(split[1]))
 
 
 def onKeyDown(key):
-    global angle, distance, speed, feedback
+    global angle, distance, speed, status
 
     if key == pygame.K_ESCAPE:
         pyros.publish("finemove/stop", "stop")
@@ -42,25 +46,25 @@ def onKeyDown(key):
         pyros.publish("finemove/stop", "stop")
         print("** STOP!!!")
     elif key == pygame.K_UP:
-        feedback = "** FORWARD"
+        status = "** FORWARD"
         pyros.publish("finemove/forward", distance)
         print("** FORWARD")
     elif key == pygame.K_DOWN:
-        feedback = "** BACK"
+        status = "** BACK"
         pyros.publish("finemove/back", distance)
         print("** BACK")
     elif key == pygame.K_LEFT:
-        feedback = "** ROTATE LEFT"
+        status = "** ROTATE LEFT"
         pyros.publish("finemove/rotate", str(-angle))
         print("** ROTATE LEFT")
     elif key == pygame.K_RIGHT:
-        feedback = "** ROTATE RIGHT"
+        status = "** ROTATE RIGHT"
         pyros.publish("finemove/rotate", str(angle))
         print("** ROTATE RIGHT")
     elif key == pygame.K_LEFTBRACKET:
-        angle -= 15
+        angle -= 22.5
     elif key == pygame.K_RIGHTBRACKET:
-        angle += 15
+        angle += 22.5
     elif key == pygame.K_o:
         distance -= 5
     elif key == pygame.K_p:
@@ -70,28 +74,26 @@ def onKeyDown(key):
     elif key == pygame.K_l:
         speed += 1
     elif key == pygame.K_w:
-        feedback = "** FORWARD CONT"
-        pyros.publish("finemove/forwardcont", str(speed))
+        status = "** FORWARD CONT"
+        pyros.publish("finemove/forward", "0")
         print("** FORWARD CONT")
+    elif key == pygame.K_a:
+        pyros.publish("move/steer", "-150 " + str(foundSpeed))
     elif key == pygame.K_s:
-        feedback = "** BACK"
-        pyros.publish("finemove/backcont", str(speed))
-        print("** BACK")
+        pyros.publish("move/steer", "1000000 " + str(foundSpeed))
+    elif key == pygame.K_d:
+        pyros.publish("move/steer", "150 " + str(foundSpeed))
     else:
         pyros.gcc.handleConnectKeys(key)
 
 
 def onKeyUp(key):
-    global feedback
+    global status
 
-    if key == pygame.K_w:
-        feedback = "** STOP"
-        pyros.publish("finemove/stop", "stop")
-        print("** STOP")
-    elif key == pygame.K_s:
-        feedback = "** STOP"
-        pyros.publish("finemove/stop", "stop")
-        print("** STOP")
+    # if key == pygame.K_s:
+    #     status = "** STOP"
+    #     pyros.publish("finemove/stop", "stop")
+    #     print("** STOP")
     return
 
 
@@ -120,13 +122,19 @@ while True:
     screen.blit(text, (0, 60))
 
     text = bigFont.render("Distance: " + str(distance), 1, (255, 255, 255))
-    screen.blit(text, (300, 60))
+    screen.blit(text, (350, 60))
 
     text = bigFont.render("Speed: " + str(speed), 1, (255, 255, 255))
-    screen.blit(text, (300, 120))
+    screen.blit(text, (350, 100))
+
+    text = bigFont.render("Detected Speed: " + str(foundSpeed), 1, (255, 255, 255))
+    screen.blit(text, (350, 140))
+
+    text = bigFont.render(status, 1, (255, 255, 255))
+    screen.blit(text, (0, 180))
 
     text = bigFont.render(feedback, 1, (255, 255, 255))
-    screen.blit(text, (0, 180))
+    screen.blit(text, (0, 240))
 
     pygame.display.flip()
     frameclock.tick(30)
