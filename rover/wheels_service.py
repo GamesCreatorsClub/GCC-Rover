@@ -18,6 +18,17 @@ import storagelib
 #
 
 DEBUG = False
+PWM = [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0],
+
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+]
+
+
 STORAGE_MAP_FILE = "/home/pi/rover-storage.config"
 SERVO_REGEX = re.compile("servo/(\d+)")
 
@@ -36,6 +47,8 @@ PROTOTYPE_WHEEL_CALIBRATION = {
         "300": "215"
     }
 }
+
+pwmIndex = 0
 
 wheelMap = {}
 wheelCalibrationMap = {}
@@ -125,6 +138,16 @@ def handleSpeed(wheel, wheelCal, speedStr):
         if DEBUG:
             print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
         speed = 0
+    elif speedStr == "+0":
+        servoPosition = interpolate(0, wheelCal["0"], wheelCal["-300"])
+        if DEBUG:
+            print("    got speed +0 @ " + str(servoPosition) + " for " + str(servoNumber))
+        speed = 0
+    elif speedStr == "0":
+        servoPosition = int(interpolate(0.5, wheelCal["-0"], wheelCal["0"]))
+        if DEBUG:
+            print("    got speed 0 @ " + str(servoPosition) + " for " + str(servoNumber))
+        speed = 0
     else:
         speed = float(speedStr)
         if speed >= 0:
@@ -176,6 +199,9 @@ def driveWheel(wheelName):
         if wheel["gen"] != None:
             servoPosition = wheel["gen"].__next__()
 
+        pwmPart = (int(servoPosition * 10) % 10) // 2
+        servoPosition = int(servoPosition) + PWM[pwmPart][pwmIndex]
+
         servoNumber = wheelCal["servo"]
 
         if speedStr != "0" and speedStr != "-0":
@@ -183,10 +209,15 @@ def driveWheel(wheelName):
 
 
 def driveWheels():
+    global pwmIndex
+
     driveWheel("fl")
     driveWheel("fr")
     driveWheel("bl")
     driveWheel("br")
+    pwmIndex += 1
+    if pwmIndex >= len(PWM[0]):
+        pwmIndex = 0
 
 
 def servoTopic(topic, payload, groups):
