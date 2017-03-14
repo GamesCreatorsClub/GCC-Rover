@@ -21,7 +21,8 @@ _onConnected = doNothing
 _connected = False
 
 _subscribers = []
-_regexToLambda = {}
+_regexTextToLambda = {}
+_regexBinaryToLambda = {}
 
 
 def isConnected():
@@ -37,7 +38,17 @@ def subscribe(topic, method):
     _subscribers.append(topic)
     regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
     regex = re.compile(regexString)
-    _regexToLambda[regex] = method
+    _regexTextToLambda[regex] = method
+
+    if _connected:
+        client.subscribe(topic, 0)
+
+
+def subscribeBinary(topic, method):
+    _subscribers.append(topic)
+    regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
+    regex = re.compile(regexString)
+    _regexBinaryToLambda[regex] = method
 
     if _connected:
         client.subscribe(topic, 0)
@@ -62,17 +73,26 @@ def _onConnect(mqttClient, data, rc):
 
 
 def _onMessage(mqttClient, data, msg):
-    payload = str(msg.payload, 'utf-8')
     topic = msg.topic
 
     try:
-        for regex in _regexToLambda:
+        for regex in _regexTextToLambda:
             matching = regex.match(topic)
             if matching:
-                method = _regexToLambda[regex]
+                method = _regexTextToLambda[regex]
 
+                payload = str(msg.payload, 'utf-8')
                 method(topic, payload, matching.groups())
                 return
+
+        for regex in _regexBinaryToLambda:
+            matching = regex.match(topic)
+            if matching:
+                method = _regexBinaryToLambda[regex]
+
+                method(topic, msg.payload, matching.groups())
+                return
+
     except Exception as ex:
         print("ERROR: Got exception in on message processing; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
@@ -82,6 +102,7 @@ def _reconnect():
         client.reconnect()
     except:
         pass
+
 
 def _connect():
     global _connected
