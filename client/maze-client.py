@@ -7,12 +7,18 @@ import pyros.gcc
 import pyros.agent
 import pyros.pygamehelper
 
-SMALLEST_DISTANCE = 50
+COMFORTABLE_DISTANCE = 100
+SMALLEST_DISTANCE = 60
 DISTANCE = 10
 SCALE = 10
 
 angle = 0
 distanceAtAngle = 0
+smallestDist = 0
+smallestDistAngle = 0
+largestDist = 0
+largestDistAngle = 0
+
 
 driveAngle = 0
 pygame.init()
@@ -22,7 +28,6 @@ screen = pygame.display.set_mode((600, 600))
 
 stopped = True
 received = True
-oneStep = True
 
 distances = {}
 
@@ -33,8 +38,8 @@ def connected():
 
 def sanitise(distance):
     distance -= 100
-    if distance < 50:
-        distance = 50
+    if distance < 20:
+        distance = 20
     return distance
 
 
@@ -46,19 +51,15 @@ def parseDistances(p):
 
 
 def handleMoveResponse(topic, message, groups):
-    global oneStep
 
-    if not stopped or oneStep:
-        if message == "done-turn":
-            print("** Turned!")
-            move()
-        oneStep = False
+    if message.startswith("done-turn"):
+        print("** Turned!")
+        move()
 
-    if not stopped:
-        if message == "done-move":
-            print("** Moved!")
-            pyros.publish("sensor/distance/scan", "scan")
-            print("** Asked for distance scan")
+    if message.startswith("done-move"):
+        print("** Moved!")
+        pyros.publish("sensor/distance/scan", "scan")
+        print("** Asked for distance scan")
 
 
 def handleSensorDistance(topic, message, groups):
@@ -90,25 +91,37 @@ def handleSensorDistance(topic, message, groups):
     print("** LARGEST  DISTANCE @ angle: " + str(largestDistAngle) + " | distance: " + str(largestDist))
     print("** SMALLEST DISTANCE @ angle: " + str(smallestDistAngle) + " | distance: " + str(smallestDist))
 
-    driveAngle = largestDistAngle / 1.5
+    selectedAngle = largestDistAngle
+
+    # if smallestDist < SMALLEST_DISTANCE:
+    #     if smallestDistAngle > 0:
+    #         driveAngle = smallestDistAngle - 45
+    #     else:
+    #         driveAngle = smallestDistAngle + 45
+
+    if selectedAngle != -90 and selectedAngle != 90:
+        if distances[selectedAngle - 22.5] < COMFORTABLE_DISTANCE:
+            selectedAngle += 22.5
+        elif distances[selectedAngle + 22.5] < COMFORTABLE_DISTANCE:
+            selectedAngle -= 22.5
+    elif selectedAngle == -90:
+        selectedAngle += 22.5
+    elif selectedAngle == 90:
+        selectedAngle -= 22.5
+
+    driveAngle = selectedAngle
 
     if not stopped:
         goOneStep()
 
 
 def goOneStep():
+    global driveAngle
 
-    if smallestDist < SMALLEST_DISTANCE:
-        if smallestDistAngle > 0:
-            driveAngle = smallestDistAngle - 45
-        else:
-            driveAngle = smallestDistAngle + 45
-
-    if not stopped:
-        if driveAngle != 0:
-            pyros.publish("finemove/rotate", int(driveAngle))
-        else:
-            move()
+    if driveAngle != 0:
+        pyros.publish("finemove/rotate", int(driveAngle))
+    else:
+        move()
 
 
 def move():
@@ -158,7 +171,7 @@ def drawRadar():
 
 
 def onKeyDown(key):
-    global stopped, received, angle, oneStep
+    global stopped, received, angle
 
     if key == pygame.K_ESCAPE:
         pyros.publish("finemove/stop", "stop")
@@ -173,7 +186,6 @@ def onKeyDown(key):
         print("** Asked for distance scan")
         stopped = False
     elif key == pygame.K_g:
-        oneStep = True
         goOneStep()
     elif key == pygame.K_s:
         pyros.publish("sensor/distance/scan", "")
@@ -233,6 +245,9 @@ while True:
 
     text = bigFont.render("Dist: " + str(distanceAtAngle), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 160, 0, 0))
+
+    text = bigFont.render("Selected: " + str(driveAngle), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(0, 200, 0, 0))
 
     drawRadar()
 

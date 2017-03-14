@@ -136,7 +136,7 @@ if __name__ == "__main__":
         print("Starting drive agent...")
 
         pyroslib.subscribe("drive", handleMessage)
-        pyroslib.init("drive-agent")
+        pyroslib.init("drive-agent", unique=True)
 
         print("Started drive agent.")
 
