@@ -373,6 +373,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         return false;
     }
 
+
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         leftjoystick.touchDown(screenX, screenY, pointer);
@@ -382,6 +383,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         switch2.touchDown(screenX, screenY, pointer);
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
+
+
         mouseDown = true;
         return false;
     }
