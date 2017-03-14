@@ -12,6 +12,9 @@ import smbus
 # This service is responsible reading distance.
 #
 
+CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
+MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
+
 DEBUG = True
 
 I2C_BUS = 1
@@ -35,6 +38,11 @@ lastServoAngle = 0
 
 stopVariable = 0
 i2cBus = None
+
+doReadSensor = False
+continuousMode = False
+lastTimeRead = 0
+lastTimeReceivedRequestForContMode = 0
 
 
 def moveServo(angle):
@@ -191,6 +199,37 @@ def handleScan(topic, payload, groups):
     pyroslib.publish("sensor/distance", str(",".join(distancesList)))
 
 
+def handleContinuousMode(topic, message, groups):
+    global doReadSensor, continuousMode, lastTimeReceivedRequestForContMode
+
+    if message.startswith("stop"):
+        continuousMode = False
+        doReadSensor = False
+
+    else:
+        if not continuousMode:
+            continuousMode = True
+            doReadSensor = True
+            print("  Started continuous mode...")
+
+        lastTimeReceivedRequestForContMode = time.time()
+
+
+def loop():
+    global doReadSensor, lastTimeRead, continuousMode
+
+    if doReadSensor:
+        distance = readDistance()
+        pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
+
+        if continuousMode:
+            if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
+                continuousMode = False
+                print("  Stopped continuous mode.")
+        else:
+            doReadSensor = False
+
+
 if __name__ == "__main__":
     try:
         print("Starting vl53l0x sensor service...")
@@ -203,11 +242,12 @@ if __name__ == "__main__":
 
         pyroslib.subscribe("sensor/distance/read", handleRead)
         pyroslib.subscribe("sensor/distance/scan", handleScan)
+        pyroslib.subscribe("sensor/distance/continuous", handleContinuousMode)
         pyroslib.init("vl53l0x-sensor-service")
 
         print("Started vl53l0x sensor service.")
 
-        pyroslib.forever(0.02)
+        pyroslib.forever(0.02, loop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

@@ -68,7 +68,6 @@ AXES = ["x", "y", "z"]
 
 gyroResolution = GYRO_RESOLUTION_250_DPS
 accelResolution = ACCEL_RESOUTION_2G
-gyroResolution = 250.0/32768.0
 
 lastTimeAccelRead = 0
 lastTimeGyroRead = 0
@@ -80,10 +79,18 @@ i2cBus = None
 doReadGyro = False
 doReadAccel = False
 continuousModeGyro = False
+continuousModeGyroCalibrate = False
 continuousModeAccel = False
+continuousModeAccelCalibrate = False
 
+gyroCalibrationDataPoints = 0
+gyroCalibrationReadots = []
 
-calibrationData = [{"offset": 0.0}, {"offset": 0.0}, {"offset": 0.0}]
+accelCalibrationDataPoints = 0
+accelCalibrationReadots = []
+
+gyroCalibrationData = [{"offset": 0.0}, {"offset": 0.0}, {"offset": 0.0}]
+accelCalibrationData = [{"offset": 0.0}, {"offset": 0.0}, {"offset": 0.0}]
 
 
 def bytesToInt(msb, lsb):
@@ -165,18 +172,37 @@ def readGyro():
     return x, y, -z, deltaTime
 
 
-def calibrateGyro():
+def initialCalibrate():
+    global gyroCalibrationReadots, accelCalibrationReadots
+
+    del gyroCalibrationReadots[:]
+    del accelCalibrationReadots[:]
+
+    readGyro()
+    readAccel()
+    time.sleep(0.02)
+
+    c = 0
+    while c < 50:
+        gyroData = readGyro()
+        gyroCalibrationReadots.append(gyroData)
+
+        accelData = readAccel()
+        accelCalibrationReadots.append(accelData)
+        c += 1
+
+    calcGyroCalibrationData()
+    calcAccelCalibrationData()
+
+
+def calcGyroCalibrationData():
 
     minV = [0, 0, 0]
     maxV = [0, 0, 0]
     avg = [0, 0, 0]
 
-    readGyro()
-    time.sleep(0.02)
-
     c = 0
-    while c < 50:
-        data = readGyro()
+    for data in gyroCalibrationReadots:
 
         for i in range(0, 3):
             if data[i] < minV[i]:
@@ -188,13 +214,43 @@ def calibrateGyro():
         c += 1
         time.sleep(0.02)
 
+    print("    Finished calibration for gyro " + str(c) + " data points")
     for i in range(0, 3):
-        calibrationData[i] = {
+        gyroCalibrationData[i] = {
             "offset": avg[i] / c,
             "min": minV[i],
             "max": maxV[i]
         }
-        print("Calibrated axis " + AXES[i] + " offset as " + str(calibrationData[i]["offset"]))
+        print("    Calibrated gyro axis " + AXES[i] + " offset as " + str(gyroCalibrationData[i]["offset"]))
+
+
+def calcAccelCalibrationData():
+
+    minV = [0, 0, 0]
+    maxV = [0, 0, 0]
+    avg = [0, 0, 0]
+
+    c = 0
+    for data in accelCalibrationReadots:
+
+        for i in range(0, 3):
+            if data[i] < minV[i]:
+                minV[i] = data[i]
+            if data[i] > maxV[i]:
+                maxV[i] = data[i]
+            avg[i] += data[i]
+
+        c += 1
+        time.sleep(0.02)
+
+    print("    Finished calibration for accel " + str(c) + " data points")
+    for i in range(0, 3):
+        accelCalibrationData[i] = {
+            "offset": avg[i] / c,
+            "min": minV[i],
+            "max": maxV[i]
+        }
+        print("    Calibrated accel axis " + AXES[i] + " offset as " + str(gyroCalibrationData[i]["offset"]))
 
 
 def handleReadAccel(topic, message, groups):
@@ -212,37 +268,105 @@ def handleReadGyro(topic, message, groups):
 
 
 def handleContinuousAccel(topic, message, groups):
-    global doReadAccel, continuousModeAccel, lastTimeReceivedRequestForContAccelMode
+    global doReadAccel, continuousModeAccel, continuousModeAccelCalibrate, accelCalibrationDataPoints, lastTimeReceivedRequestForContAccelMode
 
-    if not continuousModeAccel:
-        continuousModeAccel = True
-        doReadAccel = True
-        print("  Started continuous accel mode...")
+    if message.startswith("calibrate"):
+        if continuousModeAccel:
+            continuousModeAccel = False
+
+        if not continuousModeAccelCalibrate:
+            continuousModeAccelCalibrate = True
+            doReadAccel = True
+
+            print("  Started freewheel accel calibration...")
+            split = message.split(",")
+            if len(split) > 1:
+                accelCalibrationDataPoints = int(split[1])
+            accelCalibrationReadots.clear()
+    elif message.startswith("stop"):
+        continuousModeAccel = False
+        doReadAccel = False
+
+        if continuousModeAccelCalibrate:
+            calcAccelCalibrationData()
+            continuousModeAccelCalibrate = False
+
+    else:
+        if continuousModeAccelCalibrate:
+            calcAccelCalibrationData()
+            continuousModeAccelCalibrate = False
+
+        if not continuousModeAccel:
+            continuousModeAccel = True
+            doReadAccel = True
+            print("  Started continuous accel mode...")
+
     lastTimeReceivedRequestForContAccelMode = time.time()
 
 
 def handleContinuousGyro(topic, message, groups):
-    global doReadGyro, continuousModeGyro, lastTimeReceivedRequestForContGyroMode
+    global doReadGyro, continuousModeGyro, continuousModeGyroCalibrate, gyroCalibrationDataPoints, lastTimeReceivedRequestForContGyroMode
 
-    if not continuousModeGyro:
-        continuousModeGyro = True
-        doReadGyro = True
-        print("  Started continuous gyro mode...")
+    if message.startswith("calibrate"):
+        if continuousModeGyro:
+            continuousModeGyro = False
+
+        if not continuousModeGyroCalibrate:
+            continuousModeGyroCalibrate = True
+            doReadGyro = True
+
+            print("  Started freewheel calibration...")
+            split = message.split(",")
+            if len(split) > 1:
+                gyroCalibrationDataPoints = int(split[1])
+            gyroCalibrationReadots.clear()
+    elif message.startswith("stop"):
+        continuousModeGyro = False
+        doReadGyro = False
+
+        if continuousModeGyroCalibrate:
+            calcGyroCalibrationData()
+            continuousModeGyroCalibrate = False
+
+    else:
+        if continuousModeGyroCalibrate:
+            calcGyroCalibrationData()
+            continuousModeGyroCalibrate = False
+
+        if not continuousModeGyro:
+            continuousModeGyro = True
+            doReadGyro = True
+            print("  Started continuous gyro mode...")
+
     lastTimeReceivedRequestForContGyroMode = time.time()
 
 
 def loop():
-    global doReadGyro, doReadAccel, lastTimeGyroRead, lastTimeAccelRead, continuousModeGyro, continuousModeAccel
+    global doReadGyro, doReadAccel, lastTimeGyroRead, lastTimeAccelRead, continuousModeGyro, continuousModeGyroCalibrate, continuousModeAccel, continuousModeAccelCalibrate
 
     if doReadAccel:
         if time.time() - lastTimeAccelRead > MAX_TIMEOUT:
-            accelData = readAccel()
+            rawData = readAccel()
             time.sleep(0.02)
-        accelData = readAccel()
 
-        pyroslib.publish("sensor/accel", str(accelData[0]) + "," + str(accelData[1]) + "," + str(accelData[2]) + "," + str(accelData[3]))
+        rawData = readAccel()
+        data = []
+        for i in range(0, 3):
+            data.append(rawData[i] - accelCalibrationData[i]["offset"])
+        data.append(rawData[3])
 
-        if continuousModeAccel:
+        pyroslib.publish("sensor/accel", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]))
+
+        if continuousModeAccelCalibrate:
+            accelCalibrationReadots.append(rawData)
+
+            if len(accelCalibrationReadots) > accelCalibrationDataPoints:
+                del accelCalibrationReadots[0]
+
+            if time.time() - lastTimeReceivedRequestForContAccelMode > CONTINUOUS_MODE_TIMEOUT:
+                continuousModeAccelCalibrate = False
+                print("  Stopped continuous mode calibration.")
+        elif continuousModeAccel:
             if time.time() - lastTimeReceivedRequestForContAccelMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousModeAccel = False
                 print("  Stopped continuous mode accel.")
@@ -253,15 +377,25 @@ def loop():
         if time.time() - lastTimeGyroRead > MAX_TIMEOUT:
             gyroData = readGyro()
             time.sleep(0.02)
+
         rawData = readGyro()
         data = []
         for i in range(0, 3):
-            data.append(rawData[i] - calibrationData[i]["offset"])
+            data.append(rawData[i] - gyroCalibrationData[i]["offset"])
         data.append(rawData[3])
 
         pyroslib.publish("sensor/gyro", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]))
 
-        if continuousModeGyro:
+        if continuousModeGyroCalibrate:
+            gyroCalibrationReadots.append(rawData)
+
+            if len(gyroCalibrationReadots) > gyroCalibrationDataPoints:
+                del gyroCalibrationReadots[0]
+
+            if time.time() - lastTimeReceivedRequestForContGyroMode > CONTINUOUS_MODE_TIMEOUT:
+                continuousModeGyroCalibrate = False
+                print("  Stopped continuous mode calibration.")
+        elif continuousModeGyro:
             if time.time() - lastTimeReceivedRequestForContGyroMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousModeGyro = False
                 print("  Stopped continuous mode gyro.")
@@ -275,7 +409,7 @@ if __name__ == "__main__":
 
         initMPU()
 
-        calibrateGyro()
+        initialCalibrate()
 
         pyroslib.subscribe("sensor/accel/read", handleReadAccel)
         pyroslib.subscribe("sensor/accel/continuous", handleContinuousAccel)
