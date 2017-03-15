@@ -341,6 +341,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             leftjoystick.setValues(plx, ply);
             rightjoystick.setValues(prx, pry);
 
+
             platformSpecific.updateControllerButtons(controllerButtons);
 
             if (controllerButtons.containsKey(ControllerButton.BUTTON_LB)) {

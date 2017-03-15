@@ -1,16 +1,29 @@
 package org.ah.gcc.rover.controllers;
 
-public abstract class AbstractController {
+import java.util.ArrayList;
+import java.util.List;
 
-    public void axisMoved(int joystick, int x1, int y1, int x2, int y2)  {
+public abstract class AbstractController implements ControllerInterface {
 
+    public List<ControllerListener> listeners;
+
+    public AbstractController() {
+        listeners = new ArrayList<ControllerListener>();
     }
 
-    public void buttonPressDown(int button)  {
-
+    public void addListener(ControllerListener listener) {
+        listeners.add(listener);
     }
 
-    public void buttonPressUp(int button)  {
-
+    public void removeListener(ControllerListener listener) {
+        listeners.remove(listener);
     }
+
+    public void fireEvent(ControllerState state) {
+        for (ControllerListener listener : listeners) {
+            listener.controllerUpdate(state);
+        }
+    }
+
+
 }
