@@ -415,8 +415,8 @@ def turnOnSpot():
 
     needGyro()
 
+    slantWheels()
     if wheelPosition != SLANT:
-        slantWheels()
         timeout(50, calibrateGyro)
     else:
         nextState(calibrateGyro)
@@ -587,8 +587,8 @@ def driveStraight():
 
     needAccel()
 
+    straightenWheels()
     if wheelPosition != STRAIGHT:
-        straightenWheels()
         timeout(50, startUp)
     else:
         nextState(startUp)
