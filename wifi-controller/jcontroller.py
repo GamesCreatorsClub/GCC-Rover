@@ -9,6 +9,13 @@ from PIL import ImageFont, ImageDraw, Image
 from smbus import SMBus
 import RPi.GPIO as GPIO
 
+import math
+
+import pyros
+import pyros.gcc
+
+
+
 GPIO.setmode(GPIO.BCM)
 
 GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -25,8 +32,18 @@ oled = ssd1306(i2cbus)
 draw = oled.canvas
 joystick.startNewThread()
 
+screenTick = 0
 batteryBlink = 0
+connectionBlink = 0
+lastX3 = 0
+lastY3 = 0
+topSpeed = 150
+lastSelect = False
 
+joystick.axis_states["x"] = 0
+joystick.axis_states["y"] = 0
+joystick.axis_states["rx"] = 0
+joystick.axis_states["ry"] = 0
 
 def clear():
     # draw.rectangle((0, 0, oled.width - 1, oled.height - 1), outline=0, fill=0)
@@ -117,6 +134,25 @@ def drawBattery(x, y, width):
         # drawText((0, 50), "B: LOW")
 
 
+def drawConnection(x, y):
+    global connectionBlink
+
+    connectionBlink += 1
+    if connectionBlink > 2:
+        connectionBlink = 0
+
+    s = pyros.gcc.selectedRover
+    if pyros.isConnected() or connectionBlink > 0:
+        draw.text((x, y), s, font=font, fill=1)
+
+
+def drawTopSpeed(x, y):
+    if pyros.isConnected():
+        x = x - draw.textsize(str(topSpeed), font)[0]
+
+        draw.text((x, y), str(topSpeed), font=font, fill=1)
+
+
 def doShutdown():
     print("Shutting down now!")
     try:
@@ -132,11 +168,11 @@ def countDownToShutdown():
 
         i -= 1
         if i == 0:
-            x = (128 - draw.textsize("Shutdown in", font)[0]) // 2
-            draw.text((x, 10), "Shutdown in", font=font, fill=1)
+            x = (128 - draw.textsize("Switch off", font)[0]) // 2
+            draw.text((x, 10), "Switch off", font=font, fill=1)
 
-            x = (128 - draw.textsize("NOW", fontBig)[0]) // 2
-            draw.text((x, 32), "NOW", font=fontBig, fill=1)
+            x = (128 - draw.textsize("in 10s", fontBig)[0]) // 2
+            draw.text((x, 32), "in 10s", font=fontBig, fill=1)
             oled.display()
 
             doShutdown()
@@ -150,15 +186,139 @@ def countDownToShutdown():
         sleep(0.5)
 
 
-# Main event loop
-while True:
-    clear()
+def processKeys():
+    global lastX3, lastY3, lastSelect, topSpeed
 
-    drawJoysticks()
-    drawBattery(106, 58, 21)
+    x3 = int(joystick.axis_states["hat0x"])
+    y3 = int(joystick.axis_states["hat0y"])
+
+    if x3 != lastX3:
+        sr = int(pyros.gcc.selectedRover)
+        if x3 > 0:
+            sr += 1
+            if sr > 4:
+                sr = 2
+        elif x3 < 0:
+            sr -= 1
+            if sr < 2:
+                sr = 4
+
+        pyros.gcc.selectedRover = str(sr)
+
+        pyros.gcc.connect()
+
+    select = joystick.button_states["select"]
+    if select and select != lastSelect:
+        sr = int(pyros.gcc.selectedRover)
+        sr += 1
+        if sr > 4:
+            sr = 2
+
+        pyros.gcc.selectedRover = str(sr)
+
+        pyros.gcc.connect()
+
+    if y3 != lastY3:
+        if y3 < 0 and topSpeed < 300:
+            topSpeed += 10
+        elif y3 > 0 and topSpeed > 10:
+            topSpeed -= 10
+
+    lastX3 = x3
+    lastY3 = y3
+    lastSelect = select
+
+
+def calcRoverSpeed(speed):
+        return int(speed * topSpeed)
+
+
+def calculateExpo(input, expoPercentage):
+        if input >= 0:
+            return input * input * expoPercentage + input * (1.0 - expoPercentage)
+        else:
+            return - input * input * expoPercentage + input * (1.0 - expoPercentage)
+
+
+def calcRoverDistance(distance):
+        if distance >= 0:
+            distance = abs(distance)
+            distance = 1.0 - distance;
+            distance = distance + 0.2
+            distance = distance * 500
+        else:
+            distance = abs(distance)
+            distance = 1.0 - distance
+            distance = distance + 0.2
+            distance = - distance * 500
+
+        return int(distance)
+
+
+def processJoysticks():
+    lx = int(joystick.axis_states["x"])
+    ly = int(joystick.axis_states["y"])
+    ld = math.sqrt(lx * lx + ly * ly)
+
+    rx = int(joystick.axis_states["rx"])
+    ry = int(joystick.axis_states["ry"])
+    rd = math.sqrt(rx * rx + ry * ry)
+    ra = math.atan2(rx, -ry) * 180 / math.pi
+
+    if ld < 0.1 and rd > 0.1:
+        if True:
+            distance = rd
+
+            distance = calculateExpo(distance, 0.75)
+
+            roverSpeed = calcRoverSpeed(distance)
+            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed)))
+        else:
+            roverSpeed = calcRoverSpeed(rd)
+            pyros.publish("move/orbit", str(roverSpeed) + "")
+    elif ld > 0.1 and rd > 0.1:
+
+        ry = calculateExpo(ry, 0.75)
+
+        lx = calculateExpo(lx, 0.75)
+
+        roverSpeed = -calcRoverSpeed(ry)
+        roverTurningDistance = calcRoverDistance(lx)
+        pyros.publish("move/steer", str(roverTurningDistance) + " " + str(roverSpeed))
+    elif ld > 0.1:
+        lx = calculateExpo(lx, 0.75)
+        roverSpeed = calcRoverSpeed(lx) / 4
+        pyros.publish("move/rotate", int(roverSpeed))
+    else:
+
+        pyros.publish("move/drive", str(ra) + " 0")
+        roverSpeed = 0
+        pyros.publish("move/stop", "0")
+
+
+# Main event loop
+def loop():
+    global screenTick
+
+    screenTick += 1
+    if screenTick >= 5:
+        clear()
+
+        drawJoysticks()
+        drawBattery(106, 58, 21)
+        drawConnection(40, 50)
+        drawTopSpeed(105, 50)
+        oled.display()
+
+        screenTick = 0
+
+    processKeys()
+    processJoysticks()
 
     if joystick.button_states["select"] and joystick.button_states["start"]:
         countDownToShutdown()
 
-    oled.display()
-    sleep(0.01)
+
+
+pyros.init("gcc-controller-#", unique=False, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.forever(0.02, loop)
