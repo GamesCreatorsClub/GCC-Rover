@@ -3,6 +3,7 @@
 import time
 import os
 import io
+import numpy as np
 import traceback
 import pyroslib
 from PIL import Image, ImageEnhance
@@ -14,7 +15,7 @@ from picamera import PiCamera
 # This service is fetching picture from camera...
 #
 
-DEBUG = True
+DEBUG = False
 CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
@@ -23,6 +24,9 @@ whiteBalance = Image.new("L", (80, 64))
 
 camera = PiCamera()
 camera.resolution = (80, 64)
+camera.shutter_speed = 3000
+camera.iso = 800
+
 stream = io.BytesIO()
 
 doReadSensor = False
@@ -32,6 +36,8 @@ lastTimeReceivedRequestForContMode = 0
 
 rawL = None
 rawRGB = None
+startTime = time.time()
+lastTime = time.time()
 
 
 def log(msg):
@@ -39,14 +45,28 @@ def log(msg):
         print(msg)
 
 
+def logt(msg):
+    global lastTime
+    if DEBUG:
+        now = time.time()
+        print("{0!s:>10} {1} Lasted {2}s".format(str(round(now - startTime, 4)), msg, str(round(now - lastTime, 4))))
+        lastTime = now
+
+
 def capture():
     global rawL, rawRGB
+    output = np.empty((96, 64, 3), dtype=np.uint8)
 
     stream.seek(0)
-    camera.capture(stream, "png")
-    stream.seek(0)
-    rawRGB = Image.open(stream)
+    logt("        seek(0)")
+    camera.capture(output, "rgb", use_video_port=True)
+    logt("        capture")
+    # stream.seek(0)
+    # logt("        seek(0)")
+    rawRGB = Image.frombuffer('RGB', (80, 64), output)
+    logt("        Image.open(stream)")
     rawL = rawRGB.convert("L")
+    logt("        convert(L)")
     return rawL
 
 
@@ -122,33 +142,32 @@ def handleFetchProcessed(topic, payload, groups):
 
 
 def fetchProcessed():
-    start = time.time()
-    log("    Capturing image...")
+    global startTime, lastTime
+
+    startTime = time.time()
+    lastTime = startTime
+    logt("    Capturing image...")
     captured = capture()
-    log("    Captured image. Lasted " + str(time.time() - start) + "s")
+    logt("    Captured image.")
 
-    start2 = time.time()
     img = applyWhiteBalance(captured, whiteBalance)
-    log("    Processed white balance. Lasted " + str(time.time() - start2) + "s")
+    logt("    Processed white balance.")
 
-    start2 = time.time()
     contrast = ImageEnhance.Contrast(img)
     finalImg = contrast.enhance(10)
-    log("    Processed contrast. Lasted " + str(time.time() - start2) + "s")
+    logt("    Processed contrast.")
 
-    start2 = time.time()
     finalImg = blackAndWhite(finalImg)
-    log("    Set to black and white. Lasted " + str(time.time() - start2) + "s")
+    logt("    Set to black and white.")
 
-    start2 = time.time()
     message = finalImg.tobytes("raw")
-    log("    Converted to bytes. Lasted " + str(time.time() - start2) + "s")
+    logt("    Converted to bytes.")
 
-    start2 = time.time()
     pyroslib.publish("camera/processed", message)
-    log("    Published. Lasted " + str(time.time() - start2) + "s")
+    logt("    Published.")
 
-    print("  Sent processed image. Total time " + str(time.time() - start) + "s")
+    if DEBUG:
+        print("  Sent processed image. Total time " + str(time.time() - startTime) + "s")
 
 
 def fetchWhiteBalance(topic, payload, groups):
@@ -217,7 +236,7 @@ if __name__ == "__main__":
 
         print("Started camera service.")
 
-        pyroslib.forever(0.5, loop)
+        pyroslib.forever(0.02, loop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

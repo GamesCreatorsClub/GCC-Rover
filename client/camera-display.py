@@ -3,6 +3,7 @@ import time
 import math
 import pygame
 import pyros
+import pyros.agent
 import pyros.gcc
 import pyros.pygamehelper
 from PIL import Image
@@ -10,6 +11,7 @@ from PIL import Image
 
 pygame.init()
 bigFont = pygame.font.SysFont("arial", 32)
+font = pygame.font.SysFont("arial", 24)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((1024, 800))
 
@@ -28,9 +30,21 @@ whiteBalanceImageBig = pygame.Surface((320, 256), 24)
 processedImageBig = pygame.Surface((320, 256), 24)
 
 
+minAngle = 0
+maxAngle = 0
+midAngle = 0
+forwardSpeed = 5
+
 continuousMode = False
 lights = False
 resubscribe = time.time()
+lastReceivedTime = time.time()
+frameTime = ""
+
+
+def connected():
+    pyros.agent.init(pyros.client, "playground/drive/fine-drive-agent.py")
+    pyros.publish("camera/processed/fetch", "")
 
 
 def toPyImage(imageBytes):
@@ -67,6 +81,7 @@ def handleCameraRaw(topic, message, groups):
 
 def handleCameraProcessed(topic, message, groups):
     global receivedProcessedImage, receivedProcessedImageBig, processedImage, processedImageBig, cameraImage
+    global frameTime, lastReceivedTime
 
     images = toPyImage(message)
     receivedProcessedImage = images[0]
@@ -80,11 +95,30 @@ def handleCameraProcessed(topic, message, groups):
 
     processImage()
 
+    now = time.time()
+    if now - lastReceivedTime > 5:
+        frameTime = ">5s"
+    else:
+        frameTime = str(round(now - lastReceivedTime, 2))
+
+    lastReceivedTime = now
+
+
+def handleFeedbackMessage(topic, message, groups):
+    global feedback, foundSpeed
+
+    feedback = message
+    if message.startswith("done-move "):
+        split = message.split(" ")
+        foundSpeed = int(float(split[1]))
+
+    if not continuousMode:
+        pyros.publish("camera/processed/fetch", "")
 
 def processImage():
-    global processedImageBig, processedImage
+    global processedImageBig, processedImage, minAngle, maxAngle, midAngle
 
-    r = 30
+    r = 28
 
     ha = math.atan2(0.5, r + 0.5) * 180 / math.pi
     ha *= 2
@@ -95,9 +129,13 @@ def processImage():
     p1 = 255
     p2 = 0
 
+    minAngle = 90
+    maxAngle = -90
+    lastMinAngle = 90
+    lastMaxAngle = -90
+
     c = 0
     while a <= 90:
-        print("angles to scan: " + str(a))
         a += ha
         ra = a * math.pi / 180 + math.pi
 
@@ -109,22 +147,42 @@ def processImage():
             processedImage.set_at((x, y), (0, 255, 0))
         else:
             processedImage.set_at((x, y), (255, 0, 0))
+            if a > maxAngle:
+                maxAngle = a
+            if a < minAngle:
+                minAngle = a
 
         c += 1
+
+    midAngle = (maxAngle + minAngle) / 2
 
     processedImageBig = pygame.transform.scale(processedImage, (320, 256))
 
     # images = toPyImage2(cameraImage)
     # processedImage = images[0]
     # processedImageBig = images[1]
-    print("Scanned " + str(c) + " points")
+    print("Scanned " + str(c) + " points, midAngle=" + str(midAngle) + ", minAngle=" + str(minAngle) + ", maxAngle=" + str(maxAngle))
+
 
 def goOneStep():
-    pass
+    if -20 < midAngle < 20:
+        goForward()
+    else:
+        print("** Turning to " + str(-midAngle))
+        pyros.publish("finemove/rotate", str(-midAngle))
+
+
+def goForward():
+    print("** Going forward " + str(forwardSpeed))
+    pyros.publish("move/drive", "0 " + str(forwardSpeed))
+    pyros.loop(0.5)
+    pyros.publish("move/stop", "")
+    pyros.loop(1)
+    pyros.publish("camera/processed/fetch", "")
 
 
 def onKeyDown(key):
-    global continuousMode, lights
+    global continuousMode, lights, forwardSpeed
 
     if key == pygame.K_ESCAPE:
         sys.exit()
@@ -144,18 +202,29 @@ def onKeyDown(key):
     elif key == pygame.K_l:
         if lights:
             print("  switching off lights")
-            pyros.publish("lights/camera", "on")
+            pyros.publish("lights/camera", "off")
             lights = False
         else:
             print("  switching on lights")
-            pyros.publish("lights/camera", "off")
+            pyros.publish("lights/camera", "on")
             lights = True
     elif key == pygame.K_c:
         continuousMode = not continuousMode
     elif key == pygame.K_g:
         goOneStep()
+    elif key == pygame.K_f:
+        goForward()
     elif key == pygame.K_m:
         processImage()
+    elif key == pygame.K_LEFTBRACKET:
+        forwardSpeed -= 1
+        if forwardSpeed < 0:
+            forwardSpeed = 0
+    elif key == pygame.K_RIGHTBRACKET:
+        forwardSpeed += 1
+    elif key == pygame.K_SPACE:
+        pyros.publish("move/stop", "")
+        pyros.publish("finemove/stop", "")
     else:
         pyros.gcc.handleConnectKeys(key)
 
@@ -167,7 +236,8 @@ def onKeyUp(key):
 pyros.subscribeBinary("camera/whitebalance", handleWhiteBalance)
 pyros.subscribeBinary("camera/raw", handleCameraRaw)
 pyros.subscribeBinary("camera/processed", handleCameraProcessed)
-pyros.init("camera-display-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.subscribe("finemove/feedback", handleFeedbackMessage)
+pyros.init("camera-display-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
 while True:
@@ -189,8 +259,18 @@ while True:
 
     screen.blit(text, (0, 0))
 
-    text = bigFont.render("Continuous mode: " + str(continuousMode), 1, (255, 128, 128))
-    screen.blit(text, (300, 50))
+    text = font.render("Continuous : " + str(continuousMode), 1, (255, 255, 255))
+    screen.blit(text, (400, 50))
+
+    text = font.render("Frame time: " + str(frameTime), 1, (255, 255, 255))
+    screen.blit(text, (400, 80))
+
+    text = font.render("Mid angle: " + str(midAngle), 1, (255, 255, 255))
+    screen.blit(text, (400, 110))
+
+    text = font.render("Speed: " + str(forwardSpeed), 1, (255, 255, 255))
+    screen.blit(text, (900, 50))
+
 
     screen.blit(rawImage, (10, 50))
     screen.blit(whiteBalanceImage, (110, 50))
