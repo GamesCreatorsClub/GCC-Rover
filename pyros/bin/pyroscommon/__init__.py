@@ -131,7 +131,8 @@ def processCommonHostSwitches(arguments):
         if arguments[i] == "-t":
             _processTOption(i)
             del arguments[i]
-        i = +1
+        else:
+            i += 1
 
     return arguments
 

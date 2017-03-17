@@ -12,7 +12,7 @@ def printHelp(rc):
     print("usage: pyros [<host[:port]>] restart [-f] <processId>")
     print("")
     print("    -h                    help message")
-    print("    -f                    'tail' messages out of process")
+    print("    -f|--tail             'tail' messages out of process")
     print("    <processId>           process id")
     sys.exit(rc)
 
@@ -22,7 +22,7 @@ if len(args) < 1:
 if pc.hasHelpSwitch:
     printHelp(0)
 
-if args[0] == "-f":
+if args[0] == "-f" or args[0] == "--tail":
     tail = True
     del args[0]
 

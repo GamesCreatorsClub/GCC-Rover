@@ -5,6 +5,8 @@ import sys
 import pyroscommon as pc
 
 service = False
+restart = False
+tail = False
 
 args = pc.processCommonHostSwitches(pc.args)
 
@@ -14,6 +16,8 @@ def printHelp(rc):
     print("")
     print("    -h                    help message")
     print("    -s|--service          uploaded code is supposed to be service.")
+    print("    -r|--restart          restarts uploaded service.")
+    print("    -f|--tail             'tail' messages out of process.")
     print("    <processId>           id process is going to be known from this point on.")
     print("    <file>                python file name to be uploaded.")
     sys.exit(rc)
@@ -31,6 +35,14 @@ if args[0] == "-s" or args[0] == "--service":
     service = True
     del args[0]
 
+if args[0] == "-r" or args[0] == "--restart":
+    restart = True
+    del args[0]
+
+if args[0] == "-f" or args[0] == "--tail":
+    tail = True
+    del args[0]
+
 processId = args[0]
 
 filename = args[1]
@@ -41,7 +53,15 @@ if not os.path.exists(filename):
     sys.exit(1)
 
 
+pyrosClient = None
+hadStart = False
+
+
 def executeCommand(client):
+    global pyrosClient
+
+    pyrosClient = client
+
     file = open(filename)
     fileContent = file.read()
     file.close()
@@ -55,13 +75,30 @@ def executeCommand(client):
     return True
 
 
-def processOut(line, pId):
-    return False
-
-
-def processStatus(line, pId):
-    if line.startswith("stored"):
+def processOut(line, pid):
+    if line.endswith("\n"):
+        line = line[:len(line) - 1]
+    if not tail:
         return False
+    print(line)
+    return True
+
+
+def processStatus(line, pid):
+    global hadStart
+
+    if line.startswith("stored"):
+        if restart:
+            pyrosClient.publish("exec/" + processId, "restart")
+        else:
+            return False
+    elif restart and line.startswith("PyROS: started"):
+        hadStart = True
+        if tail:
+            print("Process " + pid + " is restarted. Showing output:")
+        else:
+            print("Process " + pid + " is restarted.")
+        return tail
     return True
 
 
