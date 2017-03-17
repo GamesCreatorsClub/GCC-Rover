@@ -62,11 +62,17 @@ pyros $1 restart   camera
 # echo Restarting    9dofsensor
 # pyros $1 restart   9dofsensor
 
-echo ""
-echo Uploading     sonarsensor
-pyros $1 upload -s sonarsensor sonarsensor_service.py
-echo Restarting    sonarsensor
-pyros $1 restart   sonarsensor
+# echo ""
+# echo Uploading     sonarsensor
+# pyros $1 upload -s sonarsensor sonarsensor_service.py
+# echo Restarting    sonarsensor
+# pyros $1 restart   sonarsensor
+
+# echo ""
+# echo Uploading     vl53l0x
+# pyros $1 upload -s vl53l0x vl53l0x_service.py
+# echo Restarting    vl53l0x
+# pyros $1 restart   vl53l0x
 
 echo ""
 echo "Currently running processes:"
