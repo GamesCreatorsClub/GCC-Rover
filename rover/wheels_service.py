@@ -159,7 +159,7 @@ def handleSpeed(wheel, wheelCal, speedStr):
 
     wheel["speed"] = speedStr
 
-    if "speedServoPos" in wheel:
+    if "speedServoPos" in wheel and wheel["speedServoPos"] != servoPosition:
         wheel["gen"] = brakeDance([wheel["speedServoPos"], servoPosition])
 
     wheel["speedServoPos"] = servoPosition
@@ -173,15 +173,17 @@ def interpolate(value, zerostr, maxstr):
     maxValue = float(maxstr)
     return (maxValue - zero) * value + zero
 
+
 # use the start value, then go through 0 and -0 and then to the target position
 # set up as an infinite generator
 def brakeDance(vals):
     # return the start value
-    yield int(vals[0])
-    yield int(vals[1])
-    yield int(vals[0])
+    yield vals[0]
+    yield vals[1]
+    yield vals[0]
     while True:
-        yield int(vals[1])
+        yield vals[1]
+
 
 def driveWheel(wheelName):
     wheel = wheelMap[wheelName]
@@ -192,7 +194,7 @@ def driveWheel(wheelName):
         # servo position is not a value, but a generator
         servoPosition = wheel["speedServoPos"]
         if wheel["gen"] is not None:
-            servoPosition = wheel["gen"].__next__()
+            servoPosition = next(wheel["gen"])
 
         pwmPart = (int(servoPosition * 10) % 10) // 2
         servoPosition = int(servoPosition) + PWM[pwmPart][pwmIndex]
