@@ -47,6 +47,8 @@ lastTimeReceivedRequestForContMode = 0
 
 def moveServo(angle):
     global lastServoAngle
+    lastServoAngle = angle
+
     # angle is between -90 and 90
     angle += 150
     angle = int(angle)
@@ -64,7 +66,6 @@ def moveServo(angle):
     # wait for servo to reach the destination
     time.sleep(sleepAmount)
 
-    lastServoAngle = angle
 
 
 def initVL53L0X():
@@ -151,6 +152,7 @@ def readDistance():
 
 
 def handleRead(topic, payload, groups):
+
     angle = float(payload)
     if DEBUG:
         print("Got read - moving to angle " + str(angle))
