@@ -257,7 +257,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     public void processJoysticks() {
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            if (switchLB.isOn()) {
+//            if (switchLB.isOn()) {
                 float distance = rightjoystick.getDistanceFromCentre();
                 rightExpo.setValue(distance);
 
@@ -266,10 +266,10 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
                 roverSpeed = calcRoverSpeed(distance);
                 roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
-            } else {
-                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
-                roverControl.publish("move/orbit", roverSpeed + "");
-            }
+//            } else {
+//                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
+//                roverControl.publish("move/orbit", roverSpeed + "");
+//            }
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             System.out.println("Left distance " + leftjoystick.getDistanceFromCentre() + ", right distance " + rightjoystick.getDistanceFromCentre());
             float rightY = rightjoystick.getYValue();

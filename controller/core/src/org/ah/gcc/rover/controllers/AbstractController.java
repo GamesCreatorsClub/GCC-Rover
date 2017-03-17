@@ -40,5 +40,6 @@ public abstract class AbstractController implements ControllerInterface {
 
     public void setName(String name) {
         this.name = name;
+
     }
 }
