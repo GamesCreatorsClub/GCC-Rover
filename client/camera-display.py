@@ -3,7 +3,6 @@ import time
 import math
 import pygame
 import pyros
-import pyros.agent
 import pyros.gcc
 import pyros.pygamehelper
 from PIL import Image
@@ -33,8 +32,9 @@ processedImageBig = pygame.Surface((320, 256), 24)
 minAngle = 0
 maxAngle = 0
 midAngle = 0
-forwardSpeed = 5
+forwardSpeed = 2
 
+running = False
 continuousMode = False
 lights = False
 resubscribe = time.time()
@@ -43,7 +43,6 @@ frameTime = ""
 
 
 def connected():
-    pyros.agent.init(pyros.client, "playground/drive/fine-drive-agent.py")
     pyros.publish("camera/processed/fetch", "")
 
 
@@ -103,6 +102,9 @@ def handleCameraProcessed(topic, message, groups):
 
     lastReceivedTime = now
 
+    if running:
+        goOneStep()
+
 
 def handleFeedbackMessage(topic, message, groups):
     global feedback, foundSpeed
@@ -114,6 +116,7 @@ def handleFeedbackMessage(topic, message, groups):
 
     if not continuousMode:
         pyros.publish("camera/processed/fetch", "")
+
 
 def processImage():
     global processedImageBig, processedImage, minAngle, maxAngle, midAngle
@@ -169,7 +172,7 @@ def goOneStep():
         goForward()
     else:
         print("** Turning to " + str(-midAngle))
-        pyros.publish("finemove/rotate", str(-midAngle))
+        pyros.publish("move/turn", str(-midAngle))
 
 
 def goForward():
@@ -182,7 +185,7 @@ def goForward():
 
 
 def onKeyDown(key):
-    global continuousMode, lights, forwardSpeed
+    global continuousMode, lights, forwardSpeed, running
 
     if key == pygame.K_ESCAPE:
         sys.exit()
@@ -212,6 +215,10 @@ def onKeyDown(key):
         continuousMode = not continuousMode
     elif key == pygame.K_g:
         goOneStep()
+    elif key == pygame.K_RETURN:
+        running = not running
+        if running:
+            goOneStep()
     elif key == pygame.K_f:
         goForward()
     elif key == pygame.K_m:
@@ -224,7 +231,7 @@ def onKeyDown(key):
         forwardSpeed += 1
     elif key == pygame.K_SPACE:
         pyros.publish("move/stop", "")
-        pyros.publish("finemove/stop", "")
+        running = False
     else:
         pyros.gcc.handleConnectKeys(key)
 
@@ -236,7 +243,7 @@ def onKeyUp(key):
 pyros.subscribeBinary("camera/whitebalance", handleWhiteBalance)
 pyros.subscribeBinary("camera/raw", handleCameraRaw)
 pyros.subscribeBinary("camera/processed", handleCameraProcessed)
-pyros.subscribe("finemove/feedback", handleFeedbackMessage)
+pyros.subscribe("move/feedback", handleFeedbackMessage)
 pyros.init("camera-display-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
@@ -269,7 +276,10 @@ while True:
     screen.blit(text, (400, 110))
 
     text = font.render("Speed: " + str(forwardSpeed), 1, (255, 255, 255))
-    screen.blit(text, (900, 50))
+    screen.blit(text, (750, 50))
+
+    text = font.render("Running: " + str(running), 1, (255, 255, 255))
+    screen.blit(text, (750, 80))
 
 
     screen.blit(rawImage, (10, 50))

@@ -37,7 +37,6 @@ MIN_ACCEL = 1.5
 atStart = True
 wheelPosition = STRAIGHT
 
-currentSpeed = 0
 
 gyroReadOut = 0
 previousGyroRead = 0
@@ -65,6 +64,7 @@ lastRotationalSpeed = 0
 forwardMovingSpeed = 2
 backMovingSpeed = -2
 
+currentSpeed = 0
 startSpeed = 0
 
 startedCommandTime = 0
