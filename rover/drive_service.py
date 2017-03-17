@@ -5,6 +5,7 @@ import traceback
 import pyroslib
 import math
 
+DEBUG = True
 
 WHEEL_CIRCUMFERENCE = 15  # 15mm
 
@@ -14,14 +15,19 @@ STRAIGHT = 1
 SLANT = 2
 SIDEWAYS = 3
 
+LEFT = 1
+RIGHT = 2
+FORWARD = 3
+BACK = 4
+
 MODE_NOTHING = 0
 MODE_STARTING = 1
 MODE_DRIVING = 2
 
-STARTING_ROTATION_SPEED = 30
-
-current_speed = 0
-current_motor_speed = 0
+BREAKING_FACTOR = 0.1
+STARTING_ROTATION_SPEED = 28
+ROTATIONAL_SPEED_OVERSHOOT_FACTOR = 6
+RAMP_UP_TIMEOUT = 20
 
 wheelPosition = STRAIGHT
 
@@ -37,6 +43,15 @@ previousControlTime = 0
 
 continuousTimeout = 50
 
+originalDirection = None
+leftMovingSpeed = -1
+rightMovingSpeed = 1
+targetGyro = 0
+currentSpeed = 0
+startSpeed = 0
+lastRotationalSpeed = 0
+startedCommandTime = 0
+
 _needGyro = False
 _needAccel = False
 
@@ -47,6 +62,47 @@ def sign(x):
     if x == 0:
         return 0
     return -1
+
+
+def log(source, msg):
+    if DEBUG:
+        print(source + ": " + msg)
+
+
+def doNothing():
+    pass
+
+_currentState = doNothing
+_nextState = doNothing
+_timeout = 0
+
+
+def nextState(state):
+    global _currentState
+    _currentState = state
+
+
+def timeout(ticks, nextStateRef):
+    global _currentState, _nextState, _timeout
+
+    _timeout = ticks
+    _nextState = nextStateRef
+    _currentState = timeoutState
+
+
+def timeoutState():
+    global _currentState, _timeout
+
+    if _timeout > 0:
+        # print("  timeoutState: " + str(timeout))
+        _timeout -= 1
+    else:
+        # print("  timeoutState: moving on " + str(_nextState))
+        _currentState = _nextState
+
+
+def processCurrentState():
+    _currentState()
 
 
 def wheelDeg(wheelName, angle):
@@ -129,169 +185,193 @@ def sidewaysWheels():
 
 
 def setRotationSpeed(speed):
-    global current_motor_speed
 
-    current_motor_speed = speed
-    direction = currentCommand["direction"]
-    if direction > 0:
-        amount = speed
-    else:
-        amount = -speed
-
-    wheelSpeed("fl", amount)
-    wheelSpeed("fr", -amount)
-    wheelSpeed("bl", amount)
-    wheelSpeed("br", -amount)
-
-    current_motor_speed = speed
+    wheelSpeed("fl", speed)
+    wheelSpeed("fr", -speed)
+    wheelSpeed("bl", speed)
+    wheelSpeed("br", -speed)
 
 
-def setForwardSpeed(speed):
-    global current_motor_speed
-
-    current_motor_speed = speed
-    direction = currentCommand["direction"]
-    if direction > 0:
-        amount = speed
-    else:
-        amount = -speed
-
-    wheelSpeed("fl", amount)
-    wheelSpeed("fr", amount)
-    wheelSpeed("bl", amount)
-    wheelSpeed("br", amount)
-
-    current_motor_speed = speed
-
-
-def setSideSpeed(speed):
-    global current_motor_speed
-
-    current_motor_speed = speed
-    direction = currentCommand["direction"]
-    if direction > 0:
-        amount = speed
-    else:
-        amount = -speed
-
-    wheelSpeed("fl", amount)
-    wheelSpeed("fr", -amount)
-    wheelSpeed("bl", -amount)
-    wheelSpeed("br", amount)
-
-    current_motor_speed = speed
-
-
-def crabAlong(amount):
-    sidewaysWheels()
-    setSideSpeed(amount)
-
-
-def turnOnSpot():
+def rotate():
     global gyroReadOut
-
-    needGyro()
-
-    gyroReadOut = 0
 
     slantWheels()
 
-    target = int(currentCommand["args"])
-    currentCommand["direction"] = sign(target)
+    speed = int(currentCommand["args"])
 
-    setRotationSpeed(STARTING_ROTATION_SPEED)
-
-
-def turnOnSpotControl():
-    global previousGyroRead, current_motor_speed
-
-    print("Gyro is " + str(gyroReadOut))
-    target = int(currentCommand["args"])
-    rotational_speed = abs(gyroReadOut - previousGyroRead)
-    if rotational_speed < 0.5:
-        current_motor_speed += 1
-
-        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_motor_speed))
-
-        setRotationSpeed(current_motor_speed)
-    elif rotational_speed > 0.8:
-        current_motor_speed -= 1
-        print("Change: ", str(rotational_speed), " Current_speed: ", str(current_motor_speed))
-        setRotationSpeed(current_motor_speed)
-
-    if (target > 0 and gyroReadOut >= target) or (target < 0 and gyroReadOut <= target):
-        newCommandMsg("", "", ["stop"])
-        dontNeedGyro()
-        pyroslib.publish("move/response", "done-turn")
+    setRotationSpeed(speed)
+    log("rotate", "s=" + str(speed))
 
 
-def moveMotorsForward():
-    moveMotors()
-    return
+def turnOnSpot():
+    global gyroReadOut, targetGyro
+    global currentSpeed, startSpeed, leftMovingSpeed, rightMovingSpeed
+    global startedCommandTime, lastRotationalSpeed
+    global originalDirection
 
+    startedCommandTime = time.time()
+    log("main", "Started turning")
+    gyroReadOut = 0
 
-def moveMotorsBack():
-    currentCommand["args"] = -int(currentCommand["args"])
-    moveMotors()
-    return
+    def setCurrentSpeed(speed):
+        global currentSpeed
+        setRotationSpeed(speed)
+        currentSpeed = speed
 
-
-def moveMotors():
-    global accelYReadOut, current_speed, totalDistance
-
-    needAccel()
-
-    accelYReadOut = 0
-    totalDistance = 0
-    current_speed = 0
-
-    straightenWheels()
-
-    target = int(currentCommand["args"])
-    currentCommand["direction"] = sign(target)
-    currentCommand["mode"] = MODE_STARTING
-    print("currnetCommand=" + str(currentCommand))
-    setForwardSpeed(STARTING_ROTATION_SPEED)
-
-
-def moveMotorsControl():
-    global current_motor_speed, totalDistance, previousControlTime, current_speed
-
-    if currentCommand["mode"] == MODE_STARTING:
-        print("Accel is " + str(accelYReadOut))
-
-        target = int(currentCommand["args"])
-        direction = int(currentCommand["direction"])
-        current_speed += - accelYReadOut * accelDeltaTime * direction
-        if current_speed < 2:
-            current_motor_speed += 1
-
-            print("Total detected speed: ", str(current_speed), " new driving speed: ", str(current_motor_speed), " direction ", str(direction))
-
-            setForwardSpeed(current_motor_speed)
+    def increaseSpeed():
+        if originalDirection == LEFT:
+            setCurrentSpeed(currentSpeed - 1)
         else:
-            currentCommand["mode"] = MODE_DRIVING
+            setCurrentSpeed(currentSpeed + 1)
+
+    def decreaseSpeed():
+        global currentSpeed
+        if originalDirection == LEFT:
+            setCurrentSpeed(currentSpeed + 1)
+        else:
+            setCurrentSpeed(currentSpeed - 1)
+
+    def calibrateGyro():
+        pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
+        timeout(51, fetchCalibrated)
+
+    def fetchCalibrated():
+        pyroslib.publish("sensor/gyro/continuous", "start")
+        nextState(startUp)
+
+    def startUp():
+        setCurrentSpeed(currentSpeed)
+        timeout(10, waitToStartMoving)
+        log("startUp", "speed=" + str(currentSpeed) + ", gyro " + str(gyroReadOut))
+
+    def waitToStartMoving():
+        global currentSpeed, leftMovingSpeed, rightMovingSpeed, startSpeed, _timeout
+
+        if abs(gyroReadOut) < 0.5:
+            increaseSpeed()
+            log("waitToStartMoving", "increasing speed to " + str(currentSpeed) + ", gyro " + str(gyroReadOut) + " <=> " + str(targetGyro))
+            _timeout = RAMP_UP_TIMEOUT
+            nextState(waitToStartMovingNoIncrease)
+        elif abs(gyroReadOut) > 2.0:
+            log("waitToStartMoving", "stared too fast " + str(currentSpeed) + ", gyro " + str(gyroReadOut) + " <=> " + str(targetGyro))
+            if originalDirection == LEFT:
+                setCurrentSpeed(int(currentSpeed * 0.5))
+            else:
+                setCurrentSpeed(int(currentSpeed * 0.5))
+            _timeout = RAMP_UP_TIMEOUT
+            nextState(waitToStartMovingNoIncrease)
+        else:
+            increaseSpeed()
+            if originalDirection == LEFT:
+                leftMovingSpeed = currentSpeed
+                startSpeed = currentSpeed
+                log("waitToStartMoving", "recorded leftMovingSpeed " + str(leftMovingSpeed))
+            else:
+                rightMovingSpeed = currentSpeed
+                startSpeed = currentSpeed
+                log("waitToStartMoving", "recorded rightMovingSpeed " + str(rightMovingSpeed))
+            nextState(turnControl)
+
+    def waitToStartMovingNoIncrease():
+        global currentSpeed, leftMovingSpeed, rightMovingSpeed, startSpeed, _timeout
+        setCurrentSpeed(currentSpeed)
+
+        if abs(gyroReadOut) < 1:
+            if _timeout > 0:
+                _timeout -= 1
+            else:
+                nextState(waitToStartMoving)
+        else:
+            if originalDirection == LEFT:
+                leftMovingSpeed = currentSpeed
+                startSpeed = currentSpeed
+                log("waitToStartMovingNI", "recorded leftMovingSpeed " + str(leftMovingSpeed) + " @ " + str(gyroReadOut))
+            else:
+                rightMovingSpeed = currentSpeed
+                startSpeed = currentSpeed
+                log("waitToStartMovingNI", "recorded rightMovingSpeed " + str(rightMovingSpeed) + " @ " + str(gyroReadOut))
+            nextState(turnControl)
+
+    def turnControl():
+        global _timeout
+        rotational_speed = gyroReadOut - previousGyroRead
+        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControl", "getting close @ " + str(rotational_speed) + " gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            setCurrentSpeed(0)
+            timeout(5, startBreaking)
+        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControl", "getting close @ " + str(rotational_speed) + " gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            setCurrentSpeed(0)
+            timeout(5, startBreaking)
+        elif abs(rotational_speed) < 0.05:
+            increaseSpeed()
+            log("turnControl", "increasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            _timeout = 10
+            nextState(turnControlNoIncrease)
+        elif abs(rotational_speed) > 1.5 and abs(currentSpeed - startSpeed) > 1:
+            decreaseSpeed()
+            log("turnControl", "decreasing speed " + str(currentSpeed) + " @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target" + ", threshold " + str(abs(currentSpeed - startSpeed)))
+            _timeout = 10
+            nextState(turnControlNoIncrease)
+        else:
+            setCurrentSpeed(currentSpeed)
+            log("turnControl", " coasting @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+
+    def turnControlNoIncrease():
+        global _timeout
+
+        rotational_speed = gyroReadOut - previousGyroRead
+        if originalDirection == RIGHT and targetGyro < gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControlNI", "getting close @ " + str(rotational_speed) + " gyro + " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            setCurrentSpeed(0)
+            timeout(5, startBreaking)
+        elif originalDirection == LEFT and targetGyro > gyroReadOut + rotational_speed * ROTATIONAL_SPEED_OVERSHOOT_FACTOR:
+            log("turnControlNI", "getting close @ " + str(rotational_speed) + " gyro - " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            setCurrentSpeed(0)
+            timeout(5, startBreaking)
+        elif _timeout == 0:
+            log("turnControlNI", " reached timeout @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            nextState(turnControl)
+        else:
+            log("turnControlNI", " speeding up @ " + str(rotational_speed) + " gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target")
+            _timeout -= 1
+
+    def startBreaking():
+        if originalDirection == LEFT:
+            setCurrentSpeed(rightMovingSpeed * BREAKING_FACTOR)
+        else:
+            setCurrentSpeed(leftMovingSpeed * BREAKING_FACTOR)
+        log("startBreaking", "gyro " + str(gyroReadOut) + " <=> " + str(targetGyro) + " target @ speed " + str(currentSpeed))
+        timeout(5, stopBreaking)
+
+    def stopBreaking():
+        log("stopBreaking", "end to rotation " + str(gyroReadOut))
+        setCurrentSpeed(0)
+        setStopAll()
+        dontNeedGyro()
+        pyroslib.publish("move/feedback", "done-turn," + str(gyroReadOut))
+
+    targetGyro = float(currentCommand["args"])
+    if targetGyro < gyroReadOut:
+        originalDirection = LEFT
+        currentSpeed = leftMovingSpeed + 2
+        if currentSpeed > 0:
+            currentSpeed = 0
+        startSpeed = currentSpeed
     else:
-        now = time.time()
+        originalDirection = RIGHT
+        currentSpeed = rightMovingSpeed - 2
+        if currentSpeed < 0:
+            currentSpeed = 0
+        startSpeed = currentSpeed
 
-        totalDistance += current_motor_speed * WHEEL_CIRCUMFERENCE * (now - previousControlTime) / 60  # RPM * time
+    needGyro()
 
-        previousControlTime = now
-
-        target = int(currentCommand["args"])
-        if __name__ == '__main__':
-            if (target > 0 and totalDistance >= target) or (target < 0 and totalDistance >= -target):
-                newCommandMsg("", "", ["stop"])
-                pyroslib.publish("move/response", "done-move")
-                dontNeedAccel()
-
-        # TODO - switching motor at some speed is not enough. Stopping would be far better - or slowing down
-        # Slowing down has another risk - stopping before reaching destination. So slowing down should detec
-        # if stopped - which, with current hardware, I am not sure how to do so.
-    return
-
-
-distance = 150.0
+    slantWheels()
+    if wheelPosition != SLANT:
+        timeout(50, calibrateGyro)
+    else:
+        nextState(calibrateGyro)
 
 
 def faceAngleFront(dist):
@@ -308,18 +388,42 @@ def faceAngleBack(dist):
 
 def orbit():
     args = currentCommand["args"].split(" ")
+
     d = int(args[0])
-    speed = int(args[1])
+    if len(args) > 1:
+        speed = int(args[1])
+    else:
+        speed = 0
+    frontAngle = faceAngleFront(abs(d))
+    backAngle = faceAngleBack(abs(d))
 
-    wheelDeg("fl", str(faceAngleFront(d)))
-    wheelDeg("fr", str(-faceAngleFront(d)))
-    wheelDeg("bl", str(faceAngleBack(d)))
-    wheelDeg("br", str(-faceAngleBack(d)))
+    innerSpeed = calcInnerSpeed(speed, abs(d))
+    outerSpeed = calcOuterSpeed(speed, abs(d))
 
-    wheelSpeed("fl", str(speed))
-    wheelSpeed("fr", str(speed))
-    wheelSpeed("bl", str(speed))
-    wheelSpeed("br", str(speed))
+    adjust = 0
+    if innerSpeed > 300:
+        adjust = innerSpeed - 300
+    elif innerSpeed < -300:
+        adjust = innerSpeed + 300
+    elif outerSpeed > 300:
+        adjust = outerSpeed - 300
+    elif outerSpeed < -300:
+        adjust = outerSpeed + 300
+
+    innerSpeed -= adjust
+    outerSpeed -= adjust
+
+    log("orbit", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust) + " args:" + str(args))
+
+    wheelDeg("fl", str(frontAngle))
+    wheelDeg("fr", str(-frontAngle))
+    wheelDeg("bl", str(backAngle))
+    wheelDeg("br", str(-backAngle))
+
+    wheelSpeed("fl", str(-innerSpeed))
+    wheelSpeed("fr", str(innerSpeed))
+    wheelSpeed("bl", str(-outerSpeed))
+    wheelSpeed("br", str(outerSpeed))
 
 
 def sideAngleFront(dist):
@@ -357,26 +461,39 @@ def steer():
     frontAngle = sideAngleFront(abs(d))
     backAngle = sideAngleBack(abs(d))
 
-    innerSpeed = calcInnerSpeed(speed, d)
-    outerSpeed = calcOuterSpeed(speed, d)
+    innerSpeed = calcInnerSpeed(speed, abs(d))
+    outerSpeed = calcOuterSpeed(speed, abs(d))
 
-    print("d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed))
+    adjust = 0
+    if innerSpeed > 300:
+        adjust = innerSpeed - 300
+    elif innerSpeed < -300:
+        adjust = innerSpeed + 300
+    elif outerSpeed > 300:
+        adjust = outerSpeed - 300
+    elif outerSpeed < -300:
+        adjust = outerSpeed + 300
+
+    innerSpeed -= adjust
+    outerSpeed -= adjust
+
+    log("steer", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust) + " args:" + str(args))
 
     if d >= 0:
-        wheelDeg("fl", str(frontAngle))
-        wheelDeg("bl", str(-frontAngle))
-        wheelDeg("fr", str(backAngle))
-        wheelDeg("br", str(-backAngle))
+        wheelDeg("fl", str(backAngle))
+        wheelDeg("bl", str(-backAngle))
+        wheelDeg("fr", str(frontAngle))
+        wheelDeg("br", str(-frontAngle))
         if speed != 0:
             wheelSpeed("fl", str(outerSpeed))
             wheelSpeed("fr", str(innerSpeed))
             wheelSpeed("bl", str(outerSpeed))
             wheelSpeed("br", str(innerSpeed))
     else:
-        wheelDeg("fl", str(-backAngle))
-        wheelDeg("bl", str(backAngle))
-        wheelDeg("fr", str(-frontAngle))
-        wheelDeg("br", str(frontAngle))
+        wheelDeg("fl", str(-frontAngle))
+        wheelDeg("bl", str(frontAngle))
+        wheelDeg("fr", str(-backAngle))
+        wheelDeg("br", str(backAngle))
         if speed != 0:
             wheelSpeed("fl", str(innerSpeed))
             wheelSpeed("fr", str(outerSpeed))
@@ -416,11 +533,7 @@ def stopAllWheels():
     wheelSpeed("fr", 0)
     wheelSpeed("bl", 0)
     wheelSpeed("br", 0)
-    print("Stopping all wheels!")
-    return
-
-
-def nothing():
+    # print("Stopping all wheels!")
     return
 
 
@@ -429,35 +542,31 @@ commands = {
         "start": stopAllWheels
     },
     "rotate": {
-        "start": turnOnSpot,
-        "do": turnOnSpotControl
-    },
-    "forward": {
-        "start": moveMotorsForward,
-        "do": moveMotorsControl
-    },
-    "back": {
-        "start": moveMotorsBack,
-        "do": moveMotorsControl
+        "start": rotate,
+        "do": doNothing
     },
     "drive": {
         "start": drive,
-        "do": nothing
+        "do": doNothing
     },
     "orbit": {
         "start": orbit,
-        "do": nothing
+        "do": doNothing
     },
     "steer": {
         "start": steer,
-        "do": nothing
+        "do": doNothing
+    },
+    "turn": {
+        "start": turnOnSpot,
+        "do": processCurrentState
     }
 }
 
 currentCommand = {}
 
 
-def newCommandMsg(topic, message, groups):
+def processCommand(topic, message, groups):
     global currentCommand
 
     if "stop" in currentCommand:
@@ -471,6 +580,10 @@ def newCommandMsg(topic, message, groups):
             currentCommand["start"]()
     else:
         print("Received unknown command " + groups[0])
+
+
+def setStopAll():
+    processCommand("move/stop", "stop", ["stop"])
 
 
 def handleGyro(topic, message, groups):
@@ -508,7 +621,7 @@ if __name__ == "__main__":
     try:
         print("Starting drive service...")
 
-        pyroslib.subscribe("move/+", newCommandMsg)
+        pyroslib.subscribe("move/+", processCommand)
         pyroslib.subscribe("sensor/gyro", handleGyro)
         pyroslib.subscribe("sensor/accel", handleAccel)
         pyroslib.init("drive-service")
