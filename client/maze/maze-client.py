@@ -8,15 +8,12 @@ import pyros.agent
 import pyros.pygamehelper
 
 MAX_PING_TIMEOUT = 1
-MAX_ROTATE_DISTANCE = 500
 
-INITIAL_SPEED = 15
-INITIAL_TURNING_RADIUS = 180
-INITIAL_GAIN = 4
+INITIAL_SPEED = 20
+INITIAL_GAIN = 1
 
 gain = INITIAL_GAIN
 speed = INITIAL_SPEED
-turningRadius = INITIAL_TURNING_RADIUS
 
 pingLastTime = 0
 
@@ -37,19 +34,35 @@ def connected():
     pyros.publish("maze/ping", "")
     pyros.publish("maze/gain", str(gain))
     pyros.publish("maze/speed", str(speed))
-    pyros.publish("maze/radius", str(turningRadius))
     stop()
 
 
-def handleMoveResponse(topic, message, groups):
+def sanitise(distance):
+    # distance -= 100
+    if distance < 2:
+        distance = 2
+    return distance
 
-    if message.startswith("done-turn"):
-        print("** Turned!")
 
-    if message.startswith("done-move"):
-        print("** Moved!")
-        pyros.publish("sensor/distance/scan", "scan")
-        print("** Asked for distance scan")
+def toFloatString(f):
+    r = str(round(f, 1))
+    if "." not in r:
+        return r + ".0"
+    return r
+
+
+def handleSensorDistance(topic, message, groups):
+    global distanceAtAngle
+
+    # print("** distance = " + message)
+    if "," in message:
+        pass
+    else:
+        split = message.split(":")
+        d = float(split[1])
+        if d >= 0:
+            distanceAtAngle = sanitise(d)
+
 
 
 def stop():
@@ -65,7 +78,7 @@ def start():
 
 
 def onKeyDown(key):
-    global run, angle, speed, turningRadius, gain
+    global run, angle, speed, gain
 
     if key == pygame.K_ESCAPE:
         stop()
@@ -105,16 +118,6 @@ def onKeyDown(key):
         if speed > 100:
             speed = 100
         pyros.publish("maze/speed", int(speed))
-    elif key == pygame.K_LEFTBRACKET:
-        turningRadius -= 10
-        if turningRadius <= 0:
-            turningRadius = 0
-        pyros.publish("maze/radius", int(turningRadius))
-    elif key == pygame.K_RIGHTBRACKET:
-        turningRadius += 10
-        if turningRadius > 400:
-            turningRadius = 400
-        pyros.publish("maze/radius", int(turningRadius))
     elif key == pygame.K_LEFT:
         gain -= 0.1
         if gain < 1:
@@ -133,6 +136,8 @@ def onKeyDown(key):
 def onKeyUp(key):
     return
 
+
+pyros.subscribe("sensor/distance", handleSensorDistance)
 
 pyros.init("maze-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False, onConnected=connected)
 
@@ -167,9 +172,6 @@ while True:
 
     text = bigFont.render("Dist: " + str(distanceAtAngle), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 160, 0, 0))
-
-    text = bigFont.render("Turning Radius: " + str(turningRadius), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(300, 160, 0, 0))
 
     text = bigFont.render("Selected: " + str(driveAngle), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 200, 0, 0))
