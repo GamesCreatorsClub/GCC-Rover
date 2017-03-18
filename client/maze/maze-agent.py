@@ -8,6 +8,9 @@ import pyroslib
 MAX_TIMEOUT = 5
 
 MAX_ROTATE_DISTANCE = 500
+
+SQRT2 = math.sqrt(2)
+
 INITIAL_SPEED = 15
 INITIAL_TURNING_RADIUS = 180
 INITIAL_GAIN = 4
@@ -47,11 +50,17 @@ def sanitise(distance):
     return distance
 
 
+def toFloatString(f):
+    r = str(round(f, 1))
+    if "." not in r:
+        return r + ".0"
+    return r
+
 def parseDistances(p):
     distances.clear()
     for pair in p.split(","):
         split = pair.split(":")
-        distances[float(split[0])] = sanitise(float(split[1]))
+        distances[toFloatString(float(split[0]))] = sanitise(float(split[1]))
 
 
 def handleMoveResponse(topic, message, groups):
@@ -75,7 +84,7 @@ def handleSensorDistance(topic, message, groups):
         split = message.split(":")
         d = float(split[1])
         if d >= 0:
-            distances[float(split[0])] = sanitise(d)
+            distances[toFloatString(float(split[0]))] = sanitise(d)
 
     received = True
     if nextState is not None:
@@ -116,9 +125,9 @@ def preStartWarmUp():
 
     nextState = goForward
 
-    corridorWidth = distances[-90.0] + distances[90.0]
+    corridorWidth = distances["-90.0"] + distances["90.0"]
 
-    idealDistance = (corridorWidth / 2) * math.sqrt(2)
+    idealDistance = (corridorWidth / 2) * SQRT2
 
     print("Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
     pyroslib.publish("sensor/distance/read", str(-45))
@@ -128,43 +137,57 @@ def preStartWarmUp():
 def goForward():
     global nextState, lastWallDistance
 
-    distance = distances[-45.0]
+    if "-45.0" in distances:
+        distance = distances["-45.0"]
 
-    if abs(distance) > idealDistance * 1.25:
-        print("FORWARD: Got distance " + str(distance) + ", waiting for end of the wall...")
-        pyroslib.publish("move/steer", str(int(-MAX_ROTATE_DISTANCE * 3)) + " " + str(speed))
-        nextState = waitForTurning
-    else:
-        lastWallDistance = distance
-        delta = idealDistance - distance
-
-        if delta >= 0:
-            rotateDistance = MAX_ROTATE_DISTANCE - delta * gain
-            if rotateDistance < 100:
-                rotateDistance = 100
+        if abs(distance) > idealDistance * 2:
+            print("FORWARD: Got distance " + str(distance) + ", waiting for end of the wall...")
+            del distances["-90.0"]
+            pyroslib.publish("sensor/distance/deg", "-90")
+            pyroslib.publish("move/steer", str(int(-MAX_ROTATE_DISTANCE * 2)) + " " + str(speed))  # go straight
+            # pyroslib.publish("move/steer", str(int(-lastWallDistance / math.sqrt(2))) + " " + str(speed))
+            # pyroslib.publish("move/steer", str(int(-idealDistance / 2)) + " " + str(speed))
+            nextState = waitForTurning
         else:
-            rotateDistance = -MAX_ROTATE_DISTANCE - delta * gain
-            if rotateDistance > -100:
-                rotateDistance = -100
+            lastWallDistance = distance
+            delta = idealDistance - distance
 
-        print("FORWARD: Got distance " + str(distance) + " where delta is " + str(delta) + " steering at distance " + str(rotateDistance))
+            if delta >= 0:
+                rotateDistance = MAX_ROTATE_DISTANCE - delta * gain
+                if rotateDistance < 100:
+                    rotateDistance = 100
+            else:
+                rotateDistance = -MAX_ROTATE_DISTANCE - delta * gain
+                if rotateDistance > -100:
+                    rotateDistance = -100
 
-        pyroslib.publish("move/steer", str(int(rotateDistance)) + " " + str(speed))
+            print("FORWARD: Got distance " + str(distance) + " where delta is " + str(round(delta, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
+
+            pyroslib.publish("move/steer", str(int(rotateDistance)) + " " + str(speed))
+    else:
+        print("FORWARD: waiting to get reading...")
+
     doContinuousRead()
 
 
 def waitForTurning():
-    global nextState
+    global nextState, lastWallDistance
 
-    distance = distances[-45.0]
+    if "-90.0" in distances:
+        distance = distances["-90.0"]
 
-    if abs(distance) > idealDistance * 0.75:
-        print("WAIT: Got distance " + str(distance) + ", starting turning at steering distance " + str(-turningRadius))
-        pyroslib.publish("move/steer", str(int(-turningRadius)) + " " + str(speed))
+        if abs(distance) >= idealDistance * 0.75:
+            print("WAIT: Got distance " + str(distance) + ", starting turning at steering distance " + str(-round(lastWallDistance, 2)))
+            del distances["-45.0"]
+            pyroslib.publish("sensor/distance/deg", "-45")
+            pyroslib.publish("move/steer", str(int(-lastWallDistance)) + " " + str(speed))
 
-        nextState = turning
+            nextState = turning
+        else:
+            lastWallDistance = distance
+            print("WAIT: Got distance " + str(distance) + ", waiting...")
     else:
-        print("WAIT: Got distance " + str(distance) + ", waiting...")
+        print("WAIT: waiting to get reading...")
 
     doContinuousRead()
 
@@ -172,15 +195,18 @@ def waitForTurning():
 def turning():
     global nextState
 
-    distance = distances[-45.0]
+    if "-45.0" in distances:
+        distance = distances["-45.0"]
 
-    if abs(distance) < idealDistance * 0.75:
-        print("TURN: Got distance " + str(distance) + ", back to hugging the wall")
+        if abs(distance) < idealDistance * 0.75:
+            print("TURN: Got distance " + str(distance) + ", back to hugging the wall")
 
-        nextState = goForward
+            nextState = goForward
+        else:
+            print("TURN: Got distance " + str(distance) + ", turning at distance " + str(-turningRadius))
+            pyroslib.publish("move/steer", str(int(-lastWallDistance)) + " " + str(speed))
     else:
-        print("TURN: Got distance " + str(distance) + ", turning at distance " + str(-turningRadius))
-        pyroslib.publish("move/steer", str(int(-turningRadius)) + " " + str(speed))
+        print("TURN: waiting to get reading...")
 
     doContinuousRead()
 
@@ -206,21 +232,21 @@ def handleMazeSpeed(topic, message, groups):
     global speed
 
     speed = int(message)
-    print("  Got turning speed of " + speed)
+    print("  Got turning speed of " + str(speed))
 
 
 def handleMazeGain(topic, message, groups):
     global gain
 
     gain = float(message)
-    print("  Got turning gain of " + gain)
+    print("  Got turning gain of " + str(gain))
 
 
 def handleMazeRadius(topic, message, groups):
     global turningRadius
 
     turningRadius = int(message)
-    print("  Got turning radius of " + turningRadius)
+    print("  Got turning radius of " + str(turningRadius))
 
 def handleMazeCommand(topic, message, groups):
     if message == "start":

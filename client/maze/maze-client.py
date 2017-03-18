@@ -65,7 +65,7 @@ def start():
 
 
 def onKeyDown(key):
-    global run, angle, speed, turningRadius
+    global run, angle, speed, turningRadius, gain
 
     if key == pygame.K_ESCAPE:
         stop()
@@ -99,18 +99,32 @@ def onKeyDown(key):
         speed -= 1
         if speed < 1:
             speed = -1
+        pyros.publish("maze/speed", int(speed))
     elif key == pygame.K_UP:
         speed += 1
         if speed > 100:
             speed = 100
-    elif key == pygame.K_LEFT:
+        pyros.publish("maze/speed", int(speed))
+    elif key == pygame.K_LEFTBRACKET:
         turningRadius -= 10
         if turningRadius <= 0:
             turningRadius = 0
-    elif key == pygame.K_RIGHT:
+        pyros.publish("maze/radius", int(turningRadius))
+    elif key == pygame.K_RIGHTBRACKET:
         turningRadius += 10
         if turningRadius > 400:
             turningRadius = 400
+        pyros.publish("maze/radius", int(turningRadius))
+    elif key == pygame.K_LEFT:
+        gain -= 0.1
+        if gain < 1:
+            gain = 1
+        pyros.publish("maze/gain", int(gain))
+    elif key == pygame.K_RIGHT:
+        gain += 0.1
+        if gain > 10:
+            gain = 10
+        pyros.publish("maze/gain", int(gain))
 
     else:
         pyros.gcc.handleConnectKeys(key)
