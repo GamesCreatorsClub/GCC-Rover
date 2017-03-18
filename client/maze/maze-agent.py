@@ -140,7 +140,8 @@ def goForward():
         distance = distances["-45.0"]
 
         if abs(distance) > idealDistance * 1.75:
-            print("FORWARD: Got distance " + str(distance) + ", waiting for end of the wall...")
+            if DEBUG:
+                print("FORWARD: Got distance " + str(distance) + ", waiting for end of the wall...")
             del distances["-90.0"]
             pyroslib.publish("sensor/distance/deg", "-90")
             pyroslib.publish("move/steer", str(int(-MAX_ROTATE_DISTANCE * 2)) + " " + str(speed))  # go straight
@@ -154,7 +155,6 @@ def goForward():
 
             if distance < idealDistance:
                 difference = distance / idealDistance
-                # difference = 1 - difference
 
                 difference *= difference
                 difference *= gain
