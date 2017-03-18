@@ -20,6 +20,9 @@ pingLastTime = 0
 angle = 0
 distanceAtAngle = 0
 
+corridorWidth = 0
+idealDistance = 0
+
 run = False
 
 driveAngle = 0
@@ -63,6 +66,17 @@ def handleSensorDistance(topic, message, groups):
         if d >= 0:
             distanceAtAngle = sanitise(d)
 
+
+def handleDataCorridor(topic, message, groups):
+    global corridorWidth
+
+    corridorWidth = float(message)
+
+
+def handleDataIdealDistance(topic, message, groups):
+    global idealDistance
+
+    idealDistance = float(message)
 
 
 def stop():
@@ -137,6 +151,8 @@ def onKeyUp(key):
     return
 
 
+pyros.subscribe("maze/data/corridor", handleDataCorridor)
+pyros.subscribe("maze/data/idealDistance", handleDataIdealDistance)
 pyros.subscribe("sensor/distance", handleSensorDistance)
 
 pyros.init("maze-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False, onConnected=connected)
@@ -178,6 +194,12 @@ while True:
 
     text = bigFont.render("Gain: " + str(round(gain, 1)), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(300, 200, 0, 0))
+
+    text = bigFont.render("Corridor: " + str(round(corridorWidth, 1)), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(300, 240, 0, 0))
+
+    text = bigFont.render("Ideal dist: " + str(round(idealDistance, 1)), 1, (255, 255, 255))
+    screen.blit(text, pygame.Rect(300, 280, 0, 0))
 
     pygame.display.flip()
     frameclock.tick(30)
