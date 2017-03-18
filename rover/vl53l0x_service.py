@@ -116,43 +116,55 @@ def readDistance():
 
     i2cBus.write_byte_data(I2C_ADDRESS, VL53L0X_REG_SYSTEM_INTERRUPT_CLEAR, 0x01)
 
-    if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-        # if status == 0:
-        #     print("    Data OK!")
-        if status == 0x01:
-            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL CONTINUITY TEST FAILURE!")
-        if status == 0x02:
-            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL WATCHDOG TEST FAILURE!")
-        if status == 0x03:
-            log(DEBUG_LEVEL_INFO, "Read", "    NO VHV VALUE FOUND!")
-        if status == 0x04:
-            log(DEBUG_LEVEL_INFO, "Read", "    MSRC NO TARGET!")
-        if status == 0x05:
-            log(DEBUG_LEVEL_INFO, "Read", "    SNR CHECK!")
-        if status == 0x06:
-            log(DEBUG_LEVEL_INFO, "Read", "    RANGE PHASE CHECK!")
-        if status == 0x07:
-            log(DEBUG_LEVEL_INFO, "Read", "    SIGMA THRESHOLD CHECK!")
-        if status == 0x08:
-            log(DEBUG_LEVEL_INFO, "Read", "    TCC!")
-        if status == 0x09:
-            log(DEBUG_LEVEL_INFO, "Read", "    PHASE CONSISTENCY!")
-        if status == 0x0A:
-            log(DEBUG_LEVEL_INFO, "Read", "    MIN CLIP!")
-        # if status == 0x0B:
-        #     log("Read", "    RANGE COMPLETE!")
-        if status == 0x0C:
-            log(DEBUG_LEVEL_INFO, "Read", "    ALGO UNDERFLOW!")
-        if status == 0x0D:
-            log(DEBUG_LEVEL_INFO, "Read", "    ALGO OVERFLOW!")
-        if status == 0x0E:
-            log(DEBUG_LEVEL_INFO, "Read", "    RANGE IGNORE THRESHOLD!")
-
-
     if status == 0x0B or status == 0:
         distance = makeuint16(data[11], data[10])
     else:
         distance = -1
+
+        # if status == 0:
+        #     print("    Data OK!")
+    if status == 0x01:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL CONTINUITY TEST FAILURE!")
+    if status == 0x02:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL WATCHDOG TEST FAILURE!")
+    if status == 0x03:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    NO VHV VALUE FOUND!")
+    if status == 0x04:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    MSRC NO TARGET!")
+        distance = 8191
+    if status == 0x05:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    SNR CHECK!")
+    if status == 0x06:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    RANGE PHASE CHECK!")
+    if status == 0x07:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    SIGMA THRESHOLD CHECK!")
+    if status == 0x08:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    TCC!")
+    if status == 0x09:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    PHASE CONSISTENCY!")
+    if status == 0x0A:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    MIN CLIP!")
+    # if status == 0x0B:
+    #     log("Read", "    RANGE COMPLETE!")
+    if status == 0x0C:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    ALGO UNDERFLOW!")
+    if status == 0x0D:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    ALGO OVERFLOW!")
+    if status == 0x0E:
+        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
+            log(DEBUG_LEVEL_INFO, "Read", "    RANGE IGNORE THRESHOLD!")
 
     log(DEBUG_LEVEL_INFO, "Read", "  Distance is " + str(distance) + "mm. Got result after " + str(count) + " checks. Status " + bin(status))
 
