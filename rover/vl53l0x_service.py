@@ -3,7 +3,7 @@
 import time
 import traceback
 import pyroslib
-import smbus
+import VL53L0X
 
 # VL53L0X sensor service
 #
@@ -35,7 +35,7 @@ VL53L0X_REG_RESULT_INTERRUPT_STATUS = 0x13
 VL53L0X_REG_RESULT_RANGE_STATUS = 0x14
 
 SERVO_NUMBER = 8
-SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
+SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60 (expecting servo to be twice as slow as per specs
 
 lastServoAngle = 0
 newServoAngle = 0
@@ -48,6 +48,10 @@ continuousMode = False
 lastTimeRead = 0
 lastTimeReceivedRequestForContMode = 0
 started = time.time()
+
+tof = None
+lastRead = time.time()
+
 
 def log(level, where, what):
     if level <= DEBUG_LEVEL:
@@ -80,95 +84,32 @@ def moveServo(angle):
     time.sleep(sleepAmount)
 
 
-
 def initVL53L0X():
-    global i2cBus, stopVariable
+    global tof, timing
+    tof = VL53L0X.VL53L0X()
+    tof.start_ranging(VL53L0X.VL53L0X_BETTER_ACCURACY_MODE)
+    timing = tof.get_timing()
+    if (timing < 20000):
+        timing = 20000
 
-    i2cBus = smbus.SMBus(I2C_BUS)
-
-    stopVariable = i2cBus.read_byte_data(I2C_ADDRESS, 0x91)
+    print ("Timing %d ms" % (timing/1000))
 
 
 def readDistance():
-    def makeuint16(lsb, msb):
-        return ((msb & 0xFF) << 8) | (lsb & 0xFF)
+    global lastRead
 
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x80, 0x01)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0xFF, 0x01)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x00, 0x00)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x91, stopVariable)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x00, 0x01)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0xFF, 0x00)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x80, 0x00)
+    now = time.time()
+    if now - lastRead < timing/1000000.00:
+        time.sleep(timing / 1000000.00)
+        log(DEBUG_LEVEL_ALL, "Read", "Slept for " + str(timing / 1000000.00) + "s")
 
-    log(DEBUG_LEVEL_ALL, "Read", "    Initiating read...")
-    i2cBus.write_byte_data(I2C_ADDRESS, VL53L0X_REG_SYSRANGE_START, 0x01)
+    distance = tof.get_distance()
+    log(DEBUG_LEVEL_INFO, "Read", "Got distance " + str(distance) + "mm")
 
-    count = 0
-    while count < 10:  # 0.1 second waiting time max
-        time.sleep(0.010)
-        val = i2cBus.read_byte_data(I2C_ADDRESS, VL53L0X_REG_RESULT_RANGE_STATUS)
-        if val & 0x01:
-            break
-        count += 1
+    lastRead = time.time()
 
-    data = i2cBus.read_i2c_block_data(I2C_ADDRESS, 0x14, 12)
-
-    status = ((data[0] & 0x78) >> 3)
-
-    i2cBus.write_byte_data(I2C_ADDRESS, VL53L0X_REG_SYSTEM_INTERRUPT_CLEAR, 0x01)
-
-    if status == 0x0B or status == 0:
-        distance = makeuint16(data[11], data[10])
-    else:
-        distance = -1
-
-        # if status == 0:
-        #     print("    Data OK!")
-    if status == 0x01:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL CONTINUITY TEST FAILURE!")
-    if status == 0x02:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL WATCHDOG TEST FAILURE!")
-    if status == 0x03:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    NO VHV VALUE FOUND!")
-    if status == 0x04:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    MSRC NO TARGET!")
-        distance = 8191
-    if status == 0x05:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    SNR CHECK!")
-    if status == 0x06:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    RANGE PHASE CHECK!")
-    if status == 0x07:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    SIGMA THRESHOLD CHECK!")
-    if status == 0x08:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    TCC!")
-    if status == 0x09:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    PHASE CONSISTENCY!")
-    if status == 0x0A:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    MIN CLIP!")
-    # if status == 0x0B:
-    #     log("Read", "    RANGE COMPLETE!")
-    if status == 0x0C:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    ALGO UNDERFLOW!")
-    if status == 0x0D:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    ALGO OVERFLOW!")
-    if status == 0x0E:
-        if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
-            log(DEBUG_LEVEL_INFO, "Read", "    RANGE IGNORE THRESHOLD!")
-
-    log(DEBUG_LEVEL_INFO, "Read", "  Distance is " + str(distance) + "mm. Got result after " + str(count) + " checks. Status " + bin(status))
+    if distance > 10:
+        distance -= 10
 
     return distance
 
