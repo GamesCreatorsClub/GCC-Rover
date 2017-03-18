@@ -15,7 +15,10 @@ import smbus
 CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
-DEBUG = True
+DEBUG_LEVEL_OFF = 0
+DEBUG_LEVEL_INFO = 1
+DEBUG_LEVEL_ALL = 2
+DEBUG_LEVEL = DEBUG_LEVEL_INFO
 
 I2C_BUS = 1
 I2C_ADDRESS = 0x29
@@ -35,6 +38,7 @@ SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
 
 lastServoAngle = 0
+newServoAngle = 0
 
 stopVariable = 0
 i2cBus = None
@@ -43,11 +47,19 @@ doReadSensor = False
 continuousMode = False
 lastTimeRead = 0
 lastTimeReceivedRequestForContMode = 0
+started = time.time()
+
+def log(level, where, what):
+    if level <= DEBUG_LEVEL:
+        t = round(time.time() - started, 4)
+        print("{0:>18} {1}: {2}".format(t, where, what))
 
 
 def moveServo(angle):
-    global lastServoAngle
+    global lastServoAngle, newServoAngle
+
     lastServoAngle = angle
+    newServoAngle = lastServoAngle
 
     # angle is between -90 and 90
     angle += 150
@@ -60,8 +72,7 @@ def moveServo(angle):
     angleDistance = abs(lastServoAngle - angle)
     sleepAmount = SERVO_SPEED * angleDistance / 60.0
 
-    if DEBUG:
-        print("Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
+    log(DEBUG_LEVEL_ALL, "Servo", "Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
     # wait for servo to reach the destination
     time.sleep(sleepAmount)
@@ -88,8 +99,7 @@ def readDistance():
     i2cBus.write_byte_data(I2C_ADDRESS, 0xFF, 0x00)
     i2cBus.write_byte_data(I2C_ADDRESS, 0x80, 0x00)
 
-    if DEBUG:
-        print("    Initiating read...")
+    log(DEBUG_LEVEL_ALL, "Read", "    Initiating read...")
     i2cBus.write_byte_data(I2C_ADDRESS, VL53L0X_REG_SYSRANGE_START, 0x01)
 
     count = 0
@@ -106,47 +116,45 @@ def readDistance():
 
     i2cBus.write_byte_data(I2C_ADDRESS, VL53L0X_REG_SYSTEM_INTERRUPT_CLEAR, 0x01)
 
-    if DEBUG:
+    if DEBUG_LEVEL > DEBUG_LEVEL_OFF:
         # if status == 0:
         #     print("    Data OK!")
         if status == 0x01:
-            print("    VCSEL CONTINUITY TEST FAILURE!")
+            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL CONTINUITY TEST FAILURE!")
         if status == 0x02:
-            print("    VCSEL WATCHDOG TEST FAILURE!")
+            log(DEBUG_LEVEL_INFO, "Read", "    VCSEL WATCHDOG TEST FAILURE!")
         if status == 0x03:
-            print("    NO VHV VALUE FOUND!")
+            log(DEBUG_LEVEL_INFO, "Read", "    NO VHV VALUE FOUND!")
         if status == 0x04:
-            print("    MSRC NO TARGET!")
+            log(DEBUG_LEVEL_INFO, "Read", "    MSRC NO TARGET!")
         if status == 0x05:
-            print("    SNR CHECK!")
+            log(DEBUG_LEVEL_INFO, "Read", "    SNR CHECK!")
         if status == 0x06:
-            print("    RANGE PHASE CHECK!")
+            log(DEBUG_LEVEL_INFO, "Read", "    RANGE PHASE CHECK!")
         if status == 0x07:
-            print("    SIGMA THRESHOLD CHECK!")
+            log(DEBUG_LEVEL_INFO, "Read", "    SIGMA THRESHOLD CHECK!")
         if status == 0x08:
-            print("    TCC!")
+            log(DEBUG_LEVEL_INFO, "Read", "    TCC!")
         if status == 0x09:
-            print("    PHASE CONSISTENCY!")
+            log(DEBUG_LEVEL_INFO, "Read", "    PHASE CONSISTENCY!")
         if status == 0x0A:
-            print("    MIN CLIP!")
+            log(DEBUG_LEVEL_INFO, "Read", "    MIN CLIP!")
         # if status == 0x0B:
-        #     print("    RANGE COMPLETE!")
+        #     log("Read", "    RANGE COMPLETE!")
         if status == 0x0C:
-            print("    ALGO UNDERFLOW!")
+            log(DEBUG_LEVEL_INFO, "Read", "    ALGO UNDERFLOW!")
         if status == 0x0D:
-            print("    ALGO OVERFLOW!")
+            log(DEBUG_LEVEL_INFO, "Read", "    ALGO OVERFLOW!")
         if status == 0x0E:
-            print("    RANGE IGNORE THRESHOLD!")
+            log(DEBUG_LEVEL_INFO, "Read", "    RANGE IGNORE THRESHOLD!")
 
-        print("    Got result after " + str(count) + " checks. Status " + bin(status))
 
     if status == 0x0B or status == 0:
         distance = makeuint16(data[11], data[10])
     else:
         distance = -1
 
-    if DEBUG:
-        print("  Distance is " + str(distance) + "mm")
+    log(DEBUG_LEVEL_INFO, "Read", "  Distance is " + str(distance) + "mm. Got result after " + str(count) + " checks. Status " + bin(status))
 
     return distance
 
@@ -154,20 +162,17 @@ def readDistance():
 def handleRead(topic, payload, groups):
 
     angle = float(payload)
-    if DEBUG:
-        print("Got read - moving to angle " + str(angle))
+    log(DEBUG_LEVEL_INFO, "Message", "Got read - moving to angle " + str(angle))
 
     moveServo(angle)
     distance = readDistance()
-    # print ("   distance =" + str(distance))
     pyroslib.publish("sensor/distance", str(angle) + ":" + str(distance))
 
 
 def handleScan(topic, payload, groups):
     startScan = True
 
-    if DEBUG:
-        print("  Got scan...")
+    log(DEBUG_LEVEL_INFO, "Message", "  Got scan...")
 
     distances = {}
     angle = -90
@@ -212,22 +217,40 @@ def handleContinuousMode(topic, message, groups):
         if not continuousMode:
             continuousMode = True
             doReadSensor = True
-            print("  Started continuous mode...")
+            log(DEBUG_LEVEL_INFO, "Message", "  Started continuous mode...")
 
         lastTimeReceivedRequestForContMode = time.time()
 
 
+def handleDeg(topic, message, groups):
+    global newServoAngle
+
+    newServoAngle = float(message)
+    log(DEBUG_LEVEL_INFO, "Message", "  Got new angle " + message)
+
+
 def loop():
-    global doReadSensor, lastTimeRead, continuousMode
+    global doReadSensor, lastTimeRead, continuousMode, newServoAngle
 
     if doReadSensor:
-        distance = readDistance()
-        pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
+        if lastServoAngle != newServoAngle:
+            moveServo(newServoAngle)
+            log(DEBUG_LEVEL_INFO, "Loop", "  Moved to the new angle " + str(newServoAngle))
+
+        count = 0
+        distance = -1
+        while count < 3 and distance == -1:
+            distance = readDistance()
+            if distance == -1:
+                pyroslib.sleep(0.001)
+
+        if distance != -1:
+            pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousMode = False
-                print("  Stopped continuous mode.")
+                log(DEBUG_LEVEL_INFO, "Message", "  Stopped continuous mode.")
         else:
             doReadSensor = False
 
@@ -242,6 +265,7 @@ if __name__ == "__main__":
 
         time.sleep(1)
 
+        pyroslib.subscribe("sensor/distance/deg", handleDeg)
         pyroslib.subscribe("sensor/distance/read", handleRead)
         pyroslib.subscribe("sensor/distance/scan", handleScan)
         pyroslib.subscribe("sensor/distance/continuous", handleContinuousMode)
