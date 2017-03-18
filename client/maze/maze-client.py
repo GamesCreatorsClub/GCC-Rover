@@ -119,12 +119,12 @@ def onKeyDown(key):
         gain -= 0.1
         if gain < 1:
             gain = 1
-        pyros.publish("maze/gain", int(gain))
+        pyros.publish("maze/gain", int(round(gain, 1)))
     elif key == pygame.K_RIGHT:
         gain += 0.1
         if gain > 10:
             gain = 10
-        pyros.publish("maze/gain", int(gain))
+        pyros.publish("maze/gain", int(round(gain, 1)))
 
     else:
         pyros.gcc.handleConnectKeys(key)
@@ -174,7 +174,7 @@ while True:
     text = bigFont.render("Selected: " + str(driveAngle), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(0, 200, 0, 0))
 
-    text = bigFont.render("Gain: " + str(gain), 1, (255, 255, 255))
+    text = bigFont.render("Gain: " + str(round(gain, 1)), 1, (255, 255, 255))
     screen.blit(text, pygame.Rect(300, 200, 0, 0))
 
     pygame.display.flip()

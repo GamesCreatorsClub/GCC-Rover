@@ -8,6 +8,7 @@ import pyroslib
 MAX_TIMEOUT = 5
 
 MAX_ROTATE_DISTANCE = 500
+MIN_DISTANCE = 100
 
 SQRT2 = math.sqrt(2)
 
@@ -177,12 +178,25 @@ def waitForTurning():
         distance = distances["-90.0"]
 
         if abs(distance) >= idealDistance * 0.75:
-            print("WAIT: Got distance " + str(distance) + ", starting turning at steering distance " + str(-round(lastWallDistance, 2)))
+            turnDistance = lastWallDistance
+
+            print("WAIT: Got distance " + str(distance) + ", starting turning at steering distance " + str(-round(turnDistance, 2)))
             del distances["-45.0"]
             pyroslib.publish("sensor/distance/deg", "-45")
-            pyroslib.publish("move/steer", str(int(-lastWallDistance)) + " " + str(speed))
+            pyroslib.publish("move/steer", str(int(-turnDistance)) + " " + str(speed))
 
             nextState = turning
+        elif distance < MIN_DISTANCE:
+            nextState = goForward
+            del distances["90.0"]
+
+            delta = idealDistance - distance
+            rotateDistance = MAX_ROTATE_DISTANCE - delta * gain
+            if rotateDistance < 100:
+                rotateDistance = 100
+            pyroslib.publish("sensor/distance/deg", "-45")
+            pyroslib.publish("move/steer", str(int(rotateDistance)) + " " + str(speed))
+            print("WAIT: Too close to wall " + str(distance) + " where delta is " + str(round(delta, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
         else:
             lastWallDistance = distance
             print("WAIT: Got distance " + str(distance) + ", waiting...")
@@ -203,8 +217,10 @@ def turning():
 
             nextState = goForward
         else:
-            print("TURN: Got distance " + str(distance) + ", turning at distance " + str(-turningRadius))
-            pyroslib.publish("move/steer", str(int(-lastWallDistance)) + " " + str(speed))
+            turnDistance = lastWallDistance
+
+            print("TURN: Got distance " + str(distance) + ", turning at distance " + str(-turnDistance))
+            pyroslib.publish("move/steer", str(int(-turnDistance)) + " " + str(speed))
     else:
         print("TURN: waiting to get reading...")
 
