@@ -12,7 +12,7 @@ import smbus
 # This service is responsible reading distance.
 #
 
-CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
+CONTINUOUS_MODE_TIMEOUT = 3  # 5 seconds before giving up on sending accel data out
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
 DEBUG_LEVEL_OFF = 0
@@ -58,8 +58,12 @@ def log(level, where, what):
 def moveServo(angle):
     global lastServoAngle, newServoAngle
 
+    angleDistance = abs(lastServoAngle - angle)
+    sleepAmount = SERVO_SPEED * angleDistance / 60.0
+
     lastServoAngle = angle
     newServoAngle = lastServoAngle
+
 
     # angle is between -90 and 90
     angle += 150
@@ -69,8 +73,6 @@ def moveServo(angle):
     f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
     f.close()
 
-    angleDistance = abs(lastServoAngle - angle)
-    sleepAmount = SERVO_SPEED * angleDistance / 60.0
 
     log(DEBUG_LEVEL_ALL, "Servo", "Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
@@ -285,7 +287,7 @@ if __name__ == "__main__":
 
         print("Started vl53l0x sensor service.")
 
-        pyroslib.forever(0.02, loop)
+        pyroslib.forever(0.01, loop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
