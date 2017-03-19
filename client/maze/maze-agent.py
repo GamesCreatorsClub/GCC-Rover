@@ -5,11 +5,11 @@ import time
 import traceback
 import pyroslib
 
-DEBUG = False
+DEBUG = True
 
 MAX_TIMEOUT = 5
 
-MAX_WALL_END_WAIT_TIMEOUT = 4
+MAX_WALL_END_WAIT_TIMEOUT = 2
 MAX_ROTATE_DISTANCE = 500
 MIN_ROTATE_DISTANCE = 0
 MIN_DISTANCE = 100
@@ -17,7 +17,7 @@ MIN_DISTANCE = 100
 SQRT2 = math.sqrt(2)
 
 INITIAL_SPEED = 20
-INITIAL_GAIN = 1
+INITIAL_GAIN = 1.7
 
 
 gain = INITIAL_GAIN
@@ -195,7 +195,7 @@ def waitForTurning():
     if "-90.0" in distances:
         distance = distances["-90.0"]
 
-        if abs(distance) >= idealDistance * 1.5:
+        if abs(distance) >= idealDistance * 1.25:
             turnDistance = lastWallDistance
 
             if DEBUG:
