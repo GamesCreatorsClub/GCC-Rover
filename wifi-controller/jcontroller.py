@@ -53,7 +53,7 @@ lastB = False
 lastBX = False
 lastBY = False
 
-topSpeed = 75
+topSpeed = 50
 sensorDistance = 200
 
 doOrbit = False
@@ -266,10 +266,33 @@ def processKeys():
         pyros.gcc.connect()
 
     if y3 != lastY3:
-        if y3 < 0 and topSpeed < 300:
-            topSpeed += 10
-        elif y3 > 0 and topSpeed > 10:
-            topSpeed -= 10
+        if y3 < 0:
+            if topSpeed >= 20:
+                topSpeed += 10
+                if topSpeed > 300:
+                    topSpeed = 300
+            else:
+                topSpeed += 1
+        elif y3 > 0:
+            if topSpeed <= 20:
+                topSpeed -= 1
+                if topSpeed < 1:
+                    topSpeed = 1
+            else:
+                topSpeed -= 10
+
+    if x3 != lastX3:
+        if x3 > 0:
+            topSpeed += 50
+            if topSpeed > 300:
+                topSpeed = 300
+        elif x3 < 0:
+            if topSpeed >= 100:
+                topSpeed -= 50
+                if topSpeed < 30:
+                    topSpeed = 30
+            elif topSpeed > 50:
+                topSpeed = 50
 
     if tl and tl != lastTL:
         prepareToOrbit = True
@@ -279,12 +302,18 @@ def processKeys():
 
     continueToReadDistance = tl2
     if tl2 != lastTL2:
-        if tl2:
+        if tl:
             pyros.publish("sensor/distance/continuous", "start")
         else:
             pyros.publish("sensor/distance/continuous", "stop")
 
-    boost = tr2
+    boost = tr
+
+    if lastTR2 != tr2:
+        if tr2:
+            pyros.publish("servo/9", "90")
+        else:
+            pyros.publish("servo/9", "165")
 
     lastX3 = x3
     lastY3 = y3
