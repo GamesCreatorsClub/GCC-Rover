@@ -1,28 +1,55 @@
 package org.ah.gcc.rover.desktop;
 
+import org.ah.gcc.rover.JoyStick;
+import org.ah.gcc.rover.JoystickComponentListener;
 import org.ah.gcc.rover.controllers.AbstractController;
-import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.ControllerStateImplementation;
+import org.ah.gcc.rover.controllers.JoystickState;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerListener;
 import com.badlogic.gdx.controllers.PovDirection;
 import com.badlogic.gdx.math.Vector3;
 
-public class RealController extends AbstractController implements ControllerListener {
+public class ComboController extends AbstractController implements ControllerListener {
 
-    private ControllerStateImplementation state;
+    public ControllerStateImplementation state;
 
-    public RealController() {
+    public ComboController() {
         state = new ControllerStateImplementation();
     }
 
-    public ControllerState getState() {
-        return state;
+    public void setLeftJotstick(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setJoy1(stickstate);
+                fireEvent(state);
+            }
+        });
+
     }
 
-    public void setState(ControllerStateImplementation state) {
-        this.state = state;
+    public void setRightJotstick(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setJoy2(stickstate);
+                fireEvent(state);
+
+            }
+        });
+
+    }
+
+    public void setHat(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setHat1(stickstate);
+            }
+        });
+
     }
 
     @Override
@@ -70,6 +97,7 @@ public class RealController extends AbstractController implements ControllerList
         return false;
     }
 
+
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
         // TODO Auto-generated method stub
@@ -93,5 +121,6 @@ public class RealController extends AbstractController implements ControllerList
         // TODO Auto-generated method stub
         return false;
     }
+
 
 }

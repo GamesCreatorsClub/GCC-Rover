@@ -2,6 +2,8 @@ package org.ah.gcc.rover;
 
 import static org.ah.gcc.rover.MathUtil.calcDistance;
 
+import org.ah.gcc.rover.controllers.JoystickState;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
@@ -18,11 +20,12 @@ public class JoyStick {
     private int inactiveSize;
     private int padSize;
 
+    private JoystickComponentListener listener;
+
     public JoyStick(int spaceSize, int inactiveSize, int padSize, int x, int y) {
         this.spaceSize = spaceSize;
         this.inactiveSize = inactiveSize;
         this.padSize = padSize;
-
         centreX =  x;
         centreY =  Gdx.graphics.getHeight() - y;
 
@@ -139,6 +142,10 @@ public class JoyStick {
             x = (int)(-distance * Math.sin(-angle)) + centreX;
             y = (int)(-distance * Math.cos(-angle)) + centreY;
         }
+
+        if (listener != null) {
+            listener.changed(new JoystickState(getXValue(), getYValue()));
+        }
     }
 
     private double calcAngleAtPointFromCentre(int x, int y) {
@@ -147,6 +154,10 @@ public class JoyStick {
 
     private float calcDistanceFromTheCentre(float x, float y) {
         return calcDistance(centreX, centreY, x, y);
+    }
+
+    public void setListener(JoystickComponentListener listener) {
+        this.listener = listener;
     }
 
 }

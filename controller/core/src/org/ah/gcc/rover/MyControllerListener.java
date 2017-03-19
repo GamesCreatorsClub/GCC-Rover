@@ -9,17 +9,17 @@ public class MyControllerListener implements ControllerListener {
     @Override
     public void connected(Controller controller) {
         System.out.println("conected controller");
-        
+
     }
 
     @Override
     public void disconnected(Controller controller) {
         System.out.println("disconected controller");
-        
+
     }
 
     @Override
-    public boolean buttonDown(Controller controller, int buttonCode) {
+    public boolean buttonDown(Controller§ controller, int buttonCode) {
         // TODO Auto-generated method stub
         return false;
     }
@@ -60,6 +60,6 @@ public class MyControllerListener implements ControllerListener {
         return false;
     }
 
-   
-    
+
+
 }

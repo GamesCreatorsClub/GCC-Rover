@@ -1,5 +1,8 @@
 package org.ah.gcc.rover.controllers;
 
+import org.ah.gcc.rover.JoyStick;
+import org.ah.gcc.rover.JoystickComponentListener;
+
 public class ScreenController extends AbstractController {
 
     private ControllerStateImplementation state;
@@ -27,17 +30,41 @@ public class ScreenController extends AbstractController {
     public void buttonDown(int number, boolean state) {
     }
 
-//    public void setLeftJotstick(JoyStick joystick) {
-//        joystick.setListener(new JoystickComponentListener() {
-//            public void changed(float x, float y) {
-//                state.setX1(x);
-//                state.setY1(y);
-//            }
-//        });
-//    }
+    public void setLeftJotstick(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setJoy1(stickstate);
+                fireEvent(state);
+            }
+        });
+
+    }
+
+    public void setRightJotstick(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setJoy2(stickstate);
+                fireEvent(state);
+
+            }
+        });
+
+    }
+
+    public void setHat(JoyStick joystick) {
+        joystick.setListener(new JoystickComponentListener() {
+            @Override
+            public void changed(JoystickState stickstate) {
+                state.setHat1(stickstate);
+            }
+        });
+
+    }
 //
 //    public void setRightJotstick(JoyStick joystick) {
-//        joystick.setListener(new JoystickComponentListener() {
+//        joystick.setListener(new JoystickCompon               entListener() {
 //            public void changed(float x, float y) {
 //                state.setX2(x);
 //                state.setY2(y);
