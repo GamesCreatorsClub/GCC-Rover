@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# description: Starts and stops the ap-screen-service daemon
+#
+### BEGIN INIT INFO
+# Provides: ap-screen-service
+# Required-Start: $network $syslog
+# Required-Stop: $network
+# Default-Start: 2 3 5
+# Default-Stop: 0 1 6
+# Short-Description: ap-screen-service daemon
+# Description: Start or stop the ap-screen-service daemon
+### END INIT INFO
+
+BINARY=/home/pi/ap-screen-service/ap-screen-service.py
+test -x $BINARY || { echo "$BINARY not avaible";
+        if [ "$1" = "stop" ]; then exit 0;
+        else exit 5; fi; }
+
+RETVAL=0
+
+case "$1" in
+  start)
+        echo -n "Starting ap-screen-service daemon... "
+        cd /home/pi/wifi-controller
+        sudo -u pi python3 -u 2>&1 >/home/pi/ap-screen-service/ap-screen-service.log $BINARY &
+        echo "Done."
+        ;;
+  stop)
+        echo -n "Shutting down ap-screen-service daemon... "
+        pkill -9 -f "python3 -u $BINARY"
+        echo "Done."
+        ;;
+  restart)
+        $0 stop
+        $0 start
+        ;;
+  status)
+        if pgrep -f "python3 -u $BINARY" >/dev/null 2>&1
+        then
+          echo "ap-screen-service is running."
+        else
+          echo "ap-screen-service is not running."
+        fi
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
