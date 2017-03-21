@@ -67,8 +67,10 @@ public class DesktopPlatformSpecfic implements PlatformSpecific {
     }
 
     public void updateControllerButtons(Map<ControllerButton, Boolean> buttons) {
-        for (ControllerButton button : ControllerButton.values()) {
-            buttons.put(button, selectedController.getButton(button.getButtonCode()));
+        if (selectedController != null) {
+            for (ControllerButton button : ControllerButton.values()) {
+                buttons.put(button, selectedController.getButton(button.getButtonCode()));
+            }
         }
     }
 

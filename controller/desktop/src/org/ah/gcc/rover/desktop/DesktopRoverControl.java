@@ -13,7 +13,7 @@ public class DesktopRoverControl implements RoverControl {
 
     private MqttAsyncClient client;
     private boolean connected = false;
-    
+
     @Override
     public void connect(String url) {
         try {
@@ -52,7 +52,7 @@ public class DesktopRoverControl implements RoverControl {
             }
         }
     }
-    
+
     @Override
     public boolean isConnected() {
         return client != null && connected;
