@@ -20,7 +20,6 @@ public class ScreenController extends AbstractController {
             state.setHat1(position);
         }
         fireEvent(state);
-
     }
 
     public void buttonUp(int number, boolean state) {
@@ -38,7 +37,6 @@ public class ScreenController extends AbstractController {
                 fireEvent(state);
             }
         });
-
     }
 
     public void setRightJotstick(JoyStick joystick) {
@@ -50,7 +48,6 @@ public class ScreenController extends AbstractController {
 
             }
         });
-
     }
 
     public void setHat(JoyStick joystick) {

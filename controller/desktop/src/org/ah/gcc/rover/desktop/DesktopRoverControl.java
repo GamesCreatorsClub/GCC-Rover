@@ -71,5 +71,4 @@ public class DesktopRoverControl implements RoverControl {
             client = null;
         }
     }
-
 }

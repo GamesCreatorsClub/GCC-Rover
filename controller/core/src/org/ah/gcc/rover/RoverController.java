@@ -158,7 +158,6 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         screenController.setRightJotstick(rightjoystick);
 
         screenController.addListener(this);
-
     }
 
     @Override

@@ -1,9 +1,9 @@
 package org.ah.gcc.rover.desktop;
 
+import org.ah.gcc.rover.RoverController;
+
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
-
-import org.ah.gcc.rover.RoverController;
 
 public class RoverControllerLauncher {
     public static void main(String[] arg) {
