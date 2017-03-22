@@ -60,6 +60,8 @@ doOrbit = False
 prepareToOrbit = False
 continueToReadDistance = False
 boost = False
+global kick
+kick = 0
 
 joystick.axis_states["x"] = 0
 joystick.axis_states["y"] = 0
@@ -234,7 +236,7 @@ def processKeys():
 
     global screenMode, topSpeed
 
-    global prepareToOrbit, continueToReadDistance, doOrbit, boost
+    global prepareToOrbit, continueToReadDistance, doOrbit, boost, kick
 
     x3 = int(joystick.axis_states["hat0x"])
     y3 = int(joystick.axis_states["hat0y"])
@@ -315,6 +317,12 @@ def processKeys():
         else:
             pyros.publish("servo/9", "165")
 
+    if bx and bx != lastBX:
+        kick = 1
+        # pyros.publish("move/drive", "0 300")
+        # pyros.sleep(1)
+        # pyros.publish("move/drive", "0 0")
+
     lastX3 = x3
     lastY3 = y3
     lastStart = start
@@ -362,6 +370,8 @@ def calcRoverDistance(distance):
 
 
 def processJoysticks():
+    global kick
+
     lx = int(joystick.axis_states["x"])
     ly = int(joystick.axis_states["y"])
     ld = math.sqrt(lx * lx + ly * ly)
@@ -397,6 +407,8 @@ def processJoysticks():
             lx = calculateExpo(lx, 0.75)
             roverSpeed = calcRoverSpeed(lx) / 4
             pyros.publish("move/rotate", int(roverSpeed))
+    elif kick > 0:
+        pass
     else:
         pyros.publish("move/drive", str(ra) + " 0")
         roverSpeed = 0
