@@ -40,7 +40,7 @@ lights = False
 resubscribe = time.time()
 lastReceivedTime = time.time()
 frameTime = ""
-
+turnDistance = 0
 
 def connected():
     pyros.publish("camera/processed/fetch", "")
@@ -119,7 +119,7 @@ def handleFeedbackMessage(topic, message, groups):
 
 
 def processImage():
-    global processedImageBig, processedImage, minAngle, maxAngle, midAngle
+    global processedImageBig, processedImage, minAngle, maxAngle, midAngle, turnDistance
 
     r = 28
 
@@ -159,6 +159,19 @@ def processImage():
 
     midAngle = (maxAngle + minAngle) / 2
 
+
+    r = 30
+
+    a = midAngle
+
+    ap = 90 - a
+
+    apr = ap * math.pi / 180.0
+
+    turnDistance = r / (2.0 * math.cos(apr))
+
+    print("D = " + str(turnDistance) + ", apr = " + str(apr))
+
     processedImageBig = pygame.transform.scale(processedImage, (320, 256))
 
     # images = toPyImage2(cameraImage)
@@ -170,9 +183,16 @@ def processImage():
 def goOneStep():
     if -20 < midAngle < 20:
         goForward()
+    elif -45 < midAngle < 45:
+        pyros.publish("move/stop", "")
+        pyros.loop(0.5)
+        print("Steering arond " + str(-turnDistance))
+        pyros.publish("move/steer", str(int(-turnDistance)) + " " + str(forwardSpeed))
+        pyros.loop(0.5)
     else:
-        print("** Turning to " + str(-midAngle))
-        pyros.publish("move/turn", str(-midAngle))
+        print("Turning to " + str(midAngle))
+        pyros.publish("move/turn", str(round(midAngle, 1)))
+        # pyros.loop(0.5)
 
 
 def goForward():
@@ -272,7 +292,7 @@ while True:
     text = font.render("Frame time: " + str(frameTime), 1, (255, 255, 255))
     screen.blit(text, (400, 80))
 
-    text = font.render("Mid angle: " + str(midAngle), 1, (255, 255, 255))
+    text = font.render("Mid angle: " + str(round(midAngle, 2)), 1, (255, 255, 255))
     screen.blit(text, (400, 110))
 
     text = font.render("Speed: " + str(forwardSpeed), 1, (255, 255, 255))
@@ -280,6 +300,9 @@ while True:
 
     text = font.render("Running: " + str(running), 1, (255, 255, 255))
     screen.blit(text, (750, 80))
+
+    text = font.render("Turn around dist: " + str(round(turnDistance, 2)), 1, (255, 255, 255))
+    screen.blit(text, (750, 110))
 
 
     screen.blit(rawImage, (10, 50))
