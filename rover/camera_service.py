@@ -8,6 +8,7 @@ import traceback
 import pyroslib
 from PIL import Image, ImageEnhance
 from picamera import PiCamera
+from picamera.array import PiRGBArray
 
 #
 # camera service
@@ -22,10 +23,17 @@ MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
 whiteBalance = Image.new("L", (80, 64))
 
-camera = PiCamera()
+camera = PiCamera(resolution=(80, 64), framerate=10)
 camera.resolution = (80, 64)
-camera.shutter_speed = 3000
-camera.iso = 800
+# camera.shutter_speed = 3000
+# camera.iso = 800
+camera.hflip = False
+camera.vflip = False
+
+singleOutput = np.empty((96, 64, 3), dtype=np.uint8)
+continuousOutput = PiRGBArray(camera, size=(96, 64))
+
+continuousIterator = None
 
 stream = io.BytesIO()
 
@@ -54,19 +62,29 @@ def logt(msg):
 
 
 def capture():
-    global rawL, rawRGB
-    output = np.empty((96, 64, 3), dtype=np.uint8)
+    global rawL, rawRGB, continuousIterator
 
-    stream.seek(0)
-    logt("        seek(0)")
-    camera.capture(output, "rgb", use_video_port=True)
-    logt("        capture")
-    # stream.seek(0)
-    # logt("        seek(0)")
-    rawRGB = Image.frombuffer('RGB', (80, 64), output)
-    logt("        Image.open(stream)")
+    if continuousMode:
+        next(continuousIterator)
+        logt("        capture")
+        print('Captured %dx%d image' % (
+            continuousOutput.array.shape[1], continuousOutput.array.shape[0]))
+        rawRGB = Image.frombuffer('RGB', (96, 64), continuousOutput.array,'raw', 'RGB', 0, 1).crop((0, 0, 80, 64))
+        print(str(rawRGB))
+        logt("        Image.open(stream)")
+        continuousOutput.truncate(0)
+
+    else:
+        stream.seek(0)
+        logt("        seek(0)")
+        camera.capture(singleOutput, "rgb", use_video_port=True)
+        logt("        capture")
+        rawRGB = Image.frombuffer('RGB', (80, 64), singleOutput,'raw', 'RGB', 0, 1)
+        logt("        Image.open(stream)")
+
     rawL = rawRGB.convert("L")
     logt("        convert(L)")
+    print(str(rawL))
     return rawL
 
 
@@ -88,7 +106,7 @@ def limit(pixel, minPix, maxPix):
     if pixel > maxPix:
         pixel = maxPix
     if pixel < minPix:
-        pixel < minPix
+        pixel = minPix
     return pixel
 
 
@@ -186,19 +204,20 @@ def storeWhiteBalance(topic, payload, groups):
 
 
 def handleContinuousMode(topic, message, groups):
-    global doReadSensor, continuousMode, lastTimeReceivedRequestForContMode
+    global doReadSensor, continuousMode, lastTimeReceivedRequestForContMode, continuousIterator
 
     if message.startswith("stop"):
         continuousMode = False
         doReadSensor = False
-        camera.stop_preview()
+        # camera.stop_preview()
         print("  Stopped continuous mode...")
 
     else:
         if not continuousMode:
             continuousMode = True
             doReadSensor = True
-            camera.start_preview()
+            continuousOutput.truncate(0)
+            continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=False)
             print("  Started continuous mode...")
 
         lastTimeReceivedRequestForContMode = time.time()
