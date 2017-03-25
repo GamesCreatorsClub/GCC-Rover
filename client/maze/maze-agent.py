@@ -273,7 +273,7 @@ def connected():
     stop()
 
 
-def handleMazePing(topic, message, groups):
+def handlePing(topic, message, groups):
     global lastPing
     lastPing = time.time()
 
@@ -314,7 +314,7 @@ if __name__ == "__main__":
         print("Starting maze agent...")
 
         pyroslib.subscribe("sensor/distance", handleSensorDistance)
-        pyroslib.subscribe("maze/ping", handleMazePing)
+        pyroslib.subscribe("maze/ping", handlePing)
         pyroslib.subscribe("maze/command", handleMazeCommand)
         pyroslib.subscribe("maze/speed", handleMazeSpeed)
         pyroslib.subscribe("maze/gain", handleMazeGain)
