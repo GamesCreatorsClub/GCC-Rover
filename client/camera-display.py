@@ -21,8 +21,6 @@ receivedProcessedImage = pygame.Surface((80, 64), 24)
 whiteBalanceImage = pygame.Surface((80, 64), 24)
 processedImage = pygame.Surface((80, 64), 24)
 
-
-
 rawImageBig = pygame.Surface((320, 256), 24)
 receivedProcessedImageBig = pygame.Surface((320, 256), 24)
 whiteBalanceImageBig = pygame.Surface((320, 256), 24)
@@ -42,6 +40,7 @@ lastReceivedTime = time.time()
 frameTime = ""
 turnDistance = 0
 
+
 def connected():
     pyros.publish("camera/processed/fetch", "")
 
@@ -57,7 +56,6 @@ def toPyImage2(pilImage):
     pyImageSmall = pygame.image.fromstring(pilRGBImage.tobytes("raw"), (80, 64), 'RGB')
     pyImageBig = pygame.transform.scale(pyImageSmall, (320, 256))
     return (pyImageSmall, pyImageBig, pilImage)
-
 
 
 def handleWhiteBalance(topic, message, groups):
