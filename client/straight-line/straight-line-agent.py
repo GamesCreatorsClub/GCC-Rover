@@ -19,8 +19,6 @@ integratedError = 0
 derivativeError = 0
 
 calibrationStartedTime = 0
-calibrationAverage = 0
-calibratingCounts = 0
 
 lastContGyroTime = 0
 lastTimeGyroRead = 0
@@ -29,97 +27,9 @@ thisTimeGyroRead = 0
 leftSideSpeed = 75
 rightSideSpeed = 75
 
-gyroCentre = 0
-gyroMin = 0
-gyroMax = 0
-
 driving = False
-calibrating = False
+calibrating = True
 driveAfterCalibrate = False
-
-
-def connected():
-    pyroslib.publish("sensor/gyro/continuous", "")
-
-
-def handleStraight(topic, message, groups):
-    global integratedError, driving, calibrating
-
-    if message == "forward":
-        startDriving()
-    elif message == "calibrate-and-go":
-        startCalibratingAndGo()
-    elif message == "calibrate":
-        startCalibrating()
-    elif message == "stop":
-        stopDriving()
-
-
-def wheelDeg(wheelName, angle):
-    topic = "wheel/" + wheelName + "/deg"
-    pyroslib.publish(topic, str(angle))
-
-
-def startDriving():
-    global driveAfterCalibrate, driving, calibrating, leftSideSpeed, rightSideSpeed, leftDeg, rightDeg, integratedError, derivativeError
-
-    print("DRIVE DIRVE DRIVE!")
-    calibrating = False
-    driveAfterCalibrate = False
-    driving = True
-    leftSideSpeed = 75
-    rightSideSpeed = 75
-    integratedError = 0
-    derivativeError = 0
-
-
-def startCalibratingAndGo():
-    global driveAfterCalibrate
-
-    startCalibrating()
-    driveAfterCalibrate = True
-
-
-def startCalibrating():
-    global driveAfterCalibrate, driving, calibrating, leftSideSpeed, rightSideSpeed, leftDeg, rightDeg, calibrationStartedTime
-
-    print("CALIBRATING!")
-    calibrating = True
-    driveAfterCalibrate = False
-    driving = False
-    leftSideSpeed = 0
-    rightSideSpeed = 0
-    leftDeg = 0
-    rightDeg = 0
-    calibrationStartedTime = time.time()
-
-
-def stopDriving():
-    global leftSideSpeed, rightSideSpeed, driving, calibrating
-    print("STOP STOP STOP!")
-    leftSideSpeed = 0
-    rightSideSpeed = 0
-
-    driving = False
-    calibrating = False
-
-
-def getError(gyroAngle):
-    if gyroAngle > gyroMax or gyroAngle < gyroMin:
-        return gyroAngle - gyroCentre
-
-    return 0.0
-
-
-SPEED = 250
-
-SPEED_GAIN = 0.3  # 0.4
-SPEED_MAX_CONTROL = 75
-
-CONTROL_STEERING = True
-CONTROL_MOTORS = False
-
-CONTROL_TYPE = CONTROL_STEERING
 
 STEER_GAIN = 3
 STEER_MAX_CONTROL = 30
@@ -140,10 +50,55 @@ dGain = D_GAIN
 integralFadeOut = INTEGRAL_FADE_OUT
 steerMaxControl = STEER_MAX_CONTROL
 
+
+def connected():
+    pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
+
+
+def handleStraight(topic, message, groups):
+    global integratedError, driving, calibrating
+
+    if message == "forward":
+        startDriving()
+    elif message == "stop":
+        stopDriving()
+
+
+def wheelDeg(wheelName, angle):
+    topic = "wheel/" + wheelName + "/deg"
+    pyroslib.publish(topic, str(angle))
+
+
 wheelDeg("fl", 0)
 wheelDeg("fr", 0)
 wheelDeg("bl", 0)
 wheelDeg("br", 0)
+
+
+def startDriving():
+    global driveAfterCalibrate, driving, calibrating, leftSideSpeed, rightSideSpeed, leftDeg, rightDeg, integratedError, derivativeError
+
+    print("DRIVE DIRVE DRIVE!")
+    calibrating = False
+    driving = True
+    # leftSideSpeed = 75
+    # rightSideSpeed = 75
+    leftSideSpeed = 0
+    rightSideSpeed = 0
+    integratedError = 0
+    derivativeError = 0
+    pyroslib.publish("sensor/gyro/continuous", "start")
+
+
+def stopDriving():
+    global leftSideSpeed, rightSideSpeed, driving, calibrating
+    print("STOP STOP STOP!")
+    leftSideSpeed = 0
+    rightSideSpeed = 0
+
+    driving = False
+    calibrating = True
+    pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
 
 
 def handleGyro(topic, message, groups):
@@ -151,7 +106,7 @@ def handleGyro(topic, message, groups):
     global proportionalError, integratedError, derivativeError
     global leftDeg, rightDeg
     global rightSideSpeed, leftSideSpeed
-    global gyroCentre, gyroMin, gyroMax, calibrationStartedTime, calibratingCounts, calibrationAverage
+    global calibrationStartedTime
 
     previousError = 0
     control = 0
@@ -165,7 +120,7 @@ def handleGyro(topic, message, groups):
 
         integratedError *= integralFadeOut
 
-        proportionalError = getError(z)
+        proportionalError = z
         integratedError += proportionalError  # * dt
 
         if dt == 0:
@@ -177,53 +132,26 @@ def handleGyro(topic, message, groups):
 
         control = pGain * proportionalError + iGain * integratedError + dGain * derivativeError
 
-        controlSpeed = int(control * SPEED_GAIN)
-
-        if controlSpeed > SPEED_MAX_CONTROL:
-            controlSpeed = SPEED_MAX_CONTROL
-        elif controlSpeed < -SPEED_MAX_CONTROL:
-            controlSpeed = -SPEED_MAX_CONTROL
-
         controlSteer = control * steerGain
         if controlSteer > steerMaxControl:
             controlSteer = steerMaxControl
         elif controlSteer < -steerMaxControl:
             controlSteer = -steerMaxControl
 
-        if CONTROL_TYPE == CONTROL_MOTORS:
-            rightSideSpeed = SPEED - controlSpeed
-            leftSideSpeed = SPEED + controlSpeed
-        else:
-            rightSideSpeed = SPEED
-            leftSideSpeed = SPEED
+        leftDeg = int(-controlSteer)
+        rightDeg = int(-controlSteer)
 
-        if CONTROL_TYPE == CONTROL_STEERING:
-            leftDeg = int(-controlSteer)
-            rightDeg = int(-controlSteer)
+        if leftSideSpeed < 50:
+            leftSideSpeed += 25
+            rightSideSpeed += 25
+        elif leftSideSpeed < 300:
+            leftSideSpeed += 50
+            rightSideSpeed += 50
         else:
-            leftDeg = 1
-            rightDeg = 1
+            leftSideSpeed = 300
+            rightSideSpeed = 300
+
     elif calibrating:
-        now = time.time()
-        if now - calibrationStartedTime > 1:
-            calibrating = False
-            gyroCentre = calibrationAverage / 50.0
-            print("CALIBRATED:   centre: {0:>12}  min: {1:>12}  max: {2:>12}".format(
-                str(round(gyroCentre, 5)),
-                str(round(gyroMin, 5)),
-                str(round(gyroMax, 5))
-            ))
-            if driveAfterCalibrate:
-                startDriving()
-                print("DRIVE!--------------------------->")
-        else:
-            calibratingCounts += 1
-            calibrationAverage += z
-
-            if z > gyroMax:
-                gyroMax = z
-            if z < gyroMin:
-                gyroMin = z
 
         leftDeg = 0
         rightDeg = 0
@@ -268,13 +196,41 @@ def handlePing(topic, message, groups):
     lastPing = time.time()
 
 
+def handleSteerGain(topic, message, groups):
+    global steerGain
+
+    steerGain = float(message)
+
+
+def handlePGain(topic, message, groups):
+    global pGain
+
+    pGain = float(message)
+
+
+def handleIGain(topic, message, groups):
+    global iGain
+
+    iGain = float(message)
+
+
+def handleDGain(topic, message, groups):
+    global dGain
+
+    dGain = float(message)
+
+
 def loop():
     global lastContGyroTime
 
     now = time.time()
 
     if now - lastTimeGyroRead > 1:
-        pyroslib.publish("sensor/gyro/continuous", "")
+        if calibrating:
+            pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
+        else:
+            pyroslib.publish("sensor/gyro/continuous", "start")
+
         lastContGyroTime = now
 
     pyroslib.publish("wheel/fl/speed", leftSideSpeed)
@@ -289,6 +245,7 @@ def loop():
 
     if now - lastPing > MAX_TIMEOUT:
         print("** Didn't receive ping for more than " + str(now - lastPing) + "s. Leaving...")
+        pyroslib.publish("sensor/gyro/continuous", "stop")
         sys.exit(0)
 
 
@@ -299,6 +256,10 @@ if __name__ == "__main__":
         pyroslib.subscribe("sensor/gyro", handleGyro)
         pyroslib.subscribe("straight", handleStraight)
         pyroslib.subscribe("straight/ping", handlePing)
+        pyroslib.subscribe("straight/steerGain", handleSteerGain)
+        pyroslib.subscribe("straight/pGain", handlePGain)
+        pyroslib.subscribe("straight/iGain", handleIGain)
+        pyroslib.subscribe("straight/dGain", handleDGain)
 
         pyroslib.init("straight-line-agent", onConnected=connected)
 

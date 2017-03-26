@@ -206,3 +206,4 @@ while True:
 
     if time.time() - pingLastTime > MAX_PING_TIMEOUT:
         pyros.publish("maze/ping", "")
+        pingLastTime = time.time()
