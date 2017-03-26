@@ -45,6 +45,7 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean buttonDown(Controller controller, int buttonCode) {
+        System.out.println("buttonDown " + buttonCode);
         ControllerState.ButtonType buttonType = toButtonType(buttonCode);
         if (buttonType != null) {
             state.setButton(buttonType, true);
@@ -55,6 +56,7 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean buttonUp(Controller controller, int buttonCode) {
+        System.out.println("buttonUp " + buttonCode);
         ControllerState.ButtonType buttonType = toButtonType(buttonCode);
         if (buttonType != null) {
             state.setButton(toButtonType(buttonCode), false);
@@ -65,6 +67,8 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean axisMoved(Controller controller, int axisCode, float value) {
+        // System.out.println("axisMoved: " + axisCode + " -> " + value);
+
         float oldValue = 0f;
         if (axisCode == 0) {
             oldValue = state.getX1();
@@ -94,16 +98,19 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
+        System.out.println("Pov: " + povCode);
         return false;
     }
 
     @Override
     public boolean xSliderMoved(Controller controller, int sliderCode, boolean value) {
+        System.out.println("xSlider " + sliderCode);
         return false;
     }
 
     @Override
     public boolean ySliderMoved(Controller controller, int sliderCode, boolean value) {
+        System.out.println("ySlider " + sliderCode);
         return false;
     }
 

@@ -1,5 +1,6 @@
 package org.ah.gcc.rover;
 
+import org.ah.gcc.rover.RoverHandler.RoverMessageListener;
 import org.ah.gcc.rover.controllers.ControllerInterface;
 import org.ah.gcc.rover.controllers.ControllerListener;
 import org.ah.gcc.rover.controllers.ControllerState;
@@ -7,6 +8,8 @@ import org.ah.gcc.rover.controllers.ControllerState.ButtonType;
 import org.ah.gcc.rover.controllers.JoystickState;
 
 public class RoverDriver implements ControllerListener {
+
+    private int divider = 0;
 
     private RoverHandler roverControl;
     private ControllerInterface controllerInterface;
@@ -24,6 +27,9 @@ public class RoverDriver implements ControllerListener {
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
 
+    private float readDistance = 0f;
+    private long timeWhenReadDistance = 0;
+
     public RoverDriver(RoverHandler roverControl, ControllerInterface controllerInterface) {
         this.roverControl = roverControl;
         this.controllerInterface = controllerInterface;
@@ -37,6 +43,15 @@ public class RoverDriver implements ControllerListener {
         hat1 = new JoystickState(0, 0);
 
         controllerInterface.addListener(this);
+        roverControl.subscribe("sensor/distance", new RoverMessageListener() {
+            @Override public void onMessage(String topic, String message) {
+                String[] splitMessage = message.split(",")[0].split(":");
+
+                readDistance = Float.parseFloat(splitMessage[1]);
+                timeWhenReadDistance = System.currentTimeMillis();
+                System.out.println("Got distance " + message);
+            }
+        });
     }
 
     public void setRover(RoverHandler roverHandler) {
@@ -52,6 +67,7 @@ public class RoverDriver implements ControllerListener {
     }
 
     public void processJoysticks() {
+        divider++;
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
                 float distance = rightjoystick.getDistanceFromCentre();
@@ -62,13 +78,18 @@ public class RoverDriver implements ControllerListener {
                 roverSpeed = calcRoverSpeed(distance);
                 roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
+                System.out.println("In orbit");
+                float orbitDistance = 150;
+                if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {
+                    orbitDistance = readDistance + 100;
+                }
 
                 float distance = rightjoystick.getX();
                 rightExpo.setValue(distance);
                 distance = rightExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
-                roverControl.publish("move/orbit",  "150 " + roverSpeed);
+                roverControl.publish("move/orbit",  (int)orbitDistance + " " + roverSpeed);
             }
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             float rightY = rightjoystick.getY();
@@ -94,10 +115,13 @@ public class RoverDriver implements ControllerListener {
             roverSpeed = 0;
             roverControl.publish("move/stop", "0");
         }
+        if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && divider % 10 == 0) {
+            roverControl.publish("sensor/distance/read", "0");
+        }
     }
 
     private int calcRoverSpeed(float speed) {
-        return (int)(speed * 150);
+        return (int)(speed * 30);
     }
 
     private int calcRoverDistance(float distance) {
