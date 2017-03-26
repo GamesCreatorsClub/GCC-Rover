@@ -27,14 +27,10 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public void connected(Controller controller) {
-        // TODO Auto-generated method stub
-
     }
 
     @Override
     public void disconnected(Controller controller) {
-        // TODO Auto-generated method stub
-
     }
 
     @Override

@@ -7,7 +7,6 @@ public class JoystickState {
     public JoystickState(float x, float y) {
         this.x = x;
         this.y = y;
-
     }
 
     public float getDistanceFromCentre() {

@@ -29,7 +29,6 @@ public class ComboController extends AbstractController implements ControllerLis
                 fireEvent(state);
             }
         });
-
     }
 
     public void setRightJotstick(JoyStick joystick) {
@@ -41,7 +40,6 @@ public class ComboController extends AbstractController implements ControllerLis
 
             }
         });
-
     }
 
     public void setHat(JoyStick joystick) {
@@ -51,19 +49,14 @@ public class ComboController extends AbstractController implements ControllerLis
                 state.setHat1(stickstate);
             }
         });
-
     }
 
     @Override
     public void connected(Controller controller) {
-        // TODO Auto-generated method stub
-
     }
 
     @Override
     public void disconnected(Controller controller) {
-        // TODO Auto-generated method stub
-
     }
 
     @Override
@@ -99,30 +92,23 @@ public class ComboController extends AbstractController implements ControllerLis
         return false;
     }
 
-
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean xSliderMoved(Controller controller, int sliderCode, boolean value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean ySliderMoved(Controller controller, int sliderCode, boolean value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean accelerometerMoved(Controller controller, int accelerometerCode, Vector3 value) {
-        // TODO Auto-generated method stub
         return false;
     }
-
-
 }
