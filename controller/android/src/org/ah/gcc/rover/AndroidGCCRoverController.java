@@ -3,10 +3,13 @@ package org.ah.gcc.rover;
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.ah.gcc.rover.controllers.ControllerState;
+import org.ah.gcc.rover.controllers.JoystickState;
 import org.ah.gcc.rover.controllers.ScreenController;
 import org.ah.gcc.rover.ui.Button;
 import org.ah.gcc.rover.ui.ExpoGraph;
 import org.ah.gcc.rover.ui.JoyStick;
+import org.ah.gcc.rover.ui.LogoDrawer;
 import org.ah.gcc.rover.ui.Orientation;
 import org.ah.gcc.rover.ui.RoundButton;
 import org.ah.gcc.rover.ui.Switch;
@@ -27,8 +30,7 @@ import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
-public class RoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
-
+public class AndroidGCCRoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
     private RoverDetails[] ROVERS = new RoverDetails[] {
             new RoverDetails("Rover 2", "172.24.1.184", 1883),
             new RoverDetails("Rover 3", "172.24.1.185", 1883),
@@ -86,17 +88,17 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     private long alpha = 0;
 
-    private Texture gccimg;
-
-    private Texture creativesphereimg;
-
-    private Texture bobimg;
-
     private ScreenController screenController;
 
     private Map<ControllerButton, Boolean> controllerButtons = new EnumMap<ControllerButton, Boolean>(ControllerButton.class);
 
-    public RoverController(PlatformSpecific platformSpecific) {
+    private LogoDrawer logoDrawer;
+
+    private RoverHandler roverHandler;
+
+    private RoverDriver roverDriver;
+
+    public AndroidGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
         this.roverControl = platformSpecific.getRoverControl();
     }
@@ -105,6 +107,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     public void create() {
         // platformSpecific.init();
 
+
         font = new BitmapFont(Gdx.files.internal("fonts/din-alternate-bold-64.fnt"), true);
         glyphLayout = new GlyphLayout();
 
@@ -112,9 +115,6 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         batch = new SpriteBatch();
         img = new Texture("badlogic.jpg");
 
-        gccimg = new Texture("GCCLogo.png");
-        creativesphereimg = new Texture("creative-sphere.png");
-        bobimg = new Texture("bobclub.png");
 
         camera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
@@ -160,49 +160,29 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         screenController = new ScreenController();
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
+
+        screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
+        roverDriver = new RoverDriver(roverControl, screenController);
+
+        logoDrawer = new LogoDrawer(batch, camera);
+
     }
 
     @Override
     public void render() {
 
+        roverDriver.processJoysticks();
 
         alpha++;
         if (logos) {
-            camera.setToOrtho(false);
-
-            Gdx.gl.glClearColor(1, 1, 1, 1);
-            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-            batch.setProjectionMatrix(camera.combined);
-            batch.begin();
-
-            if (alpha < 30) {
-                float scale = calculateScale(gccimg);
-                int y = (int) ((Gdx.graphics.getHeight() - (gccimg.getHeight() * scale)) / 2);
-                int x = (int) ((Gdx.graphics.getWidth() - (gccimg.getWidth() * scale)) / 2);
-                batch.draw(gccimg, x, y, gccimg.getWidth() * scale, gccimg.getHeight() * scale);
-            } else if (alpha < 60) {
-                float scale = Gdx.graphics.getHeight() / creativesphereimg.getHeight();
-                int y = (int) ((Gdx.graphics.getHeight() - (creativesphereimg.getHeight() * scale)) / 2);
-                int x = (int) ((Gdx.graphics.getWidth() - (creativesphereimg.getWidth() * scale)) / 2);
-                batch.draw(creativesphereimg, x, y, creativesphereimg.getWidth() * scale, creativesphereimg.getHeight() * scale);
-            } else if (alpha < 90) {
-                float scale = Gdx.graphics.getHeight() / bobimg.getHeight();
-                int y = (int) ((Gdx.graphics.getHeight() - (bobimg.getHeight() * scale)) / 2);
-                int x = (int) ((Gdx.graphics.getWidth() - (bobimg.getWidth() * scale)) / 2);
-                batch.draw(bobimg, x, y, bobimg.getWidth() * scale, bobimg.getHeight() * scale);
-            } else if (alpha > 120) {
-                logos = false;
-            }
-
-            batch.end();
+            logoDrawer.draw();
+            logos = logoDrawer.done();
         } else {
             testConnection();
 
             messageCounter--;
             if (messageCounter < 0) {
                 messageCounter = 5;
-                processJoysticks();
             }
 
             camera.setToOrtho(true);
@@ -255,67 +235,9 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         }
     }
 
-    public void processJoysticks() {
-        if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            if (switchLB.isOn()) {
-                float distance = rightjoystick.getDistanceFromCentre();
-                rightExpo.setValue(distance);
 
-                rightExpo.setValue(distance);
-                distance = leftExpo.calculate(distance);
 
-                roverSpeed = calcRoverSpeed(distance);
-                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
-            } else {
-                roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
-                roverControl.publish("move/orbit", roverSpeed + "");
-            }
-        } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            System.out.println("Left distance " + leftjoystick.getDistanceFromCentre() + ", right distance " + rightjoystick.getDistanceFromCentre());
-            float rightY = rightjoystick.getYValue();
-            float leftX = leftjoystick.getXValue();
 
-            rightExpo.setValue(rightY);
-            rightY = rightExpo.calculate(rightY);
-
-            leftExpo.setValue(leftX);
-            leftX = leftExpo.calculate(leftX);
-
-            roverSpeed = -calcRoverSpeed(rightY);
-            roverTurningDistance = calcRoverDistance(leftX);
-            roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
-        } else if (leftjoystick.getDistanceFromCentre() > 0.1f) {
-            float leftX = leftjoystick.getXValue();
-            leftExpo.setValue(leftX);
-            leftX = leftExpo.calculate(leftX);
-            roverSpeed = calcRoverSpeed(leftX) / 4;
-            roverControl.publish("move/rotate", Integer.toString(roverSpeed));
-        } else {
-            roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
-            roverSpeed = 0;
-            roverControl.publish("move/stop", "0");
-        }
-    }
-
-    private int calcRoverSpeed(float speed) {
-        return (int)(speed * 150);
-    }
-
-    private int calcRoverDistance(float distance) {
-        if (distance >= 0) {
-            distance = Math.abs(distance);
-            distance = 1.0f - distance;
-            distance = distance + 0.2f;
-            distance = distance * 500f;
-        } else {
-            distance = Math.abs(distance);
-            distance = 1.0f - distance;
-            distance = distance + 0.2f;
-            distance = - distance * 500f;
-        }
-
-        return (int)distance;
-    }
 
     private void connectToRover() {
         // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
@@ -335,17 +257,6 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
             }
         }
     }
-
-    private float calculateScale(Texture texture) {
-        float scaleX = Gdx.graphics.getWidth() / texture.getWidth();
-        float scaleY = Gdx.graphics.getHeight() / texture.getHeight();
-        if (scaleX > scaleY) {
-            return scaleY;
-        }
-        return scaleX;
-    }
-
-
 
     @Override
     public void dispose() {
@@ -379,6 +290,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
 
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
 
         mouseDown = true;
         return false;
@@ -391,7 +304,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
         mouseDown = false;
-
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         return false;
     }
 
@@ -401,7 +315,8 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         rightjoystick.dragged(screenX, screenY, pointer);
         button1.touchDragged(screenX, screenY, pointer);
         roverSelectButton.touchDragged(screenX, screenY, pointer);
-
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         return false;
     }
 
