@@ -6,6 +6,8 @@ import io
 import numpy as np
 import traceback
 import pyroslib
+import PIL.ImageOps
+import PIL.ImageMath
 from PIL import Image, ImageEnhance
 from picamera import PiCamera
 from picamera.array import PiRGBArray
@@ -26,7 +28,7 @@ whiteBalance = Image.new("L", (80, 64))
 camera = PiCamera(resolution=(80, 64), framerate=10)
 camera.resolution = (80, 64)
 # camera.shutter_speed = 3000
-# camera.iso = 800
+camera.iso = 800
 camera.hflip = False
 camera.vflip = False
 
@@ -67,10 +69,9 @@ def capture():
     if continuousMode:
         next(continuousIterator)
         logt("        capture")
-        print('Captured %dx%d image' % (
-            continuousOutput.array.shape[1], continuousOutput.array.shape[0]))
+        # print('Captured %dx%d image' % (
+        #     continuousOutput.array.shape[1], continuousOutput.array.shape[0]))
         rawRGB = Image.frombuffer('RGB', (96, 64), continuousOutput.array,'raw', 'RGB', 0, 1).crop((0, 0, 80, 64))
-        print(str(rawRGB))
         logt("        Image.open(stream)")
         continuousOutput.truncate(0)
 
@@ -84,7 +85,6 @@ def capture():
 
     rawL = rawRGB.convert("L")
     logt("        convert(L)")
-    print(str(rawL))
     return rawL
 
 
@@ -111,6 +111,19 @@ def limit(pixel, minPix, maxPix):
 
 
 def applyWhiteBalance(img, wb):
+    # histogram = img.histogram()
+    #
+    # minP = minLevel(histogram, 20)
+    # maxP = maxLevel(histogram, 20)
+    iwb = PIL.ImageOps.invert(wb)
+    imgAC = PIL.ImageOps.autocontrast(img)
+
+    res = PIL.ImageMath.eval("a+b", a=imgAC, b=iwb)
+
+    return res.convert("L")
+
+
+def applyWhiteBalance2(img, wb):
     histogram = img.histogram()
 
     minP = minLevel(histogram, 20)
@@ -209,7 +222,7 @@ def handleContinuousMode(topic, message, groups):
     if message.startswith("stop"):
         continuousMode = False
         doReadSensor = False
-        # camera.stop_preview()
+        camera.stop_preview()
         print("  Stopped continuous mode...")
 
     else:
@@ -217,7 +230,7 @@ def handleContinuousMode(topic, message, groups):
             continuousMode = True
             doReadSensor = True
             continuousOutput.truncate(0)
-            continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=False)
+            continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=True)
             print("  Started continuous mode...")
 
         lastTimeReceivedRequestForContMode = time.time()
