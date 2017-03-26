@@ -2,6 +2,7 @@ package org.ah.gcc.rover.desktop;
 
 import org.ah.gcc.rover.controllers.AbstractController;
 import org.ah.gcc.rover.controllers.ControllerState;
+import org.ah.gcc.rover.controllers.ControllerState.ButtonType;
 import org.ah.gcc.rover.controllers.ControllerStateImplementation;
 
 import com.badlogic.gdx.controllers.Controller;
@@ -44,16 +45,22 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean buttonDown(Controller controller, int buttonCode) {
-        state.setButton(buttonCode, true);
-        fireEvent(state);
-        return false;
+        ControllerState.ButtonType buttonType = toButtonType(buttonCode);
+        if (buttonType != null) {
+            state.setButton(buttonType, true);
+            fireEvent(state);
+        }
+        return true;
     }
 
     @Override
     public boolean buttonUp(Controller controller, int buttonCode) {
-        state.setButton(buttonCode, false);
-        fireEvent(state);
-        return false;
+        ControllerState.ButtonType buttonType = toButtonType(buttonCode);
+        if (buttonType != null) {
+            state.setButton(toButtonType(buttonCode), false);
+            fireEvent(state);
+        }
+        return true;
     }
 
     @Override
@@ -63,20 +70,20 @@ public class RealController extends AbstractController implements ControllerList
             oldValue = state.getX1();
             state.setX1(value);
         } else if (axisCode == 1) {
-            oldValue = state.getX1();
+            oldValue = state.getY1();
             state.setY1(value);
-        } else if (axisCode == 2) {
+        } else if (axisCode == 3) {
             oldValue = state.getX2();
             state.setX2(value);
-        } else if (axisCode == 3) {
+        } else if (axisCode == 4) {
             oldValue = state.getY2();
             state.setY2(value);
         } else if (axisCode == 4) {
-            oldValue = state.getX3();
-            state.setX3(value);
-        } else if (axisCode == 5) {
             oldValue = state.getY3();
             state.setY3(value);
+        } else if (axisCode == 5) {
+            oldValue = state.getX3();
+            state.setX3(value);
         }
 
         if (Math.abs(oldValue - value) >= 0.01f) {
@@ -87,26 +94,47 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean xSliderMoved(Controller controller, int sliderCode, boolean value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean ySliderMoved(Controller controller, int sliderCode, boolean value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
     @Override
     public boolean accelerometerMoved(Controller controller, int accelerometerCode, Vector3 value) {
-        // TODO Auto-generated method stub
         return false;
     }
 
+    private ControllerState.ButtonType toButtonType(int buttonCode) {
+        if (buttonCode == 0) {
+            return ButtonType.SLING_SHOT_BUTTON;
+        } else if (buttonCode == 1) {
+            return ButtonType.READ_DISTANCE_BUTTON;
+        } else if (buttonCode == 2) {
+        } else if (buttonCode == 3) {
+        } else if (buttonCode == 4) {
+            return ButtonType.ORBIT_BUTTON;
+        } else if (buttonCode == 5) {
+            return ButtonType.LOCK_AXIS_BUTTON;
+        } else if (buttonCode == 6) {
+            return ButtonType.BOOST_BUTTON;
+        } else if (buttonCode == 7) {
+            return ButtonType.KICK_BUTTON;
+        } else if (buttonCode == 8) {
+        } else if (buttonCode == 9) {
+            return ButtonType.SELECT_BUTTON;
+        } else if (buttonCode == 10) {
+        } else if (buttonCode == 11) {
+        } else if (buttonCode == 12) {
+        } else if (buttonCode == 13) {
+        }
+        return null;
+    }
 }

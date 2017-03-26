@@ -3,8 +3,16 @@ package org.ah.gcc.rover;
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.JoystickState;
 import org.ah.gcc.rover.controllers.ScreenController;
+import org.ah.gcc.rover.ui.Button;
+import org.ah.gcc.rover.ui.ExpoGraph;
+import org.ah.gcc.rover.ui.JoyStick;
+import org.ah.gcc.rover.ui.LogoDrawer;
+import org.ah.gcc.rover.ui.Orientation;
+import org.ah.gcc.rover.ui.RoundButton;
+import org.ah.gcc.rover.ui.Switch;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -153,9 +161,7 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
 
-        screenController.addListener(this);
-
-        screenController.setButton(switchLB, 2);
+        screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
         roverDriver = new RoverDriver(roverControl, screenController);
 
         logoDrawer = new LogoDrawer(batch, camera);

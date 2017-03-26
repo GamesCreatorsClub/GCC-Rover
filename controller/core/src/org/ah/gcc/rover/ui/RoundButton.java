@@ -1,29 +1,28 @@
-package org.ah.gcc.rover;
+package org.ah.gcc.rover.ui;
 
+import static org.ah.gcc.rover.MathUtil.calcDistance;
+
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
-public class Button {
+public class RoundButton {
     private int x;
     private int y;
-    private int width;
-    private int height;
-    private ButtonCallback callback;
 
     private boolean pressed = false;
+    private float radius;
     private int pointer;
 
-    public Button(int x, int y, int width, int height, ButtonCallback callback) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.callback = callback;
+    public RoundButton(int x, int y, int radius) {
+
+        this.x = x - radius / 2;
+        this.y = Gdx.graphics.getHeight() - y - radius / 2;
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
-        shapeRenderer.set(ShapeType.Line);
+        shapeRenderer.set(ShapeType.Filled);
 
         if (pressed) {
             shapeRenderer.setColor(Color.DARK_GRAY);
@@ -31,31 +30,30 @@ public class Button {
             shapeRenderer.setColor(Color.GRAY);
         }
 
-        shapeRenderer.rect(x, y, width, height);
+        shapeRenderer.circle(x, y, radius);
 
     }
 
     public void touchDown(int screenX, int screenY, int pointer) {
         this.pointer = pointer;
-        if (screenX >= x && screenX <= x + width && screenY >= y && screenY < y + height) {
-            boolean previousState = pressed;
+        if (calcDistance(screenX, screenY, x, y) < radius) {
             pressed = true;
-            if (previousState != pressed) {
-                callback.invoke(pressed);
-            }
         }
     }
 
     public void touchDragged(int screenX, int screenY, int pointer) {
+        if (pointer == this.pointer && calcDistance(screenX, screenY, x, y) > radius) {
+            pressed = false;
+        }
+
+        if (pointer == this.pointer && calcDistance(screenX, screenY, x, y) < radius) {
+            pressed = true;
+        }
     }
 
     public void touchUp(int screenX, int screenY, int pointer) {
         if (pointer == this.pointer) {
-            boolean previousState = pressed;
             pressed = false;
-            if (previousState != pressed) {
-                callback.invoke(pressed);
-            }
         }
     }
 
@@ -65,9 +63,5 @@ public class Button {
 
     public void setState(boolean state) {
         this.pressed = state;
-    }
-    
-    public static interface ButtonCallback {
-        void invoke(boolean state);
     }
 }

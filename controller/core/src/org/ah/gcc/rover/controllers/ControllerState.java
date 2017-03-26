@@ -2,6 +2,16 @@ package org.ah.gcc.rover.controllers;
 
 public interface ControllerState {
 
+    enum ButtonType {
+        ORBIT_BUTTON,
+        KICK_BUTTON,
+        BOOST_BUTTON,
+        LOCK_AXIS_BUTTON,
+        READ_DISTANCE_BUTTON,
+        SLING_SHOT_BUTTON,
+        SELECT_BUTTON
+    };
+
     JoystickState getLeft();
     JoystickState getRight();
     JoystickState getHat();
@@ -15,6 +25,5 @@ public interface ControllerState {
     float getX3();
     float getY3();
 
-    boolean getButton(int id);
-
+    boolean getButton(ButtonType buttonType);
 }

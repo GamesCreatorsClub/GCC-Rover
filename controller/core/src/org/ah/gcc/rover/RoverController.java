@@ -4,6 +4,12 @@ import java.util.EnumMap;
 import java.util.Map;
 
 import org.ah.gcc.rover.controllers.ScreenController;
+import org.ah.gcc.rover.ui.Button;
+import org.ah.gcc.rover.ui.ExpoGraph;
+import org.ah.gcc.rover.ui.JoyStick;
+import org.ah.gcc.rover.ui.Orientation;
+import org.ah.gcc.rover.ui.RoundButton;
+import org.ah.gcc.rover.ui.Switch;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -265,6 +271,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
                 roverControl.publish("move/orbit", roverSpeed + "");
             }
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
+            System.out.println("Left distance " + leftjoystick.getDistanceFromCentre() + ", right distance " + rightjoystick.getDistanceFromCentre());
             float rightY = rightjoystick.getYValue();
             float leftX = leftjoystick.getXValue();
 

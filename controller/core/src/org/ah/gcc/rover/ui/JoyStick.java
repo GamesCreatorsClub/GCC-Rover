@@ -1,7 +1,8 @@
-package org.ah.gcc.rover;
+package org.ah.gcc.rover.ui;
 
 import static org.ah.gcc.rover.MathUtil.calcDistance;
 
+import org.ah.gcc.rover.JoystickComponentListener;
 import org.ah.gcc.rover.controllers.JoystickState;
 
 import com.badlogic.gdx.Gdx;

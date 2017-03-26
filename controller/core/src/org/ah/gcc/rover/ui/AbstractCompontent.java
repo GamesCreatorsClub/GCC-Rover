@@ -1,4 +1,4 @@
-package org.ah.gcc.rover;
+package org.ah.gcc.rover.ui;
 
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 

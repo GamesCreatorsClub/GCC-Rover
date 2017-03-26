@@ -3,19 +3,20 @@ package org.ah.gcc.rover.desktop;
 import java.util.EnumMap;
 import java.util.Map;
 
-import org.ah.gcc.rover.Button;
 import org.ah.gcc.rover.ControllerButton;
-import org.ah.gcc.rover.ExpoGraph;
-import org.ah.gcc.rover.JoyStick;
-import org.ah.gcc.rover.LogoDrawer;
-import org.ah.gcc.rover.Orientation;
 import org.ah.gcc.rover.PlatformSpecific;
-import org.ah.gcc.rover.RoundButton;
 import org.ah.gcc.rover.RoverDetails;
 import org.ah.gcc.rover.RoverDriver;
 import org.ah.gcc.rover.RoverHandler;
-import org.ah.gcc.rover.Switch;
+import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.JoystickState;
+import org.ah.gcc.rover.ui.Button;
+import org.ah.gcc.rover.ui.ExpoGraph;
+import org.ah.gcc.rover.ui.JoyStick;
+import org.ah.gcc.rover.ui.LogoDrawer;
+import org.ah.gcc.rover.ui.Orientation;
+import org.ah.gcc.rover.ui.RoundButton;
+import org.ah.gcc.rover.ui.Switch;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -161,7 +162,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         comboController.getScreenController().setLeftJotstick(leftjoystick);
         comboController.getScreenController().setRightJotstick(rightjoystick);
 
-        comboController.getScreenController().setButton(switchLB, 2);
+        comboController.getScreenController().setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
         roverDriver = new RoverDriver(roverHandler, comboController);
 
         logoDrawer = new LogoDrawer(batch, camera);

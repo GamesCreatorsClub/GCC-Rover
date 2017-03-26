@@ -21,7 +21,7 @@ public class ComboController extends AbstractController {
             public void controllerUpdate(ControllerState state) {
                 if (mousedown) {
                     ComboController.this.state = state;
-                    fireEvent(state);
+//                    fireEvent(state);
                 }
             }
         });
@@ -30,10 +30,8 @@ public class ComboController extends AbstractController {
             @Override
             public void controllerUpdate(ControllerState state) {
                 if (!mousedown) {
-                    if (state.getX1() != 0 || state.getY1() != 0 || state.getX2() != 0 || state.getY2() != 0) {
-                        ComboController.this.state = state;
-                        fireEvent(state);
-                    }
+                    ComboController.this.state = state;
+                    fireEvent(state);
                 }
             }
         });

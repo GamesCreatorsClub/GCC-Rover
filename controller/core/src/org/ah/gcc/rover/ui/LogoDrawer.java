@@ -1,4 +1,4 @@
-package org.ah.gcc.rover;
+package org.ah.gcc.rover.ui;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;

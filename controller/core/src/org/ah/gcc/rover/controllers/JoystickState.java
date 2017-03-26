@@ -17,8 +17,8 @@ public class JoystickState {
         return calcAngleAtPointFromCentre(x, y);
     }
 
-    private double calcAngleAtPointFromCentre(float x2, float y2) {
-        return Math.atan2((x2 - 0), -(y2 - 0));
+    private double calcAngleAtPointFromCentre(float x, float y) {
+        return Math.atan2(x, -y) * 180 / Math.PI;
     }
 
 

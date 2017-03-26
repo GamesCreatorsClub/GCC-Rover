@@ -6,7 +6,13 @@ public interface RoverHandler {
 
     void publish(String topic, String msg);
 
+    void subscribe(String topic, RoverMessageListener listener);
+
     boolean isConnected();
 
     void disconnect();
+
+    interface RoverMessageListener {
+        void onMessage(String topic, String message);
+    }
 }
