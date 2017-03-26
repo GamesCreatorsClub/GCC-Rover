@@ -24,6 +24,7 @@ public class RoverDriver implements ControllerListener {
 
     private int roverTurningDistance;
 
+    private int roverSpeedMultiplier = 150;
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
 
@@ -67,7 +68,16 @@ public class RoverDriver implements ControllerListener {
     }
 
     public void processJoysticks() {
+<<<<<<< HEAD
         divider++;
+=======
+        if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
+            roverControl.publish("servo/9", "90");
+        } else {
+            roverControl.publish("servo/9", "145");
+        }
+
+>>>>>>> Addes speed and boost
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
                 float distance = rightjoystick.getDistanceFromCentre();
@@ -118,10 +128,26 @@ public class RoverDriver implements ControllerListener {
         if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && divider % 10 == 0) {
             roverControl.publish("sensor/distance/read", "0");
         }
+
+        if (hat1.getX() > 0 && lasthat1.getX() <= 0) {
+            roverSpeedMultiplier += 10;
+        }
+
+        if (hat1.getX() < 0 && lasthat1.getX() >= 0) {
+            roverSpeedMultiplier -= 10;
+        }
+
+        if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {
+            roverSpeedMultiplier = 150;
+        } else {
+            roverSpeedMultiplier = 30;
+        }
+
+        System.out.println("Speed: " + roverSpeedMultiplier);
     }
 
     private int calcRoverSpeed(float speed) {
-        return (int)(speed * 30);
+        return (int) (speed * roverSpeedMultiplier);
     }
 
     private int calcRoverDistance(float distance) {
@@ -155,5 +181,13 @@ public class RoverDriver implements ControllerListener {
         leftjoystick.set(state.getLeft());
         rightjoystick.set(state.getRight());
         hat1.set(state.getHat());
+    }
+
+    public int getRoverSpeedMultiplier() {
+        return roverSpeedMultiplier;
+    }
+
+    public void setRoverSpeedMultiplier(int roverSpeedMultiplier) {
+        this.roverSpeedMultiplier = roverSpeedMultiplier;
     }
 }
