@@ -77,7 +77,6 @@ def moveServo(angle):
     f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
     f.close()
 
-
     log(DEBUG_LEVEL_ALL, "Servo", "Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
     # wait for servo to reach the destination
