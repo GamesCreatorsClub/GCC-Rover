@@ -11,7 +11,7 @@ import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 
 import android.content.Context;
 
-public class AndroidRoverControl implements RoverControl {
+public class AndroidRoverControl implements RoverHandler {
 
     private Context applicationContext;
     private MqttAndroidClient client;

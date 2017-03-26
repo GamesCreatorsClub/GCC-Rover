@@ -2,6 +2,8 @@ package org.ah.gcc.rover.controllers;
 
 import org.ah.gcc.rover.JoyStick;
 import org.ah.gcc.rover.JoystickComponentListener;
+import org.ah.gcc.rover.Switch;
+import org.ah.gcc.rover.SwitchComponentListener;
 
 public class ScreenController extends AbstractController {
 
@@ -9,6 +11,12 @@ public class ScreenController extends AbstractController {
 
     public ScreenController() {
         state = new ControllerStateImplementation();
+    }
+
+    public ScreenController(String name) {
+        super(name);
+        state = new ControllerStateImplementation();
+
     }
 
     public void stickMoved(int number, JoystickState position) {
@@ -50,6 +58,18 @@ public class ScreenController extends AbstractController {
         });
     }
 
+    public void setButton(Switch component, final int buttonID) {
+        component.setListener(new SwitchComponentListener() {
+            public int id = buttonID;
+            @Override
+            public void changed(boolean on) {
+                state.setButton(id, on);
+                fireEvent(state);
+
+            }
+        });
+    }
+
     public void setHat(JoyStick joystick) {
         joystick.setListener(new JoystickComponentListener() {
             @Override
@@ -61,7 +81,7 @@ public class ScreenController extends AbstractController {
     }
 //
 //    public void setRightJotstick(JoyStick joystick) {
-//        joystick.setListener(new JoystickCompon               entListener() {
+//        joystick.setListener(new JoystickComponentListener() {
 //            public void changed(float x, float y) {
 //                state.setX2(x);
 //                state.setY2(y);

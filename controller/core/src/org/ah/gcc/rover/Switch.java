@@ -11,6 +11,7 @@ public class Switch {
     private Orientation orientation;
 
     private boolean on = false;
+    private SwitchComponentListener listener;
 
     public Switch(int x, int y, int width, Orientation orientation) {
         this.width = width * 2;
@@ -75,6 +76,10 @@ public class Switch {
                    on = !on;
                }
            }
+
+           if (listener != null) {
+               listener.changed(on);
+           }
     }
 
 
@@ -84,5 +89,9 @@ public class Switch {
 
     public void setState(boolean state) {
         this.on = state;
+    }
+
+    public void setListener(SwitchComponentListener listener) {
+        this.listener = listener;
     }
 }

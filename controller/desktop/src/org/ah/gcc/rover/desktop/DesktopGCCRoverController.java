@@ -1,10 +1,21 @@
-package org.ah.gcc.rover;
+package org.ah.gcc.rover.desktop;
 
 import java.util.EnumMap;
 import java.util.Map;
 
+import org.ah.gcc.rover.Button;
+import org.ah.gcc.rover.ControllerButton;
+import org.ah.gcc.rover.ExpoGraph;
+import org.ah.gcc.rover.JoyStick;
+import org.ah.gcc.rover.LogoDrawer;
+import org.ah.gcc.rover.Orientation;
+import org.ah.gcc.rover.PlatformSpecific;
+import org.ah.gcc.rover.RoundButton;
+import org.ah.gcc.rover.RoverDetails;
+import org.ah.gcc.rover.RoverDriver;
+import org.ah.gcc.rover.RoverHandler;
+import org.ah.gcc.rover.Switch;
 import org.ah.gcc.rover.controllers.JoystickState;
-import org.ah.gcc.rover.controllers.ScreenController;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -22,7 +33,7 @@ import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
-public class AndroidGCCRoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
+public class DesktopGCCRoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
     private RoverDetails[] ROVERS = new RoverDetails[] {
             new RoverDetails("Rover 2", "172.24.1.184", 1883),
             new RoverDetails("Rover 3", "172.24.1.185", 1883),
@@ -33,7 +44,7 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
     };
 
     private PlatformSpecific platformSpecific;
-    private RoverHandler roverControl;
+    private RoverHandler roverHandler;
 
     private SpriteBatch batch;
     private Texture img;
@@ -80,25 +91,22 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     private long alpha = 0;
 
-    private ScreenController screenController;
+    private ComboController comboController;
 
     private Map<ControllerButton, Boolean> controllerButtons = new EnumMap<ControllerButton, Boolean>(ControllerButton.class);
 
     private LogoDrawer logoDrawer;
 
-    private RoverHandler roverHandler;
-
     private RoverDriver roverDriver;
 
-    public AndroidGCCRoverController(PlatformSpecific platformSpecific) {
+    public DesktopGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
-        this.roverControl = platformSpecific.getRoverControl();
+        this.roverHandler = platformSpecific.getRoverControl();
     }
 
     @Override
     public void create() {
         // platformSpecific.init();
-
 
         font = new BitmapFont(Gdx.files.internal("fonts/din-alternate-bold-64.fnt"), true);
         glyphLayout = new GlyphLayout();
@@ -149,14 +157,12 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
 
-        screenController = new ScreenController();
-        screenController.setLeftJotstick(leftjoystick);
-        screenController.setRightJotstick(rightjoystick);
+        comboController = new ComboController();
+        comboController.getScreenController().setLeftJotstick(leftjoystick);
+        comboController.getScreenController().setRightJotstick(rightjoystick);
 
-        screenController.addListener(this);
-
-        screenController.setButton(switchLB, 2);
-        roverDriver = new RoverDriver(roverControl, screenController);
+        comboController.getScreenController().setButton(switchLB, 2);
+        roverDriver = new RoverDriver(roverHandler, comboController);
 
         logoDrawer = new LogoDrawer(batch, camera);
 
@@ -164,9 +170,6 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public void render() {
-
-        roverDriver.processJoysticks();
-
         alpha++;
         if (logos) {
             logoDrawer.draw();
@@ -215,7 +218,7 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
             shapeRenderer.end();
             batch.begin();
             glyphLayout.setText(font, connectedStr);
-            if (roverControl.isConnected()) {
+            if (roverHandler.isConnected()) {
                 font.setColor(Color.GREEN);
             } else {
                 font.setColor(Color.RED);
@@ -226,24 +229,23 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
             font.draw(batch, String.format("D: " + roverTurningDistance), 0, 0);
             batch.end();
 
+            if (alpha % 10 == 0) {
+                roverDriver.processJoysticks();
+            }
         }
     }
 
-
-
-
-
     private void connectToRover() {
         // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
-        roverControl.connect(ROVERS[selectedRover].getFullAddress());
+        roverHandler.connect(ROVERS[selectedRover].getFullAddress());
     }
 
     private void testConnection() {
         if (newSelectedRover != selectedRover) {
             selectedRover = newSelectedRover;
-            roverControl.disconnect();
+            roverHandler.disconnect();
         }
-        if (!roverControl.isConnected()) {
+        if (!roverHandler.isConnected()) {
             retryCounter -= 1;
             if (retryCounter < 0) {
                 retryCounter = 120;
@@ -276,6 +278,8 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+        comboController.setTouchState(true);
+
         leftjoystick.touchDown(screenX, screenY, pointer);
         rightjoystick.touchDown(screenX, screenY, pointer);
         switchLB.touchDown(screenX, screenY, pointer);
@@ -284,8 +288,8 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
 
-        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
 
         mouseDown = true;
         return false;
@@ -293,13 +297,14 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+        comboController.setTouchState(false);
         leftjoystick.touchUp(screenX, screenY, pointer);
         rightjoystick.touchUp(screenX, screenY, pointer);
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
         mouseDown = false;
-        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         return false;
     }
 
@@ -309,8 +314,8 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
         rightjoystick.dragged(screenX, screenY, pointer);
         button1.touchDragged(screenX, screenY, pointer);
         roverSelectButton.touchDragged(screenX, screenY, pointer);
-        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         return false;
     }
 

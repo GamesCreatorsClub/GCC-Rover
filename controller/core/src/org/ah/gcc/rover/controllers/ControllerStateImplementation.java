@@ -23,6 +23,20 @@ public class ControllerStateImplementation implements ControllerState {
         }
     }
 
+
+    @Override
+    public JoystickState getLeft() {
+        return joy1;
+    }
+    @Override
+    public JoystickState getRight() {
+        return joy2;
+    }
+    @Override
+    public JoystickState getHat() {
+        return hat1;
+    }
+
     @Override
     public float getX1() {
         return joy1.getX();
@@ -117,6 +131,10 @@ public class ControllerStateImplementation implements ControllerState {
 
     public void setHat1(JoystickState hat1) {
         this.hat1 = hat1;
+    }
+
+    public String toString() {
+        return "Left: " + getLeft().toString() + " Right: " + getRight().toString() + "  Buttons: " + buttons.toString();
     }
 
 }

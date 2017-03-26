@@ -7,9 +7,18 @@ public abstract class AbstractController implements ControllerInterface {
 
     public List<ControllerListener> listeners;
 
+    private String name;
+
     public AbstractController() {
         listeners = new ArrayList<ControllerListener>();
+        name = "controller";
     }
+
+    public AbstractController(String name) {
+        listeners = new ArrayList<ControllerListener>();
+        this.name = name;
+    }
+
 
     public void addListener(ControllerListener listener) {
         listeners.add(listener);
@@ -25,5 +34,11 @@ public abstract class AbstractController implements ControllerInterface {
         }
     }
 
+    public String getName() {
+        return name;
+    }
 
+    public void setName(String name) {
+        this.name = name;
+    }
 }

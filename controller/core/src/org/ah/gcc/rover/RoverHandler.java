@@ -1,10 +1,12 @@
 package org.ah.gcc.rover;
 
-public class RoverHandler {
-    public RoverHandler() {
-    }
+public interface RoverHandler {
 
-    public void publish(String topic, String msg) {
+    void connect(String url);
 
-    }
+    void publish(String topic, String msg);
+
+    boolean isConnected();
+
+    void disconnect();
 }

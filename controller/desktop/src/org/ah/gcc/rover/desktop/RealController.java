@@ -6,6 +6,7 @@ import org.ah.gcc.rover.controllers.ControllerStateImplementation;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerListener;
+import com.badlogic.gdx.controllers.Controllers;
 import com.badlogic.gdx.controllers.PovDirection;
 import com.badlogic.gdx.math.Vector3;
 
@@ -15,6 +16,13 @@ public class RealController extends AbstractController implements ControllerList
 
     public RealController() {
         state = new ControllerStateImplementation();
+        Controllers.addListener(this);
+    }
+
+    public RealController(String name) {
+        super(name);
+        state = new ControllerStateImplementation();
+        Controllers.addListener(this);
     }
 
     public ControllerState getState() {
@@ -27,6 +35,7 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public void connected(Controller controller) {
+        System.out.println("connected to a controller");
     }
 
     @Override
@@ -49,20 +58,30 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean axisMoved(Controller controller, int axisCode, float value) {
+        float oldValue = 0f;
         if (axisCode == 0) {
+            oldValue = state.getX1();
             state.setX1(value);
         } else if (axisCode == 1) {
+            oldValue = state.getX1();
             state.setY1(value);
         } else if (axisCode == 2) {
+            oldValue = state.getX2();
             state.setX2(value);
         } else if (axisCode == 3) {
+            oldValue = state.getY2();
             state.setY2(value);
         } else if (axisCode == 4) {
+            oldValue = state.getX3();
             state.setX3(value);
         } else if (axisCode == 5) {
+            oldValue = state.getY3();
             state.setY3(value);
         }
-        fireEvent(state);
+
+        if (Math.abs(oldValue - value) >= 0.01f) {
+            fireEvent(state);
+        }
         return false;
     }
 

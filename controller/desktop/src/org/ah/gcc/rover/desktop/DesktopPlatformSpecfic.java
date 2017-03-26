@@ -1,7 +1,7 @@
 package org.ah.gcc.rover.desktop;
 
 import org.ah.gcc.rover.PlatformSpecific;
-import org.ah.gcc.rover.RoverControl;
+import org.ah.gcc.rover.RoverHandler;
 
 public class DesktopPlatformSpecfic implements PlatformSpecific {
 
@@ -13,7 +13,7 @@ public class DesktopPlatformSpecfic implements PlatformSpecific {
     }
 
     @Override
-    public RoverControl getRoverControl() {
+    public RoverHandler getRoverControl() {
         return roverControl;
     }
 }

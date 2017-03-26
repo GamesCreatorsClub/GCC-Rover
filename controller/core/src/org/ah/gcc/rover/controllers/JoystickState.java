@@ -37,4 +37,15 @@ public class JoystickState {
     public void setY(float y) {
         this.y = y;
     }
+
+    public JoystickState set(JoystickState state) {
+        setX(state.x);
+        setY(state.y);
+        return state;
+    }
+
+    @Override
+    public String toString() {
+        return "(" + x + ", " + y + ")";
+    }
 }

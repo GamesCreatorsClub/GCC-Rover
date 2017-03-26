@@ -1,6 +1,6 @@
 package org.ah.gcc.rover.desktop;
 
-import org.ah.gcc.rover.RoverControl;
+import org.ah.gcc.rover.RoverHandler;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
@@ -9,7 +9,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
-public class DesktopRoverControl implements RoverControl {
+public class DesktopRoverControl implements RoverHandler {
 
     private MqttAsyncClient client;
     private boolean connected = false;

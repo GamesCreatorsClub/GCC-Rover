@@ -3,8 +3,6 @@ package org.ah.gcc.rover;
 import java.util.EnumMap;
 import java.util.Map;
 
-import org.ah.gcc.rover.controllers.ControllerListener;
-import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.ScreenController;
 
 import com.badlogic.gdx.ApplicationAdapter;
@@ -23,7 +21,7 @@ import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
-public class RoverController extends ApplicationAdapter implements InputProcessor, GestureListener, ControllerListener {
+public class RoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
 
     private RoverDetails[] ROVERS = new RoverDetails[] {
             new RoverDetails("Rover 2", "172.24.1.184", 1883),
@@ -35,7 +33,7 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
     };
 
     private PlatformSpecific platformSpecific;
-    private RoverControl roverControl;
+    private RoverHandler roverControl;
 
     private SpriteBatch batch;
     private Texture img;
@@ -156,8 +154,6 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
         screenController = new ScreenController();
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
-
-        screenController.addListener(this);
     }
 
     @Override
@@ -454,10 +450,5 @@ public class RoverController extends ApplicationAdapter implements InputProcesso
 
     @Override
     public void pinchStop() {
-    }
-
-    @Override
-    public void controllerUpdate(ControllerState state) {
-
     }
 }

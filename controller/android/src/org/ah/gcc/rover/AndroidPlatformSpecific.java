@@ -11,7 +11,7 @@ public class AndroidPlatformSpecific implements PlatformSpecific {
     }
 
     @Override
-    public RoverControl getRoverControl() {
+    public RoverHandler getRoverControl() {
         return roverControl;
     }
 }

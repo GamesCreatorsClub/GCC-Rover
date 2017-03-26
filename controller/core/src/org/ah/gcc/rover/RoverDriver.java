@@ -1,11 +1,15 @@
 package org.ah.gcc.rover;
 
 import org.ah.gcc.rover.controllers.ControllerInterface;
+import org.ah.gcc.rover.controllers.ControllerListener;
+import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.JoystickState;
 
-public class RoverDriver {
+public class RoverDriver implements ControllerListener {
 
-    private RoverHandler roverHandler;
+    private static final int butonLBid = 1;
+    private static final int butonLTid = 2;
+    private RoverHandler roverControl;
     private ControllerInterface controllerInterface;
 
     private Exponent rightExpo;
@@ -14,30 +18,30 @@ public class RoverDriver {
 
     private JoystickState leftjoystick;
     private JoystickState rightjoystick;
+    private JoystickState hat1;
+
     private int roverTurningDistance;
 
-    private boolean switchLB;
+    private boolean orbitButton = false;
+    private boolean kickButton = false;
 
-
-    public RoverDriver(RoverHandler roverHandler, ControllerInterface controllerInterface) {
-        this.roverHandler = roverHandler;
+    public RoverDriver(RoverHandler roverControl, ControllerInterface controllerInterface) {
+        this.roverControl = roverControl;
         this.controllerInterface = controllerInterface;
-
+        controllerInterface.addListener(this);
 
         rightExpo = new Exponent();
         leftExpo = new Exponent();
 
         rightjoystick = new JoystickState(0, 0);
         leftjoystick = new JoystickState(0, 0);
+        hat1 = new JoystickState(0, 0);
 
+        controllerInterface.addListener(this);
     }
 
-    public RoverHandler getRoverHandler() {
-        return roverHandler;
-    }
-
-    public void setRoverHandler(RoverHandler roverHandler) {
-        this.roverHandler = roverHandler;
+    public void setRover(RoverHandler roverHandler) {
+        this.roverControl = roverHandler;
     }
 
     public ControllerInterface getControllerInterface() {
@@ -50,7 +54,7 @@ public class RoverDriver {
 
     public void processJoysticks() {
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            if (switchLB) {
+            if (!orbitButton) {
                 float distance = rightjoystick.getDistanceFromCentre();
                 rightExpo.setValue(distance);
 
@@ -58,10 +62,10 @@ public class RoverDriver {
                 distance = leftExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
-                roverHandler.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
+                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
                 roverSpeed = calcRoverSpeed(rightjoystick.getDistanceFromCentre());
-                roverHandler.publish("move/orbit", roverSpeed + "");
+                roverControl.publish("move/orbit", roverSpeed + "");
             }
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             float rightY = rightjoystick.getY();
@@ -75,17 +79,17 @@ public class RoverDriver {
 
             roverSpeed = -calcRoverSpeed(rightY);
             roverTurningDistance = calcRoverDistance(leftX);
-            roverHandler.publish("move/steer", roverTurningDistance + " " + roverSpeed);
+            roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
         } else if (leftjoystick.getDistanceFromCentre() > 0.1f) {
             float leftX = leftjoystick.getX();
             leftExpo.setValue(leftX);
             leftX = leftExpo.calculate(leftX);
             roverSpeed = calcRoverSpeed(leftX) / 4;
-            roverHandler.publish("move/rotate", Integer.toString(roverSpeed));
+            roverControl.publish("move/rotate", Integer.toString(roverSpeed));
         } else {
-            roverHandler.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
+            roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
             roverSpeed = 0;
-            roverHandler.publish("move/stop", "0");
+            roverControl.publish("move/stop", "0");
         }
     }
 
@@ -109,4 +113,15 @@ public class RoverDriver {
         return (int)distance;
     }
 
+    @Override
+    public void controllerUpdate(ControllerState state) {
+        System.out.println("state: " + state);
+
+        orbitButton = state.getButton(butonLBid);
+        kickButton = state.getButton(butonLTid);
+
+        leftjoystick.set(state.getLeft());
+        rightjoystick.set(state.getRight());
+        hat1.set(state.getHat());
+    }
 }
