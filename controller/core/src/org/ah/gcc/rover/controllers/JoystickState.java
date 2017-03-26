@@ -10,6 +10,19 @@ public class JoystickState {
 
     }
 
+    public float getDistanceFromCentre() {
+        return (float) Math.sqrt((x*x) + (y*y));
+    }
+
+    public double getAngleFromCentre() {
+        return calcAngleAtPointFromCentre(x, y);
+    }
+
+    private double calcAngleAtPointFromCentre(float x2, float y2) {
+        return Math.atan2((x2 - 0), -(y2 - 0));
+    }
+
+
     public float getX() {
         return x;
     }

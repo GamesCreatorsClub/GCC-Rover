@@ -13,5 +13,4 @@ public interface ControllerState {
 
     public boolean getButton(int id);
 
-
 }

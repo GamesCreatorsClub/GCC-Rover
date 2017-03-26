@@ -3,8 +3,10 @@ package org.ah.gcc.rover.desktop;
 import org.ah.gcc.rover.JoyStick;
 import org.ah.gcc.rover.JoystickComponentListener;
 import org.ah.gcc.rover.controllers.AbstractController;
+import org.ah.gcc.rover.controllers.ControllerInterface;
 import org.ah.gcc.rover.controllers.ControllerStateImplementation;
 import org.ah.gcc.rover.controllers.JoystickState;
+import org.ah.gcc.rover.controllers.ScreenController;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerListener;
@@ -15,7 +17,7 @@ public class ComboController extends AbstractController implements ControllerLis
 
     public ControllerStateImplementation state;
 
-    public ComboController() {
+    public ComboController(ScreenController controller1, ControllerInterface controller2) {
         state = new ControllerStateImplementation();
     }
 

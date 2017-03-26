@@ -1,0 +1,43 @@
+RoverController
+
+
+AndroidGCCRoverController (app) (Controller means Physical + Software together)
+	-> RoverHandler from PlatformSpecific
+	-> ScreenController only & Buttons on screen (instantiated and configured by app)
+
+	-> RoverDriver(reads from ComboController writes to RoverHandler)
+
+DesktopGCCRoverController (app) 
+	-> RoverHandler from PlatformSpecific
+	-> RoverHandler from PlatformSpecific
+
+	-> ScreenController & Buttons on Screen (instantiated and configured by app)
+	-> RealController & Buttons on real controller 
+	-> ComboController (reads from RealConrtoller & ScreenController)
+
+	-> RoverDriver(reads from ComboController writes to RoverHandler)
+
+HeadlessGCCRoverController (app) 
+	-> RoverHandler from PlatformSpecific
+	-> RealController & Buttons on real controller 
+
+	-> RoverDriver(reads from ComboController writes to RoverHandler)
+
+-----
+Common:
+
+RoverDriver(RoverHandler, ControllerInterface)
+	Class that combines input from ControllerInterface (and buttons)
+	and writes states to RoverHandler
+	Also reads from RoverDriver to do more! (distance sensor) 
+	Reads mean 'listens' to event and messages from MQTT
+
+	**
+	
+	adds itself as a listener to ControllerInterface instance
+	adds itself as a listener to RoverHandler instance
+	
+
+RoverHandler
+	Handles MQTT -> sends messages and receives messages from MQTT
+	High level methods as drive forward, steer around, rotate on spot...	
