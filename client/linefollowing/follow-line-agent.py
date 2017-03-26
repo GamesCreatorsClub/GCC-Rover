@@ -9,6 +9,8 @@ from PIL import Image
 
 DEBUG = True
 
+STEER_GAIN = 0.5
+
 TURNING_NONE = 0
 TURNING_WAIT = 1
 TURNING_DONE = 2
@@ -105,18 +107,18 @@ def processImage():
     ha *= 2
 
     # print("Angle is " + str(ha))
-    a = -90
 
     p1 = 255
     p2 = 0
 
     minAngle = 90
     maxAngle = -90
-    lastMinAngle = 90
-    lastMaxAngle = -90
 
     pixelMap = processedImage.load()
 
+    array = []
+
+    a = -90
     c = 0
     while a <= 90:
         a += ha
@@ -128,14 +130,37 @@ def processImage():
         p = cameraImage.getpixel((x, y))
         if p > 127:
             pixelMap[x, y] = (0, 255, 0)
+            array.append(0)
         else:
             pixelMap[x, y] = (255, 0, 0)
+            array.append(1)
+
+        c += 1
+
+    i = 0
+    count = 0
+    while i < len(array):
+        if array[i] == 0:
+            if count == 1:
+                array[i - 1] = 0
+            elif count == 2:
+                array[i - 1] = 0
+                array[i - 2] = 0
+            count = 0
+        else:
+            count += 1
+        i += 1
+
+    a = -90
+    i = 0
+    while i < len(array):
+        a += ha
+        if array[i] != 0:
             if a > maxAngle:
                 maxAngle = a
             if a < minAngle:
                 minAngle = a
-
-        c += 1
+        i += 1
 
     midAngle = (maxAngle + minAngle) / 2
 
@@ -144,7 +169,7 @@ def processImage():
     rDistance = 35  # 28 pixels = 35mm
 
     if midAngle > 0:
-        a = 90 - midAngle
+        a = 90 - midAngle * STEER_GAIN
 
         apr = a * math.pi / 180.0
 
@@ -159,9 +184,9 @@ def processImage():
             elif turnDistance < 60:
                 turnDistance = 60
 
-            turnDistance = - turnDistance
+        # turnDistance = - turnDistance
     else:
-        a = 90 + midAngle
+        a = 90 + midAngle * STEER_GAIN
 
         apr = a * math.pi / 180.0
 
@@ -176,6 +201,7 @@ def processImage():
             elif turnDistance < 60:
                 turnDistance = 60
 
+        turnDistance = - turnDistance
     turnDistance = int(turnDistance)
 
     # print("Scanned " + str(c) + " points, midAngle=" + str(midAngle) + ", minAngle=" + str(minAngle) + ", maxAngle=" + str(maxAngle) + " turnDistance=" + str(turnDistance))
@@ -184,16 +210,17 @@ def processImage():
 def goOneStep():
     global turningState
 
-    if abs(angle) < 20:
+    if abs(angle) < 12:
         action = "drive 0 " + str(forwardSpeed)
         pyroslib.publish("move/drive", "0 " + str(forwardSpeed))
-    elif abs(angle) < 60:
+    else:
+    # elif abs(angle) < 60:
         action = "steer " + str(turnDistance) + " " + str(forwardSpeed)
         pyroslib.publish("move/steer", str(turnDistance) + " " + str(forwardSpeed))
-    else:
-        action = "turn " + str(-angle)
-        turningState = TURNING_WAIT
-        pyroslib.publish("move/turn", str(-angle))
+    # else:
+    #     action = "turn " + str(-angle)
+    #     turningState = TURNING_WAIT
+    #     pyroslib.publish("move/turn", str(-angle))
 
     message = processedImage.tobytes("raw")
 

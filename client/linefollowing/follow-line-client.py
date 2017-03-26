@@ -38,7 +38,7 @@ whiteBalanceImageBig = pygame.Surface((320, 256), 24)
 processedImages = []
 processedBigImages = []
 
-forwardSpeed = 2
+forwardSpeed = 5
 action = ""
 
 running = False
@@ -233,6 +233,7 @@ def onKeyDown(key):
     elif key == pygame.K_RETURN:
         running = not running
         if running:
+            pyros.publish("followLine/speed", str(forwardSpeed))
             pyros.publish("followLine/command", "start")
             imgNo = 0
             del processedImages[:]
