@@ -9,7 +9,9 @@ public interface ControllerState {
         LOCK_AXIS_BUTTON,
         READ_DISTANCE_BUTTON,
         SLING_SHOT_BUTTON,
-        SELECT_BUTTON
+        SELECT_BUTTON,
+        SPEED_UP_BUTTON,
+        SPEED_DOWN_BUTTON
     };
 
     JoystickState getLeft();

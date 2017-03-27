@@ -130,12 +130,14 @@ public class RoverDriver implements ControllerListener {
             roverControl.publish("sensor/distance/read", "0");
         }
 
-        if (hat1.getX() > 0 && lasthat1.getX() <= 0) {
+        if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
             roverSpeedMultiplier += 10;
+            System.out.println("New Speed UP  : " + roverSpeedMultiplier);
         }
 
-        if (hat1.getX() < 0 && lasthat1.getX() >= 0) {
+        if (buttons[ButtonType.SPEED_DOWN_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_DOWN_BUTTON.ordinal()]) {
             roverSpeedMultiplier -= 10;
+            System.out.println("New Speed   DOWN: " + roverSpeedMultiplier);
         }
 
         if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {
@@ -143,8 +145,6 @@ public class RoverDriver implements ControllerListener {
         } else {
             roverSpeedMultiplier = 30;
         }
-
-        System.out.println("Speed: " + roverSpeedMultiplier);
     }
 
     private int calcRoverSpeed(float speed) {

@@ -16,6 +16,9 @@ public class RealController extends AbstractController implements ControllerList
 
     private ControllerStateImplementation state;
 
+    private boolean speedModifier = false;
+    private int lastX = 0;
+
     public RealController() {
         state = new ControllerStateImplementation();
         Controllers.addListener(this);
@@ -37,7 +40,7 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public void connected(Controller controller) {
-        System.out.println("connected to a controller");
+        System.out.println("connected to a controller " + controller);
     }
 
     @Override
@@ -46,20 +49,35 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean buttonDown(Controller controller, int buttonCode) {
-        ControllerState.ButtonType buttonType = toButtonType(buttonCode);
-        if (buttonType != null) {
-            state.setButton(buttonType, true);
-            fireEvent(state);
+        //        System.out.println("Button down " + buttonCode);
+
+        if (buttonCode == 3) {
+            System.out.println("MODIFIED ON");
+            speedModifier = true;
+        } else {
+            ControllerState.ButtonType buttonType = toButtonType(buttonCode);
+            if (buttonType != null) {
+                state.setButton(buttonType, true);
+                fireEvent(state);
+            }
         }
         return true;
     }
 
     @Override
     public boolean buttonUp(Controller controller, int buttonCode) {
-        ControllerState.ButtonType buttonType = toButtonType(buttonCode);
-        if (buttonType != null) {
-            state.setButton(toButtonType(buttonCode), false);
+        if (buttonCode == 3) {
+            System.out.println("MODIFIED off");
+            speedModifier = false;
+            state.setButton(ButtonType.SPEED_UP_BUTTON, false);
+            state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
             fireEvent(state);
+        } else {
+            ControllerState.ButtonType buttonType = toButtonType(buttonCode);
+            if (buttonType != null) {
+                state.setButton(toButtonType(buttonCode), false);
+                fireEvent(state);
+            }
         }
         return true;
     }
@@ -68,11 +86,38 @@ public class RealController extends AbstractController implements ControllerList
     public boolean axisMoved(Controller controller, int axisCode, float value) {
         float oldValue = 0f;
         if (axisCode == 0) {
-            oldValue = state.getX1();
-            state.setX1(value);
+            if (speedModifier) {
+            } else {
+                oldValue = state.getX1();
+                state.setX1(value);
+            }
         } else if (axisCode == 1) {
-            oldValue = state.getY1();
-            state.setY1(value);
+            if (speedModifier) {
+                if (value < 0.1f && lastX >= 0) {
+                    System.out.println("SPEED UP   x1 " + value + " lastX1 " + lastX);
+                    state.setButton(ButtonType.SPEED_UP_BUTTON, true);
+                    state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
+                    lastX = -1;
+                    fireEvent(state);
+                } else if (value > 0.1f && lastX <= 0) {
+                    System.out.println("SPEED DOWN x1 " + value + " lastX1 " + lastX);
+                    state.setButton(ButtonType.SPEED_UP_BUTTON, false);
+                    state.setButton(ButtonType.SPEED_DOWN_BUTTON, true);
+                    lastX = 1;
+                    fireEvent(state);
+                } else if (Math.abs(value) < 0.1f && lastX != 0) {
+                    System.out.println("SPEED ---- x1 " + value + " lastX1 " + lastX);
+                    state.setButton(ButtonType.SPEED_UP_BUTTON, false);
+                    state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
+                    lastX = 0;
+                    fireEvent(state);
+                } else {
+                    System.out.println("----- ---- x1 " + value + " lastX1 " + lastX);
+                }
+            } else {
+                oldValue = state.getY1();
+                state.setY1(value);
+            }
         } else if (axisCode == 3) {
             oldValue = state.getX2();
             state.setX2(value);
