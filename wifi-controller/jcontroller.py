@@ -311,6 +311,8 @@ def processKeys():
 
     boost = tr
 
+
+    ## kick
     if lastTR2 != tr2:
         if tr2:
             pyros.publish("servo/9", "90")

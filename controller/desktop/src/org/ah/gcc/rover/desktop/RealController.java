@@ -4,6 +4,7 @@ import org.ah.gcc.rover.controllers.AbstractController;
 import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.ControllerState.ButtonType;
 import org.ah.gcc.rover.controllers.ControllerStateImplementation;
+import org.ah.gcc.rover.controllers.JoystickState;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerListener;
@@ -88,12 +89,37 @@ public class RealController extends AbstractController implements ControllerList
 
         if (Math.abs(oldValue - value) >= 0.01f) {
             fireEvent(state);
+            //System.out.println("new joystick: " + axisCode);
+
         }
+
+
+
         return false;
     }
 
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
+        System.out.println("new pov: " + value.toString());
+        if (value == PovDirection.center) {
+            state.getHat1().set(JoystickState.zero());
+        } else if (value == PovDirection.north) {
+            state.getHat1().set(0, 1);
+        } else if (value == PovDirection.south) {
+            state.getHat1().set(0, -1);
+        } else if (value == PovDirection.east) {
+            state.getHat1().set(1, 0);
+        } else if (value == PovDirection.west) {
+            state.getHat1().set(-1, 0);
+        } else if (value == PovDirection.northEast) {
+            state.getHat1().set(1, 1);
+        } else if (value == PovDirection.northWest) {
+            state.getHat1().set(-1, 1);
+        } else if (value == PovDirection.southEast) {
+            state.getHat1().set(1, -1);
+        } else if (value == PovDirection.southWest) {
+            state.getHat1().set(-1, -1);
+        }
         return false;
     }
 

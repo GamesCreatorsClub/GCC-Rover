@@ -38,6 +38,12 @@ public class JoystickState {
         this.y = y;
     }
 
+    public JoystickState set(int x, int y) {
+        setX(x);
+        setY(y);
+        return this;
+    }
+
     public JoystickState set(JoystickState state) {
         setX(state.x);
         setY(state.y);
@@ -47,5 +53,10 @@ public class JoystickState {
     @Override
     public String toString() {
         return "(" + x + ", " + y + ")";
+    }
+
+
+    public static JoystickState zero() {
+        return new JoystickState(0, 0);
     }
 }

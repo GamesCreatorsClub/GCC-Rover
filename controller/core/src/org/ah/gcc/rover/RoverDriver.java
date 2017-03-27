@@ -21,10 +21,12 @@ public class RoverDriver implements ControllerListener {
     private JoystickState leftjoystick;
     private JoystickState rightjoystick;
     private JoystickState hat1;
+    private JoystickState lasthat1;
 
     private int roverTurningDistance;
 
     private int roverSpeedMultiplier = 150;
+
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
 
@@ -42,6 +44,7 @@ public class RoverDriver implements ControllerListener {
         rightjoystick = new JoystickState(0, 0);
         leftjoystick = new JoystickState(0, 0);
         hat1 = new JoystickState(0, 0);
+        lasthat1 = new JoystickState(0, 0);
 
         controllerInterface.addListener(this);
         roverControl.subscribe("sensor/distance", new RoverMessageListener() {
@@ -68,16 +71,14 @@ public class RoverDriver implements ControllerListener {
     }
 
     public void processJoysticks() {
-<<<<<<< HEAD
         divider++;
-=======
+
         if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
             roverControl.publish("servo/9", "90");
         } else {
             roverControl.publish("servo/9", "145");
         }
 
->>>>>>> Addes speed and boost
         if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
             if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
                 float distance = rightjoystick.getDistanceFromCentre();
@@ -177,6 +178,8 @@ public class RoverDriver implements ControllerListener {
         for (ButtonType buttonType : ButtonType.values()) {
             buttons[buttonType.ordinal()] = state.getButton(buttonType);
         }
+
+        lasthat1.set(hat1);
 
         leftjoystick.set(state.getLeft());
         rightjoystick.set(state.getRight());
