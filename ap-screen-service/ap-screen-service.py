@@ -4,7 +4,7 @@ import time
 import subprocess
 import RPi.GPIO as GPIO
 
-SCREEN_OFF_TIME = 15  # 5 seconds
+SCREEN_OFF_TIME = 300  # 5 seconds
 
 GPIO_RIGHT = 27  # Joypad left
 GPIO_LEFT = 17  # Joypad right
@@ -107,6 +107,7 @@ def shutdown():
 
         previousSwitch = currentSwtich
         currentSwtich = hasShutdownCombo()
+        readKeys()
 
     if not (previousSwitch == 0 and currentSwtich == 1):
         doShutdown()
