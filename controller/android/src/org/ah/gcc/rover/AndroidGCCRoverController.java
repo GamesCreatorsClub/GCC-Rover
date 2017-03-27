@@ -11,7 +11,9 @@ import org.ah.gcc.rover.ui.ExpoGraph;
 import org.ah.gcc.rover.ui.JoyStick;
 import org.ah.gcc.rover.ui.LogoDrawer;
 import org.ah.gcc.rover.ui.Orientation;
+import org.ah.gcc.rover.ui.POV;
 import org.ah.gcc.rover.ui.RoundButton;
+import org.ah.gcc.rover.ui.SquareButton;
 import org.ah.gcc.rover.ui.Switch;
 
 import com.badlogic.gdx.ApplicationAdapter;
@@ -74,7 +76,7 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     private Switch switchLB;
 
-    private Switch switchLT;
+    private SquareButton switchLT;
 
     private Switch switch2;
 
@@ -98,6 +100,12 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     private RoverDriver roverDriver;
 
+    private SquareButton switchRT;
+
+    private Switch switchRB;
+
+    private POV pov;
+
     public AndroidGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
         this.roverControl = platformSpecific.getRoverControl();
@@ -106,7 +114,6 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
     @Override
     public void create() {
         // platformSpecific.init();
-
 
         font = new BitmapFont(Gdx.files.internal("fonts/din-alternate-bold-64.fnt"), true);
         glyphLayout = new GlyphLayout();
@@ -125,8 +132,8 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
         leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
         rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
 
-        leftExpo = new ExpoGraph((int)cellSize * 8, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
-        rightExpo = new ExpoGraph((int)cellSize * 10, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        leftExpo = new ExpoGraph((int)cellSize * 5, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        rightExpo = new ExpoGraph((int)cellSize * 13, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
 
         leftExpo.setPercentage(0.75f);
         rightExpo.setPercentage(0.90f);
@@ -143,20 +150,25 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
             }
         });
 
+        pov = new POV((int) cellSize * 9, (int) cellSize * 4, (int) cellSize*2);
+
         button1 = new RoundButton((int)cellSize * 6, (int)cellSize * 11, (int)cellSize / 2);
 
-        switchLT = new Switch((int)cellSize * 0, (int)(cellSize * 1), (int)cellSize * 4, Orientation.HORIZONTAL);
-        switchLT.setState(true);
-        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 3), (int)cellSize * 4, Orientation.HORIZONTAL);
-        switchLB.setState(true);
-        switch2 = new Switch((int)cellSize * 13, (int)cellSize, (int)cellSize * 2, Orientation.VERTICAL);
+        switchLT = new SquareButton((int)cellSize * 0, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchLT.setState(false);
+        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchLB.setState(false);
+
+        switchRT = new SquareButton((int)cellSize * 16, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchRT.setState(false);
+        switchRB = new Switch((int)cellSize * 16, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchRB.setState(false);
 
 
         inputMultiplexer = new InputMultiplexer();
         inputMultiplexer.addProcessor(this);
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
-
         screenController = new ScreenController();
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
@@ -215,7 +227,10 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
             button1.draw(shapeRenderer);
             switchLB.draw(shapeRenderer);
             switchLT.draw(shapeRenderer);
-            switch2.draw(shapeRenderer);
+            pov.draw(shapeRenderer);
+            switchRB.draw(shapeRenderer);
+            switchRT.draw(shapeRenderer);
+
             roverSelectButton.draw(shapeRenderer);
 
             shapeRenderer.end();
@@ -282,17 +297,20 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+
         leftjoystick.touchDown(screenX, screenY, pointer);
         rightjoystick.touchDown(screenX, screenY, pointer);
         switchLB.touchDown(screenX, screenY, pointer);
         switchLT.touchDown(screenX, screenY, pointer);
-        switch2.touchDown(screenX, screenY, pointer);
+        switchRT.touchDown(screenX, screenY, pointer);
+        switchRB.touchDown(screenX, screenY, pointer);
+
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
 
         screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
-
+        pov.touchDown(screenX, screenY, pointer);
         mouseDown = true;
         return false;
     }
@@ -301,11 +319,18 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
         leftjoystick.touchUp(screenX, screenY, pointer);
         rightjoystick.touchUp(screenX, screenY, pointer);
+        switchLB.touchUp(screenX, screenY, pointer);
+        switchLT.touchUp(screenX, screenY, pointer);
+        switchRT.touchUp(screenX, screenY, pointer);
+        switchRB.touchUp(screenX, screenY, pointer);
+
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
-        mouseDown = false;
+
         screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        pov.touchUp(screenX, screenY, pointer);
+        mouseDown = false;
         return false;
     }
 
@@ -313,10 +338,15 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
     public boolean touchDragged(int screenX, int screenY, int pointer) {
         leftjoystick.dragged(screenX, screenY, pointer);
         rightjoystick.dragged(screenX, screenY, pointer);
+        switchLT.touchDragged(screenX, screenY, pointer);
+        switchRT.touchDragged(screenX, screenY, pointer);
+
         button1.touchDragged(screenX, screenY, pointer);
         roverSelectButton.touchDragged(screenX, screenY, pointer);
+
         screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        pov.touchDragged(screenX, screenY, pointer);
         return false;
     }
 

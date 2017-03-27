@@ -4,14 +4,13 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
-public class Switch {
+public class Switch extends ScreenButton {
     private int width;
     private int x;
     private int y;
     private Orientation orientation;
 
     private boolean on = false;
-    private SwitchComponentListener listener;
 
     public Switch(int x, int y, int width, Orientation orientation) {
         this.width = width * 2;
@@ -23,18 +22,19 @@ public class Switch {
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
+        shapeRenderer.set(ShapeType.Filled);
         if (orientation == Orientation.HORIZONTAL) {
             if (on) {
                 shapeRenderer.set(ShapeType.Filled);
                 shapeRenderer.setColor(Color.GREEN);
                 shapeRenderer.rect(x, y, width / 2, width / 2);
 
-                shapeRenderer.set(ShapeType.Line);
+                shapeRenderer.set(ShapeType.Filled);
 
                 shapeRenderer.setColor(Color.DARK_GRAY);
                 shapeRenderer.rect(x + width / 2, y, width / 2, width / 2);
             } else {
-                shapeRenderer.set(ShapeType.Line);
+                shapeRenderer.set(ShapeType.Filled);
                 shapeRenderer.setColor(Color.DARK_GRAY);
                 shapeRenderer.rect(x, y, width / 2, width / 2);
 
@@ -77,11 +77,12 @@ public class Switch {
                }
            }
 
-           if (listener != null) {
-               listener.changed(on);
+           if (getListener() != null) {
+               getListener().changed(on);
            }
-    }
 
+
+    }
 
     public boolean isOn() {
         return on;
@@ -91,7 +92,5 @@ public class Switch {
         this.on = state;
     }
 
-    public void setListener(SwitchComponentListener listener) {
-        this.listener = listener;
-    }
+
 }

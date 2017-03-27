@@ -17,6 +17,7 @@ import org.ah.gcc.rover.ui.LogoDrawer;
 import org.ah.gcc.rover.ui.Orientation;
 import org.ah.gcc.rover.ui.POV;
 import org.ah.gcc.rover.ui.RoundButton;
+import org.ah.gcc.rover.ui.SquareButton;
 import org.ah.gcc.rover.ui.Switch;
 
 import com.badlogic.gdx.ApplicationAdapter;
@@ -78,10 +79,10 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
     private double cellSize;
 
     private Switch switchLB;
+    private SquareButton switchLT;
 
-    private Switch switchLT;
-
-    private Switch switch2;
+    private Switch switchRB;
+    private SquareButton switchRT;
 
     private Button roverSelectButton;
 
@@ -129,8 +130,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
         rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
 
-        leftExpo = new ExpoGraph((int)cellSize * 8, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
-        rightExpo = new ExpoGraph((int)cellSize * 10, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        leftExpo = new ExpoGraph((int)cellSize * 5, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        rightExpo = new ExpoGraph((int)cellSize * 13, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
 
         leftExpo.setPercentage(0.75f);
         rightExpo.setPercentage(0.90f);
@@ -147,15 +148,19 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             }
         });
 
-        pov = new POV((int) cellSize * 10, (int) cellSize * 6, (int) cellSize);
+        pov = new POV((int) cellSize * 9, (int) cellSize * 4, (int) cellSize*2);
 
         button1 = new RoundButton((int)cellSize * 6, (int)cellSize * 11, (int)cellSize / 2);
 
-        switchLT = new Switch((int)cellSize * 0, (int)(cellSize * 1), (int)cellSize * 2, Orientation.HORIZONTAL);
-        switchLT.setState(true);
-        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 3), (int)cellSize * 2, Orientation.HORIZONTAL);
-        switchLB.setState(true);
-        switch2 = new Switch((int)cellSize * 13, (int)cellSize, (int)cellSize * 2, Orientation.VERTICAL);
+        switchLT = new SquareButton((int)cellSize * 0, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchLT.setState(false);
+        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchLB.setState(false);
+
+        switchRT = new SquareButton((int)cellSize * 16, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchRT.setState(false);
+        switchRB = new Switch((int)cellSize * 16, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchRB.setState(false);
 
 
         inputMultiplexer = new InputMultiplexer();
@@ -166,7 +171,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         comboController = new ComboController();
         comboController.getScreenController().setLeftJotstick(leftjoystick);
         comboController.getScreenController().setRightJotstick(rightjoystick);
-
+        comboController.getScreenController().setHat(pov);
         comboController.getScreenController().setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
         roverDriver = new RoverDriver(roverHandler, comboController);
 
@@ -219,7 +224,9 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             switchLB.draw(shapeRenderer);
             switchLT.draw(shapeRenderer);
             pov.draw(shapeRenderer);
-            switch2.draw(shapeRenderer);
+            switchRB.draw(shapeRenderer);
+            switchRT.draw(shapeRenderer);
+
             roverSelectButton.draw(shapeRenderer);
 
             shapeRenderer.end();
@@ -291,7 +298,9 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         rightjoystick.touchDown(screenX, screenY, pointer);
         switchLB.touchDown(screenX, screenY, pointer);
         switchLT.touchDown(screenX, screenY, pointer);
-        switch2.touchDown(screenX, screenY, pointer);
+        switchRT.touchDown(screenX, screenY, pointer);
+        switchRB.touchDown(screenX, screenY, pointer);
+
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
 
@@ -314,6 +323,12 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.touchUp(screenX, screenY, pointer);
 
+        switchLT.touchUp(screenX, screenY, pointer);
+        switchLB.touchUp(screenX, screenY, pointer);
+
+        switchRT.touchUp(screenX, screenY, pointer);
+        switchRB.touchUp(screenX, screenY, pointer);
+
         return false;
     }
 
@@ -325,7 +340,10 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         roverSelectButton.touchDragged(screenX, screenY, pointer);
         comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        pov.dragged(screenX, screenY, pointer);
 
+        switchLT.touchDragged(screenX, screenY, pointer);
+        switchRT.touchDragged(screenX, screenY, pointer);
         return false;
     }
 

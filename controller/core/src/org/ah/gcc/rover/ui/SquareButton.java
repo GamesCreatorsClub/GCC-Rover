@@ -4,26 +4,25 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
-public class Button {
+public class SquareButton extends ScreenButton{
     private int x;
     private int y;
-    private int width;
-    private int height;
-    private ButtonCallback callback;
 
     private boolean pressed = false;
     private int pointer;
+    private int height;
+    private int width;
 
-    public Button(int x, int y, int width, int height, ButtonCallback callback) {
+    public SquareButton(int x, int y, int width, int height) {
+
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
-        this.callback = callback;
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
-        shapeRenderer.set(ShapeType.Line);
+        shapeRenderer.set(ShapeType.Filled);
 
         if (pressed) {
             shapeRenderer.setColor(Color.DARK_GRAY);
@@ -37,25 +36,36 @@ public class Button {
 
     public void touchDown(int screenX, int screenY, int pointer) {
         this.pointer = pointer;
-        if (screenX >= x && screenX <= x + width && screenY >= y && screenY < y + height) {
-            boolean previousState = pressed;
+        if (screenX > x && screenX < x + width
+                && screenY > y && screenY < y + height) {
             pressed = true;
-            if (previousState != pressed) {
-                callback.invoke(pressed);
-            }
+        }
+        if (getListener() != null) {
+            getListener().changed(pressed);
         }
     }
 
     public void touchDragged(int screenX, int screenY, int pointer) {
+        this.pointer = pointer;
+        if (screenX > x && screenX < x + width
+                && screenY > y && screenY < y + height) {
+            pressed = true;
+        } else {
+            pressed = false;
+        }
+        if (getListener() != null) {
+            getListener().changed(pressed);
+        }
     }
 
     public void touchUp(int screenX, int screenY, int pointer) {
-        if (pointer == this.pointer) {
-            boolean previousState = pressed;
+        this.pointer = pointer;
+        if (screenX > x && screenX < x + width
+                && screenY > y && screenY < y + height) {
             pressed = false;
-            if (previousState != pressed) {
-                callback.invoke(pressed);
-            }
+        }
+        if (getListener() != null) {
+            getListener().changed(pressed);
         }
     }
 
@@ -65,9 +75,5 @@ public class Button {
 
     public void setState(boolean state) {
         this.pressed = state;
-    }
-
-    public static interface ButtonCallback {
-        void invoke(boolean state);
     }
 }
