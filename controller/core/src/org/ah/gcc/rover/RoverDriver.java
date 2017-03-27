@@ -1,5 +1,10 @@
 package org.ah.gcc.rover;
 
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.ah.gcc.rover.RoverHandler.RoverMessageListener;
 import org.ah.gcc.rover.controllers.ControllerInterface;
 import org.ah.gcc.rover.controllers.ControllerListener;
@@ -18,10 +23,11 @@ public class RoverDriver implements ControllerListener {
     private Exponent leftExpo;
     private int roverSpeed;
 
-    private JoystickState leftjoystick;
-    private JoystickState rightjoystick;
     private JoystickState hat1;
     private JoystickState lasthat1;
+
+    private JoystickAdapter leftJoystick = new JoystickAdapter();
+    private JoystickAdapter rightJoystick = new JoystickAdapter();
 
     private int roverTurningDistance;
 
@@ -29,6 +35,9 @@ public class RoverDriver implements ControllerListener {
 
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
+
+    private StringValueAdapter readDistanceValue = new StringValueAdapter("distance");
+    private StringValueAdapter roverSpeedValue = new StringValueAdapter("speed");
 
     private float readDistance = 0f;
     private long timeWhenReadDistance = 0;
@@ -41,8 +50,6 @@ public class RoverDriver implements ControllerListener {
         rightExpo = new Exponent();
         leftExpo = new Exponent();
 
-        rightjoystick = new JoystickState(0, 0);
-        leftjoystick = new JoystickState(0, 0);
         hat1 = new JoystickState(0, 0);
         lasthat1 = new JoystickState(0, 0);
 
@@ -53,10 +60,28 @@ public class RoverDriver implements ControllerListener {
 
                 readDistance = Float.parseFloat(splitMessage[1]);
                 timeWhenReadDistance = System.currentTimeMillis();
-                System.out.println("Got distance " + message);
+
+                readDistanceValue.setValue(String.format("%.2f", readDistance));
             }
         });
     }
+
+    public JoystickAdapter getLeftJoystick() {
+        return leftJoystick;
+    }
+
+    public JoystickAdapter getRightJoystick() {
+        return rightJoystick;
+    }
+
+    public StringValueAdapter getReadDistanceValue() {
+        return readDistanceValue;
+    }
+
+    public StringValueAdapter getRoverSpeedValue() {
+        return roverSpeedValue;
+    }
+
 
     public void setRover(RoverHandler roverHandler) {
         this.roverControl = roverHandler;
@@ -73,21 +98,24 @@ public class RoverDriver implements ControllerListener {
     public void processJoysticks() {
         divider++;
 
+        JoystickState leftJoystickState = leftJoystick.getState();
+        JoystickState rightJoystickState = rightJoystick.getState();
+
         if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
             roverControl.publish("servo/9", "90");
         } else {
             roverControl.publish("servo/9", "145");
         }
 
-        if (leftjoystick.getDistanceFromCentre() < 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
+        if (leftJoystickState.getDistanceFromCentre() < 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
             if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
-                float distance = rightjoystick.getDistanceFromCentre();
+                float distance = rightJoystickState.getDistanceFromCentre();
                 rightExpo.setValue(distance);
 
                 distance = rightExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
-                roverControl.publish("move/drive", String.format("%.2f %.0f", rightjoystick.getAngleFromCentre(), (float)(roverSpeed)));
+                roverControl.publish("move/drive", String.format("%.2f %.0f", rightJoystickState.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
                 System.out.println("In orbit");
                 float orbitDistance = 150;
@@ -95,16 +123,16 @@ public class RoverDriver implements ControllerListener {
                     orbitDistance = readDistance + 100;
                 }
 
-                float distance = rightjoystick.getX();
+                float distance = rightJoystickState.getX();
                 rightExpo.setValue(distance);
                 distance = rightExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
                 roverControl.publish("move/orbit",  (int)orbitDistance + " " + roverSpeed);
             }
-        } else if (leftjoystick.getDistanceFromCentre() > 0.1f && rightjoystick.getDistanceFromCentre() > 0.1f) {
-            float rightY = rightjoystick.getY();
-            float leftX = leftjoystick.getX();
+        } else if (leftJoystickState.getDistanceFromCentre() > 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
+            float rightY = rightJoystickState.getY();
+            float leftX = leftJoystickState.getX();
 
             rightExpo.setValue(rightY);
             rightY = rightExpo.calculate(rightY);
@@ -115,14 +143,14 @@ public class RoverDriver implements ControllerListener {
             roverSpeed = -calcRoverSpeed(rightY);
             roverTurningDistance = calcRoverDistance(leftX);
             roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
-        } else if (leftjoystick.getDistanceFromCentre() > 0.1f) {
-            float leftX = leftjoystick.getX();
+        } else if (leftJoystickState.getDistanceFromCentre() > 0.1f) {
+            float leftX = leftJoystickState.getX();
             leftExpo.setValue(leftX);
             leftX = leftExpo.calculate(leftX);
             roverSpeed = calcRoverSpeed(leftX) / 4;
             roverControl.publish("move/rotate", Integer.toString(roverSpeed));
         } else {
-            roverControl.publish("move/drive", rightjoystick.getAngleFromCentre() + " 0");
+            roverControl.publish("move/drive", rightJoystickState.getAngleFromCentre() + " 0");
             roverSpeed = 0;
             roverControl.publish("move/stop", "0");
         }
@@ -132,23 +160,23 @@ public class RoverDriver implements ControllerListener {
 
         if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
             roverSpeedMultiplier += 10;
+            roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
             System.out.println("New Speed UP  : " + roverSpeedMultiplier);
         }
 
         if (buttons[ButtonType.SPEED_DOWN_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_DOWN_BUTTON.ordinal()]) {
             roverSpeedMultiplier -= 10;
+            roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
             System.out.println("New Speed   DOWN: " + roverSpeedMultiplier);
-        }
-
-        if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {
-            roverSpeedMultiplier = 150;
-        } else {
-            roverSpeedMultiplier = 30;
         }
     }
 
     private int calcRoverSpeed(float speed) {
-        return (int) (speed * roverSpeedMultiplier);
+        if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {
+            return (int) (speed * 300);
+        } else {
+            return (int) (speed * roverSpeedMultiplier);
+        }
     }
 
     private int calcRoverDistance(float distance) {
@@ -181,8 +209,8 @@ public class RoverDriver implements ControllerListener {
 
         lasthat1.set(hat1);
 
-        leftjoystick.set(state.getLeft());
-        rightjoystick.set(state.getRight());
+        leftJoystick.update(state.getLeft());
+        rightJoystick.update(state.getRight());
         hat1.set(state.getHat());
     }
 
@@ -192,5 +220,62 @@ public class RoverDriver implements ControllerListener {
 
     public void setRoverSpeedMultiplier(int roverSpeedMultiplier) {
         this.roverSpeedMultiplier = roverSpeedMultiplier;
+    }
+
+    public static class JoystickAdapter {
+        private List<JoystickComponentListener> listeners = new ArrayList<JoystickComponentListener>();
+        private JoystickState state = new JoystickState(0f, 0f);
+
+        public JoystickAdapter() { }
+
+        public JoystickState getState() {
+            return state;
+        }
+
+        public void update(JoystickState state) {
+            if (this.state.set(state)) {
+                fireEvent();
+            }
+        }
+
+        public void fireEvent() {
+            for (JoystickComponentListener listener : listeners) {
+                listener.changed(getState());
+            }
+        }
+
+        public void addListener(JoystickComponentListener listener) {
+            listeners.add(listener);
+        }
+
+        public void removeListener(JoystickComponentListener listener) {
+            listeners.remove(listener);
+        }
+    }
+
+    public static class StringValueAdapter {
+        private PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
+
+        private String propertyName = "";
+        private String value = "";
+
+        public StringValueAdapter(String propertyName) {
+            this.propertyName = propertyName;
+        }
+
+        public void setValue(String value) {
+            if (value.equals(this.value)) {
+                propertyChangeSupport.firePropertyChange(propertyName, this.value, value);
+            }
+            this.value = value;
+        }
+
+        public void addListener(PropertyChangeListener listener) {
+            propertyChangeSupport.addPropertyChangeListener(listener);
+        }
+
+        public void removeListener(PropertyChangeListener listener) {
+            propertyChangeSupport.removePropertyChangeListener(listener);
+        }
     }
 }

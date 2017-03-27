@@ -1,6 +1,7 @@
 package org.ah.gcc.rover.controllers;
 
 public class JoystickState {
+
     private float x;
     private float y;
 
@@ -44,10 +45,11 @@ public class JoystickState {
         return this;
     }
 
-    public JoystickState set(JoystickState state) {
+    public boolean set(JoystickState state) {
+        boolean updated = state.x != x || state.y != y;
         setX(state.x);
         setY(state.y);
-        return state;
+        return updated;
     }
 
     @Override
