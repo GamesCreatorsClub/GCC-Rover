@@ -105,6 +105,10 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     private POV pov;
 
+    private ScreenController screenController;
+
+    private RealController realController;
+
     public DesktopGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
         this.roverHandler = platformSpecific.getRoverControl();
@@ -169,8 +173,10 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         inputMultiplexer.addProcessor(new GestureDetector(this));
         Gdx.input.setInputProcessor(inputMultiplexer);
 
-        comboController = new ComboController();
-        ScreenController screenController = comboController.getScreenController();
+        screenController = new ScreenController();
+        realController = new RealController();
+
+        comboController = new ComboController(screenController, realController);
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
         screenController.setHat(pov);
@@ -306,8 +312,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         button1.touchDown(screenX, screenY, pointer);
         roverSelectButton.touchDown(screenX, screenY, pointer);
 
-        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.touchDown(screenX, screenY, pointer);
         mouseDown = true;
         return false;
@@ -321,8 +327,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
         mouseDown = false;
-        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.touchUp(screenX, screenY, pointer);
 
         switchLT.touchUp(screenX, screenY, pointer);
@@ -340,8 +346,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         rightjoystick.dragged(screenX, screenY, pointer);
         button1.touchDragged(screenX, screenY, pointer);
         roverSelectButton.touchDragged(screenX, screenY, pointer);
-        comboController.getScreenController().stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
-        comboController.getScreenController().stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
+        screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
+        screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.dragged(screenX, screenY, pointer);
 
         switchLT.touchDragged(screenX, screenY, pointer);
