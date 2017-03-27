@@ -12,19 +12,19 @@ import com.badlogic.gdx.controllers.Controllers;
 import com.badlogic.gdx.controllers.PovDirection;
 import com.badlogic.gdx.math.Vector3;
 
-public class RealController extends AbstractController implements ControllerListener {
+public class DesktopRealController extends AbstractController implements ControllerListener {
 
     private ControllerStateImplementation state;
 
     private boolean speedModifier = false;
     private int lastX = 0;
 
-    public RealController() {
+    public DesktopRealController() {
         state = new ControllerStateImplementation();
         Controllers.addListener(this);
     }
 
-    public RealController(String name) {
+    public DesktopRealController(String name) {
         super(name);
         state = new ControllerStateImplementation();
         Controllers.addListener(this);
@@ -49,10 +49,9 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean buttonDown(Controller controller, int buttonCode) {
-        //        System.out.println("Button down " + buttonCode);
+        System.out.println("Button down " + buttonCode);
 
         if (buttonCode == 3) {
-            System.out.println("MODIFIED ON");
             speedModifier = true;
         } else {
             ControllerState.ButtonType buttonType = toButtonType(buttonCode);
@@ -67,7 +66,6 @@ public class RealController extends AbstractController implements ControllerList
     @Override
     public boolean buttonUp(Controller controller, int buttonCode) {
         if (buttonCode == 3) {
-            System.out.println("MODIFIED off");
             speedModifier = false;
             state.setButton(ButtonType.SPEED_UP_BUTTON, false);
             state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
@@ -94,25 +92,25 @@ public class RealController extends AbstractController implements ControllerList
         } else if (axisCode == 1) {
             if (speedModifier) {
                 if (value < 0.1f && lastX >= 0) {
-                    System.out.println("SPEED UP   x1 " + value + " lastX1 " + lastX);
+                    // System.out.println("SPEED UP   x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, true);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
                     lastX = -1;
                     fireEvent(state);
                 } else if (value > 0.1f && lastX <= 0) {
-                    System.out.println("SPEED DOWN x1 " + value + " lastX1 " + lastX);
+                    // System.out.println("SPEED DOWN x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, false);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, true);
                     lastX = 1;
                     fireEvent(state);
                 } else if (Math.abs(value) < 0.1f && lastX != 0) {
-                    System.out.println("SPEED ---- x1 " + value + " lastX1 " + lastX);
+                    // System.out.println("SPEED ---- x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, false);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
                     lastX = 0;
                     fireEvent(state);
-                } else {
-                    System.out.println("----- ---- x1 " + value + " lastX1 " + lastX);
+                // } else {
+                //    System.out.println("----- ---- x1 " + value + " lastX1 " + lastX);
                 }
             } else {
                 oldValue = state.getY1();
@@ -134,7 +132,7 @@ public class RealController extends AbstractController implements ControllerList
 
         if (Math.abs(oldValue - value) >= 0.01f) {
             fireEvent(state);
-            //System.out.println("new joystick: " + axisCode);
+            // System.out.println("new joystick: " + axisCode);
 
         }
 
@@ -145,7 +143,7 @@ public class RealController extends AbstractController implements ControllerList
 
     @Override
     public boolean povMoved(Controller controller, int povCode, PovDirection value) {
-        System.out.println("new pov: " + value.toString());
+        // System.out.println("new pov: " + value.toString());
         if (value == PovDirection.center) {
             state.getHat1().set(JoystickState.zero());
         } else if (value == PovDirection.north) {

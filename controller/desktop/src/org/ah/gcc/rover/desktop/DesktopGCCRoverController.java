@@ -1,9 +1,9 @@
 package org.ah.gcc.rover.desktop;
 
-import java.util.EnumMap;
-import java.util.Map;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 
-import org.ah.gcc.rover.ControllerButton;
+import org.ah.gcc.rover.JoystickComponentListener;
 import org.ah.gcc.rover.PlatformSpecific;
 import org.ah.gcc.rover.RoverDetails;
 import org.ah.gcc.rover.RoverDriver;
@@ -26,8 +26,11 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Pixmap.Format;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
@@ -47,6 +50,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             new RoverDetails("Rover 4p", "gcc-wifi-ap", 1886)
     };
 
+    @SuppressWarnings("unused")
     private PlatformSpecific platformSpecific;
     private RoverHandler roverHandler;
 
@@ -74,8 +78,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
     private int retryCounter = 0;
     private int messageCounter = 10;
 
-    private int roverSpeed = 0;
-    private int roverTurningDistance = 0;
+    private String roverSpeed = "";
+    private String roverTurningDistance = "";
 
     private double cellSize;
 
@@ -97,8 +101,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     private ComboController comboController;
 
-    private Map<ControllerButton, Boolean> controllerButtons = new EnumMap<ControllerButton, Boolean>(ControllerButton.class);
-
     private LogoDrawer logoDrawer;
 
     private RoverDriver roverDriver;
@@ -118,7 +120,12 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
     public void create() {
         // platformSpecific.init();
 
-        font = new BitmapFont(Gdx.files.internal("fonts/din-alternate-bold-64.fnt"), true);
+        String fontName = "fonts/din-alternate-bold-64.fnt";
+        if (Gdx.graphics.getWidth() <= 320) {
+            fontName = "fonts/din-alternate-bold-15.fnt";
+        }
+
+        font = new BitmapFont(Gdx.files.internal(fontName), true);
         glyphLayout = new GlyphLayout();
 
         font.setColor(Color.BLACK);
@@ -183,8 +190,36 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
         roverDriver = new RoverDriver(roverHandler, comboController);
 
+        roverDriver.getLeftJoystick().addListener(new JoystickComponentListener() {
+            @Override public void changed(JoystickState state) {
+                leftjoystick.setValues(state.getX(), state.getY());
+            }
+        });
+
+        roverDriver.getRightJoystick().addListener(new JoystickComponentListener() {
+            @Override public void changed(JoystickState state) {
+                rightjoystick.setValues(state.getX(), state.getY());
+            }
+        });
+
+        roverDriver.getRoverSpeedValue().addListener(new PropertyChangeListener() {
+            @Override public void propertyChange(PropertyChangeEvent evt) {
+                roverSpeed = evt.getNewValue().toString();
+            }
+        });
+
+        roverDriver.getReadDistanceValue().addListener(new PropertyChangeListener() {
+            @Override public void propertyChange(PropertyChangeEvent evt) {
+                roverTurningDistance = evt.getNewValue().toString();
+            }
+        });
+
         logoDrawer = new LogoDrawer(batch, camera);
 
+        Pixmap pixmap = new Pixmap(32, 32, Format.RGBA8888);
+        // Pixmap pixmap = new Pixmap(Gdx.files.internal("cursor-empty.png"));
+        Cursor customCursor = Gdx.graphics.newCursor(pixmap, 0, 0);
+        Gdx.graphics.setCursor(customCursor);
     }
 
     @Override

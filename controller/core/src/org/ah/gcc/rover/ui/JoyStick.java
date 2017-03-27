@@ -115,6 +115,7 @@ public class JoyStick {
     public void dragged(int screenX, int screenY, int pointer) {
         if (this.pointer == pointer) {
             updateCoordinates(screenX, screenY);
+            fireChanged();
         }
     }
 
@@ -143,10 +144,6 @@ public class JoyStick {
             x = (int)(-distance * Math.sin(-angle)) + centreX;
             y = (int)(-distance * Math.cos(-angle)) + centreY;
         }
-
-        if (listener != null) {
-            listener.changed(new JoystickState(getXValue(), getYValue()));
-        }
     }
 
     private double calcAngleAtPointFromCentre(int x, int y) {
@@ -161,4 +158,9 @@ public class JoyStick {
         this.listener = listener;
     }
 
+    private void fireChanged() {
+        if (listener != null) {
+            listener.changed(new JoystickState(getXValue(), getYValue()));
+        }
+    }
 }

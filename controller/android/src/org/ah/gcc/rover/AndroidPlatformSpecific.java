@@ -1,5 +1,7 @@
 package org.ah.gcc.rover;
 
+import org.ah.gcc.rover.controllers.ControllerInterface;
+
 import android.content.Context;
 
 public class AndroidPlatformSpecific implements PlatformSpecific {
@@ -13,5 +15,14 @@ public class AndroidPlatformSpecific implements PlatformSpecific {
     @Override
     public RoverHandler getRoverControl() {
         return roverControl;
+    }
+
+    @Override
+    public void renderCallback() {
+    }
+
+    @Override
+    public ControllerInterface getRealController() {
+        return null;
     }
 }

@@ -19,7 +19,7 @@ allprojects {
     version = '1.0'
     ext {
         appName = "rover-controller-client"
-        gdxVersion = '1.9.5'
+        gdxVersion = '1.9.5.rpi-SNAPSHOT'
         roboVMVersion = '2.3.0'
         box2DLightsVersion = '1.4'
         ashleyVersion = '1.7.0'
@@ -30,6 +30,7 @@ allprojects {
     repositories {
         mavenLocal()
         mavenCentral()
+        maven { url "http://repository.abstracthorizon.org/maven2/abstracthorizon.snapshot/" }
         maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
         maven { url "https://oss.sonatype.org/content/repositories/releases/" }
     }
@@ -43,6 +44,7 @@ project(":desktop") {
         compile "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$pahoVersion"
         compile "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$pahoVersion"
         compile "com.badlogicgames.gdx:gdx-backend-lwjgl:$gdxVersion"
+        compile "com.badlogicgames.gdx:gdx-backend-jogamp:$gdxVersion"
         compile "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
         compile "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"
         compile "com.badlogicgames.gdx:gdx-controllers:$gdxVersion"

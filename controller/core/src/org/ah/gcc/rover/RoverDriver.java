@@ -1,5 +1,6 @@
 package org.ah.gcc.rover;
 
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ public class RoverDriver implements ControllerListener {
 
     private int roverTurningDistance;
 
-    private int roverSpeedMultiplier = 150;
+    private int roverSpeedMultiplier = 40;
 
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
@@ -64,6 +65,7 @@ public class RoverDriver implements ControllerListener {
                 readDistanceValue.setValue(String.format("%.2f", readDistance));
             }
         });
+        readDistanceValue.setValue(Integer.toString(roverSpeedMultiplier));
     }
 
     public JoystickAdapter getLeftJoystick() {
@@ -117,7 +119,6 @@ public class RoverDriver implements ControllerListener {
                 roverSpeed = calcRoverSpeed(distance);
                 roverControl.publish("move/drive", String.format("%.2f %.0f", rightJoystickState.getAngleFromCentre(), (float)(roverSpeed)));
             } else {
-                System.out.println("In orbit");
                 float orbitDistance = 150;
                 if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {
                     orbitDistance = readDistance + 100;
@@ -159,15 +160,29 @@ public class RoverDriver implements ControllerListener {
         }
 
         if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
-            roverSpeedMultiplier += 10;
+            if (roverSpeedMultiplier < 10) {
+                roverSpeedMultiplier += 1;
+            } else if (roverSpeedMultiplier < 50) {
+                roverSpeedMultiplier += 5;
+            } else if (roverSpeedMultiplier < 300) {
+                roverSpeedMultiplier += 10;
+            }
             roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
-            System.out.println("New Speed UP  : " + roverSpeedMultiplier);
         }
 
         if (buttons[ButtonType.SPEED_DOWN_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_DOWN_BUTTON.ordinal()]) {
-            roverSpeedMultiplier -= 10;
+            if (roverSpeedMultiplier > 50) {
+                roverSpeedMultiplier -= 10;
+            } else if (roverSpeedMultiplier < 10) {
+                roverSpeedMultiplier -= 5;
+            } else if (roverSpeedMultiplier < 0) {
+                roverSpeedMultiplier -= 1;
+            }
             roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
-            System.out.println("New Speed   DOWN: " + roverSpeedMultiplier);
+        }
+
+        for (int i = 0; i < buttons.length; i++) {
+            prevButtons[i] = buttons[i];
         }
     }
 
@@ -197,11 +212,7 @@ public class RoverDriver implements ControllerListener {
 
     @Override
     public void controllerUpdate(ControllerState state) {
-//        System.out.println("state: " + state);
-
-        for (int i = 0; i < buttons.length; i++) {
-            prevButtons[i] = buttons[i];
-        }
+        // System.out.println("state: " + state);
 
         for (ButtonType buttonType : ButtonType.values()) {
             buttons[buttonType.ordinal()] = state.getButton(buttonType);
@@ -264,7 +275,7 @@ public class RoverDriver implements ControllerListener {
         }
 
         public void setValue(String value) {
-            if (value.equals(this.value)) {
+            if (!value.equals(this.value)) {
                 propertyChangeSupport.firePropertyChange(propertyName, this.value, value);
             }
             this.value = value;
@@ -272,6 +283,7 @@ public class RoverDriver implements ControllerListener {
 
         public void addListener(PropertyChangeListener listener) {
             propertyChangeSupport.addPropertyChangeListener(listener);
+            listener.propertyChange(new PropertyChangeEvent(this, propertyName, "", value));
         }
 
         public void removeListener(PropertyChangeListener listener) {

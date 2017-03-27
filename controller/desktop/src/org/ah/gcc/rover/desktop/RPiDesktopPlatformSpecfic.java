@@ -4,11 +4,11 @@ import org.ah.gcc.rover.PlatformSpecific;
 import org.ah.gcc.rover.RoverHandler;
 import org.ah.gcc.rover.controllers.ControllerInterface;
 
-public class DesktopPlatformSpecfic implements PlatformSpecific {
+public class RPiDesktopPlatformSpecfic implements PlatformSpecific {
 
     private DesktopRoverControl roverControl;
 
-    public DesktopPlatformSpecfic() {
+    public RPiDesktopPlatformSpecfic() {
         roverControl = new DesktopRoverControl();
     }
 
@@ -23,6 +23,6 @@ public class DesktopPlatformSpecfic implements PlatformSpecific {
 
     @Override
     public ControllerInterface getRealController() {
-        return new DesktopRealController();
+        return new RPiRealController();
     }
 }

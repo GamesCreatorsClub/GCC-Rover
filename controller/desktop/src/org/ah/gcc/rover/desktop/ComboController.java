@@ -4,7 +4,6 @@ import org.ah.gcc.rover.controllers.AbstractController;
 import org.ah.gcc.rover.controllers.ControllerInterface;
 import org.ah.gcc.rover.controllers.ControllerListener;
 import org.ah.gcc.rover.controllers.ControllerState;
-import org.ah.gcc.rover.controllers.ScreenController;
 
 public class ComboController extends AbstractController {
 
@@ -46,7 +45,7 @@ public class ComboController extends AbstractController {
         return controller1;
     }
 
-    public void setController1(ScreenController controller1) {
+    public void setController1(ControllerInterface controller1) {
         this.controller1 = controller1;
     }
 
@@ -54,7 +53,7 @@ public class ComboController extends AbstractController {
         return controller2;
     }
 
-    public void setController2(RealController controller2) {
+    public void setController2(ControllerInterface controller2) {
         this.controller2 = controller2;
     }
 }
