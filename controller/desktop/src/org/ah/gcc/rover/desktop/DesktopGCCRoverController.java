@@ -10,6 +10,7 @@ import org.ah.gcc.rover.RoverDriver;
 import org.ah.gcc.rover.RoverHandler;
 import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.JoystickState;
+import org.ah.gcc.rover.controllers.ScreenController;
 import org.ah.gcc.rover.ui.Button;
 import org.ah.gcc.rover.ui.ExpoGraph;
 import org.ah.gcc.rover.ui.JoyStick;
@@ -169,10 +170,11 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         Gdx.input.setInputProcessor(inputMultiplexer);
 
         comboController = new ComboController();
-        comboController.getScreenController().setLeftJotstick(leftjoystick);
-        comboController.getScreenController().setRightJotstick(rightjoystick);
-        comboController.getScreenController().setHat(pov);
-        comboController.getScreenController().setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
+        ScreenController screenController = comboController.getScreenController();
+        screenController.setLeftJotstick(leftjoystick);
+        screenController.setRightJotstick(rightjoystick);
+        screenController.setHat(pov);
+        screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
         roverDriver = new RoverDriver(roverHandler, comboController);
 
         logoDrawer = new LogoDrawer(batch, camera);
