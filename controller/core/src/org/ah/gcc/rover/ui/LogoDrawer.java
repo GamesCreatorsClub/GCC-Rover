@@ -48,16 +48,19 @@ public class LogoDrawer {
         batch.begin();
 
         if (alpha < 30) {
+            done = false;
             float scale = calculateScale(gccimg);
             int y = (int) ((Gdx.graphics.getHeight() - (gccimg.getHeight() * scale)) / 2);
             int x = (int) ((Gdx.graphics.getWidth() - (gccimg.getWidth() * scale)) / 2);
             batch.draw(gccimg, x, y, gccimg.getWidth() * scale, gccimg.getHeight() * scale);
         } else if (alpha < 60) {
+            done = false;
             float scale = Gdx.graphics.getHeight() / creativesphereimg.getHeight();
             int y = (int) ((Gdx.graphics.getHeight() - (creativesphereimg.getHeight() * scale)) / 2);
             int x = (int) ((Gdx.graphics.getWidth() - (creativesphereimg.getWidth() * scale)) / 2);
             batch.draw(creativesphereimg, x, y, creativesphereimg.getWidth() * scale, creativesphereimg.getHeight() * scale);
         } else if (alpha < 90) {
+            done = false;
             float scale = Gdx.graphics.getHeight() / bobimg.getHeight();
             int y = (int) ((Gdx.graphics.getHeight() - (bobimg.getHeight() * scale)) / 2);
             int x = (int) ((Gdx.graphics.getWidth() - (bobimg.getWidth() * scale)) / 2);

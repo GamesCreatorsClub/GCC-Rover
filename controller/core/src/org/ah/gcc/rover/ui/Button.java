@@ -4,7 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 
-public class Button {
+public class Button extends ScreenButton {
     private int x;
     private int y;
     private int width;
@@ -23,7 +23,7 @@ public class Button {
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
-        shapeRenderer.set(ShapeType.Line);
+        shapeRenderer.set(ShapeType.Filled);
 
         if (pressed) {
             shapeRenderer.setColor(Color.DARK_GRAY);

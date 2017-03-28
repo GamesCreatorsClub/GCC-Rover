@@ -91,20 +91,20 @@ public class DesktopRealController extends AbstractController implements Control
             }
         } else if (axisCode == 1) {
             if (speedModifier) {
-                if (value < 0.1f && lastX >= 0) {
-                    // System.out.println("SPEED UP   x1 " + value + " lastX1 " + lastX);
+                if (value < -0.1f && lastX >= 0) {
+                    System.out.println("SPEED UP   x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, true);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
                     lastX = -1;
                     fireEvent(state);
                 } else if (value > 0.1f && lastX <= 0) {
-                    // System.out.println("SPEED DOWN x1 " + value + " lastX1 " + lastX);
+                    System.out.println("SPEED DOWN x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, false);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, true);
                     lastX = 1;
                     fireEvent(state);
                 } else if (Math.abs(value) < 0.1f && lastX != 0) {
-                    // System.out.println("SPEED ---- x1 " + value + " lastX1 " + lastX);
+                    System.out.println("SPEED ---- x1 " + value + " lastX1 " + lastX);
                     state.setButton(ButtonType.SPEED_UP_BUTTON, false);
                     state.setButton(ButtonType.SPEED_DOWN_BUTTON, false);
                     lastX = 0;

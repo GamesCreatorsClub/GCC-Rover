@@ -27,7 +27,6 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Cursor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -183,6 +182,15 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         screenController.setRightJotstick(rightjoystick);
         screenController.setHat(pov);
         screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
+        screenController.setButton(switchRB, ControllerState.ButtonType.LOCK_AXIS_BUTTON);
+        screenController.setButton(switchLT, ControllerState.ButtonType.BOOST_BUTTON);
+        screenController.setButton(switchRT, ControllerState.ButtonType.KICK_BUTTON);
+
+        screenController.setButton(roverSelectButton, ControllerState.ButtonType.SELECT_BUTTON);
+
+
+
+
 
         if (realController != null) {
             comboController = new ComboController(screenController, realController);
@@ -215,12 +223,13 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             }
         });
 
+
+
         logoDrawer = new LogoDrawer(batch, camera);
 
         Pixmap pixmap = new Pixmap(32, 32, Format.RGBA8888);
-        // Pixmap pixmap = new Pixmap(Gdx.files.internal("cursor-empty.png"));
-        Cursor customCursor = Gdx.graphics.newCursor(pixmap, 0, 0);
-        Gdx.graphics.setCursor(customCursor);
+        //Cursor customCursor = Gdx.graphics.newCursor(pixmap, 0, 0);
+        //Gdx.graphics.setCursor(customCursor);
     }
 
     @Override
@@ -228,7 +237,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         alpha++;
         if (logos) {
             logoDrawer.draw();
-            logos = logoDrawer.done();
+            logos = !logoDrawer.done();
         } else {
             testConnection();
 
