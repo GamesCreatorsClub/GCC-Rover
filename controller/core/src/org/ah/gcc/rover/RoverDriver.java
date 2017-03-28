@@ -17,7 +17,7 @@ public class RoverDriver implements ControllerListener {
 
     private int divider = 0;
 
-    private RoverHandler roverControl;
+    private RoverHandler roverHandler;
     private ControllerInterface controllerInterface;
 
     private Exponent rightExpo;
@@ -31,20 +31,23 @@ public class RoverDriver implements ControllerListener {
     private JoystickAdapter rightJoystick = new JoystickAdapter();
 
     private int roverTurningDistance;
-
     private int roverSpeedMultiplier = 40;
+    private int selectedRover = 0;
+    private int retryCounter = 10;
+
 
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
 
-    private StringValueAdapter readDistanceValue = new StringValueAdapter("distance");
-    private StringValueAdapter roverSpeedValue = new StringValueAdapter("speed");
+    private ValueAdapter<String> readDistanceValue = new ValueAdapter<String>("distance", "");
+    private ValueAdapter<String> roverSpeedValue = new ValueAdapter<String>("speed", "");
+    private ValueAdapter<Integer> selectedRoverValue = new ValueAdapter<Integer>("selectedRover", selectedRover);
 
     private float readDistance = 0f;
     private long timeWhenReadDistance = 0;
 
     public RoverDriver(RoverHandler roverControl, ControllerInterface controllerInterface) {
-        this.roverControl = roverControl;
+        this.roverHandler = roverControl;
         this.controllerInterface = controllerInterface;
         controllerInterface.addListener(this);
 
@@ -65,7 +68,7 @@ public class RoverDriver implements ControllerListener {
                 readDistanceValue.setValue(String.format("%.2f", readDistance));
             }
         });
-        readDistanceValue.setValue(Integer.toString(roverSpeedMultiplier));
+        roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
     }
 
     public JoystickAdapter getLeftJoystick() {
@@ -76,17 +79,21 @@ public class RoverDriver implements ControllerListener {
         return rightJoystick;
     }
 
-    public StringValueAdapter getReadDistanceValue() {
+    public ValueAdapter<String> getReadDistanceValue() {
         return readDistanceValue;
     }
 
-    public StringValueAdapter getRoverSpeedValue() {
+    public ValueAdapter<String> getRoverSpeedValue() {
         return roverSpeedValue;
+    }
+
+    public ValueAdapter<Integer> getSelectedRover() {
+        return selectedRoverValue;
     }
 
 
     public void setRover(RoverHandler roverHandler) {
-        this.roverControl = roverHandler;
+        this.roverHandler = roverHandler;
     }
 
     public ControllerInterface getControllerInterface() {
@@ -104,9 +111,9 @@ public class RoverDriver implements ControllerListener {
         JoystickState rightJoystickState = rightJoystick.getState();
 
         if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
-            roverControl.publish("servo/9", "90");
+            roverHandler.publish("servo/9", "90");
         } else {
-            roverControl.publish("servo/9", "145");
+            roverHandler.publish("servo/9", "165");
         }
 
         if (leftJoystickState.getDistanceFromCentre() < 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
@@ -125,11 +132,9 @@ public class RoverDriver implements ControllerListener {
                     } else {
                         angleFromCentre = 180;
                     }
-                    roverControl.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float)(roverSpeed)));
                 } else {
-                    roverControl.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float)(roverSpeed)));
                 }
-
+                roverHandler.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float)(roverSpeed)));
             } else {
                 float orbitDistance = 150;
                 if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {
@@ -141,7 +146,7 @@ public class RoverDriver implements ControllerListener {
                 distance = rightExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
-                roverControl.publish("move/orbit",  (int)orbitDistance + " " + roverSpeed);
+                roverHandler.publish("move/orbit",  (int)orbitDistance + " " + roverSpeed);
             }
         } else if (leftJoystickState.getDistanceFromCentre() > 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
             float rightY = rightJoystickState.getY();
@@ -155,20 +160,20 @@ public class RoverDriver implements ControllerListener {
 
             roverSpeed = -calcRoverSpeed(rightY);
             roverTurningDistance = calcRoverDistance(leftX);
-            roverControl.publish("move/steer", roverTurningDistance + " " + roverSpeed);
+            roverHandler.publish("move/steer", roverTurningDistance + " " + roverSpeed);
         } else if (leftJoystickState.getDistanceFromCentre() > 0.1f) {
             float leftX = leftJoystickState.getX();
             leftExpo.setValue(leftX);
             leftX = leftExpo.calculate(leftX);
             roverSpeed = calcRoverSpeed(leftX) / 4;
-            roverControl.publish("move/rotate", Integer.toString(roverSpeed));
+            roverHandler.publish("move/rotate", Integer.toString(roverSpeed));
         } else {
-            roverControl.publish("move/drive", rightJoystickState.getAngleFromCentre() + " 0");
+            roverHandler.publish("move/drive", rightJoystickState.getAngleFromCentre() + " 0");
             roverSpeed = 0;
-            roverControl.publish("move/stop", "0");
+            roverHandler.publish("move/stop", "0");
         }
         if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && divider % 10 == 0) {
-            roverControl.publish("sensor/distance/read", "0");
+            roverHandler.publish("sensor/distance/read", "0");
         }
 
         if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
@@ -193,10 +198,41 @@ public class RoverDriver implements ControllerListener {
             roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
         }
 
+        if (buttons[ButtonType.SELECT_BUTTON.ordinal()] && !prevButtons[ButtonType.SELECT_BUTTON.ordinal()]) {
+            int selectedRover = getSelectedRover().getValue() + 1;
+            if (selectedRover >= RoverHandler.ROVERS.length) {
+                selectedRover = 0;
+            }
+            getSelectedRover().setValue(selectedRover);
+        }
+
         for (int i = 0; i < buttons.length; i++) {
             prevButtons[i] = buttons[i];
         }
+
+        testConnection();
     }
+
+    private void testConnection() {
+        int newSelectedRover = selectedRoverValue.getValue();
+        if (newSelectedRover != selectedRover) {
+            selectedRover = newSelectedRover;
+            roverHandler.disconnect();
+        }
+        if (!roverHandler.isConnected()) {
+            retryCounter -= 1;
+            if (retryCounter < 0) {
+                retryCounter = 10;
+                connectToRover();
+            }
+        }
+    }
+
+    private void connectToRover() {
+        // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
+        roverHandler.connect(RoverHandler.ROVERS[selectedRover].getFullAddress());
+    }
+
 
     private int calcRoverSpeed(float speed) {
         if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {
@@ -276,21 +312,26 @@ public class RoverDriver implements ControllerListener {
         }
     }
 
-    public static class StringValueAdapter {
+    public static class ValueAdapter<T> {
         private PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
 
         private String propertyName = "";
-        private String value = "";
+        private T value;
 
-        public StringValueAdapter(String propertyName) {
+        public ValueAdapter(String propertyName, T initialValue) {
             this.propertyName = propertyName;
+            this.value = initialValue;
         }
 
-        public void setValue(String value) {
+        public void setValue(T value) {
             if (!value.equals(this.value)) {
                 propertyChangeSupport.firePropertyChange(propertyName, this.value, value);
             }
             this.value = value;
+        }
+
+        public T getValue() {
+            return value;
         }
 
         public void addListener(PropertyChangeListener listener) {

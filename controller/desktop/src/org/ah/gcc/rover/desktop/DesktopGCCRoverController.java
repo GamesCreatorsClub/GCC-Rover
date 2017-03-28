@@ -5,7 +5,6 @@ import java.beans.PropertyChangeListener;
 
 import org.ah.gcc.rover.JoystickComponentListener;
 import org.ah.gcc.rover.PlatformSpecific;
-import org.ah.gcc.rover.RoverDetails;
 import org.ah.gcc.rover.RoverDriver;
 import org.ah.gcc.rover.RoverHandler;
 import org.ah.gcc.rover.controllers.ControllerInterface;
@@ -41,12 +40,9 @@ import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
 public class DesktopGCCRoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
-    private RoverDetails[] ROVERS = new RoverDetails[] { new RoverDetails("Rover 2", "172.24.1.184", 1883), new RoverDetails("Rover 3", "172.24.1.185", 1883),
-            new RoverDetails("Rover 4", "172.24.1.186", 1883), new RoverDetails("Rover 2p", "gcc-wifi-ap", 1884),
-            new RoverDetails("Rover 3p", "gcc-wifi-ap", 1885), new RoverDetails("Rover 4p", "gcc-wifi-ap", 1886) };
 
-    @SuppressWarnings("unused")
     private PlatformSpecific platformSpecific;
+
     private RoverHandler roverHandler;
 
     private SpriteBatch batch;
@@ -67,10 +63,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
     private ExpoGraph leftExpo;
     private ExpoGraph rightExpo;
 
-    private int selectedRover = 0;
-    private int newSelectedRover = 0;
-
-    private int retryCounter = 0;
     private int messageCounter = 10;
 
     private String roverSpeed = "";
@@ -89,8 +81,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
     private RoundButton button1;
 
     private boolean logos = true;
-
-    private boolean mouseDown = false;
 
     private long alpha = 0;
 
@@ -148,10 +138,11 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             @Override
             public void invoke(boolean state) {
                 if (state) {
-                    newSelectedRover = selectedRover + 1;
-                    if (newSelectedRover >= ROVERS.length) {
-                        newSelectedRover = 0;
+                    int selectedRover = roverDriver.getSelectedRover().getValue() + 1;
+                    if (selectedRover >= RoverHandler.ROVERS.length) {
+                        selectedRover = 0;
                     }
+                    roverDriver.getSelectedRover().setValue(selectedRover);
                 }
             }
         });
@@ -185,12 +176,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         screenController.setButton(switchRB, ControllerState.ButtonType.LOCK_AXIS_BUTTON);
         screenController.setButton(switchLT, ControllerState.ButtonType.BOOST_BUTTON);
         screenController.setButton(switchRT, ControllerState.ButtonType.KICK_BUTTON);
-
         screenController.setButton(roverSelectButton, ControllerState.ButtonType.SELECT_BUTTON);
-
-
-
-
 
         if (realController != null) {
             comboController = new ComboController(screenController, realController);
@@ -239,8 +225,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             logoDrawer.draw();
             logos = !logoDrawer.done();
         } else {
-            testConnection();
-
             messageCounter--;
             if (messageCounter < 0) {
                 messageCounter = 5;
@@ -255,7 +239,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             shapeRenderer.setProjectionMatrix(camera.combined);
             shapeRenderer.setAutoShapeType(true);
 
-            String connectedStr = ROVERS[selectedRover].getName();
+            String connectedStr = RoverHandler.ROVERS[roverDriver.getSelectedRover().getValue()].getName();
 
             shapeRenderer.begin();
             if (grid ) {
@@ -303,25 +287,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         }
     }
 
-    private void connectToRover() {
-        // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
-        roverHandler.connect(ROVERS[selectedRover].getFullAddress());
-    }
-
-    private void testConnection() {
-        if (newSelectedRover != selectedRover) {
-            selectedRover = newSelectedRover;
-            roverHandler.disconnect();
-        }
-        if (!roverHandler.isConnected()) {
-            retryCounter -= 1;
-            if (retryCounter < 0) {
-                retryCounter = 120;
-                connectToRover();
-            }
-        }
-    }
-
     @Override
     public void dispose() {
         batch.dispose();
@@ -361,7 +326,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.touchDown(screenX, screenY, pointer);
-        mouseDown = true;
         return false;
     }
 
@@ -374,7 +338,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         rightjoystick.touchUp(screenX, screenY, pointer);
         button1.touchUp(screenX, screenY, pointer);
         roverSelectButton.touchUp(screenX, screenY, pointer);
-        mouseDown = false;
+
         screenController.stickMoved(0, new JoystickState(leftjoystick.getXValue(), leftjoystick.getYValue()));
         screenController.stickMoved(1, new JoystickState(rightjoystick.getXValue(), rightjoystick.getYValue()));
         pov.touchUp(screenX, screenY, pointer);
