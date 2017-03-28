@@ -117,7 +117,11 @@ public class RoverDriver implements ControllerListener {
                 distance = rightExpo.calculate(distance);
 
                 roverSpeed = calcRoverSpeed(distance);
-                roverControl.publish("move/drive", String.format("%.2f %.0f", rightJoystickState.getAngleFromCentre(), (float)(roverSpeed)));
+                if (!buttons[ButtonType.LOCK_AXIS_BUTTON.ordinal()]) {
+                    roverControl.publish("move/drive", String.format("%.2f %.0f", rightJoystickState.getAngleFromCentre(), (float)(roverSpeed)));
+                } else {
+                    roverControl.publish("move/drive", "0.0 " + (float)(roverSpeed));
+                }
             } else {
                 float orbitDistance = 150;
                 if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {

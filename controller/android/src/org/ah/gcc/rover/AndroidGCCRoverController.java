@@ -210,12 +210,12 @@ public class AndroidGCCRoverController extends ApplicationAdapter implements Inp
 
             shapeRenderer.begin();
             shapeRenderer.setColor(0.9f, 0.9f, 0.9f, 1f);
-            for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
-                shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
-            }
-            for (int y = Gdx.graphics.getHeight(); y > 0 ; y = (int) (y - cellSize)) {
-                shapeRenderer.line(0, y, Gdx.graphics.getWidth(), y);
-            }
+//            for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
+//                shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
+//            }
+//            for (int y = 0; y < Gdx.graphics.getHeight() ; y = (int) (y + cellSize)) {
+//                shapeRenderer.line(0, Gdx.graphics.getHeight() - y, Gdx.graphics.getWidth(), Gdx.graphics.getHeight() - y);
+//            }
 
             shapeRenderer.setColor(Color.BLACK);
 

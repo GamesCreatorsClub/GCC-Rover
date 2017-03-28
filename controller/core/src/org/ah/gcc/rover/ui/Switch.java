@@ -42,6 +42,10 @@ public class Switch extends ScreenButton {
                 shapeRenderer.setColor(Color.RED);
                 shapeRenderer.rect(x + width / 2, y, width / 2, width / 2);
             }
+            shapeRenderer.set(ShapeType.Line);
+            shapeRenderer.setColor(Color.BLACK);
+            shapeRenderer.rect(x, y, width, width / 2);
+
         } else if (orientation == Orientation.VERTICAL) {
             if (on) {
                 shapeRenderer.setColor(Color.GREEN);
@@ -58,6 +62,9 @@ public class Switch extends ScreenButton {
                 shapeRenderer.setColor(Color.RED);
                 shapeRenderer.rect(x, y + width / 2, width, width / 2);
             }
+            shapeRenderer.set(ShapeType.Line);
+            shapeRenderer.setColor(Color.BLACK);
+            shapeRenderer.rect(x, y, width / 2, width);
         }
 
     }

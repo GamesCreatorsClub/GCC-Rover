@@ -42,14 +42,9 @@ import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
 public class DesktopGCCRoverController extends ApplicationAdapter implements InputProcessor, GestureListener {
-    private RoverDetails[] ROVERS = new RoverDetails[] {
-            new RoverDetails("Rover 2", "172.24.1.184", 1883),
-            new RoverDetails("Rover 3", "172.24.1.185", 1883),
-            new RoverDetails("Rover 4", "172.24.1.186", 1883),
-            new RoverDetails("Rover 2p", "gcc-wifi-ap", 1884),
-            new RoverDetails("Rover 3p", "gcc-wifi-ap", 1885),
-            new RoverDetails("Rover 4p", "gcc-wifi-ap", 1886)
-    };
+    private RoverDetails[] ROVERS = new RoverDetails[] { new RoverDetails("Rover 2", "172.24.1.184", 1883), new RoverDetails("Rover 3", "172.24.1.185", 1883),
+            new RoverDetails("Rover 4", "172.24.1.186", 1883), new RoverDetails("Rover 2p", "gcc-wifi-ap", 1884),
+            new RoverDetails("Rover 3p", "gcc-wifi-ap", 1885), new RoverDetails("Rover 4p", "gcc-wifi-ap", 1886) };
 
     @SuppressWarnings("unused")
     private PlatformSpecific platformSpecific;
@@ -112,6 +107,8 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     private ControllerInterface realController;
 
+    private boolean grid = false;
+
     public DesktopGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
         this.roverHandler = platformSpecific.getRoverControl();
@@ -133,23 +130,22 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         batch = new SpriteBatch();
         img = new Texture("badlogic.jpg");
 
-
         camera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         cellSize = Gdx.graphics.getWidth() / 20;
 
         shapeRenderer = new ShapeRenderer();
 
-        leftjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 4, (int)cellSize * 4);
-        rightjoystick = new JoyStick((int)cellSize * 8, (int)cellSize * 16, (int)cellSize * 4);
+        leftjoystick = new JoyStick((int) cellSize * 8, (int) cellSize * 4, (int) cellSize * 4);
+        rightjoystick = new JoyStick((int) cellSize * 8, (int) cellSize * 16, (int) cellSize * 4);
 
-        leftExpo = new ExpoGraph((int)cellSize * 5, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
-        rightExpo = new ExpoGraph((int)cellSize * 13, (int)cellSize * 2, (int)cellSize * 2, (int)cellSize * 2);
+        leftExpo = new ExpoGraph((int) cellSize * 5, (int) cellSize * 2, (int) cellSize * 2, (int) cellSize * 2);
+        rightExpo = new ExpoGraph((int) cellSize * 13, (int) cellSize * 2, (int) cellSize * 2, (int) cellSize * 2);
 
         leftExpo.setPercentage(0.75f);
         rightExpo.setPercentage(0.90f);
 
-        roverSelectButton = new Button((int)cellSize * 6, 0, (int)cellSize * 8, (int)(cellSize * 1.5), new Button.ButtonCallback() {
+        roverSelectButton = new Button((int) cellSize * 6, 0, (int) cellSize * 8, (int) (cellSize * 1.5), new Button.ButtonCallback() {
             @Override
             public void invoke(boolean state) {
                 if (state) {
@@ -161,20 +157,19 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             }
         });
 
-        pov = new POV((int) cellSize * 9, (int) cellSize * 4, (int) cellSize*2);
+        pov = new POV((int) cellSize * 9, (int) cellSize * 4, (int) cellSize * 2);
 
-        button1 = new RoundButton((int)cellSize * 6, (int)cellSize * 11, (int)cellSize / 2);
+        button1 = new RoundButton((int) cellSize * 6, (int) cellSize * 11, (int) cellSize / 2);
 
-        switchLT = new SquareButton((int)cellSize * 0, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchLT = new SquareButton((int) cellSize * 0, (int) (cellSize * 0), (int) cellSize * 4, (int) cellSize * 2);
         switchLT.setState(false);
-        switchLB = new Switch((int)cellSize * 0, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchLB = new Switch((int) cellSize * 0, (int) (cellSize * 2), (int) cellSize * 2, Orientation.HORIZONTAL);
         switchLB.setState(false);
 
-        switchRT = new SquareButton((int)cellSize * 16, (int)(cellSize * 0), (int)cellSize * 4, (int)cellSize * 2);
+        switchRT = new SquareButton((int) cellSize * 16, (int) (cellSize * 0), (int) cellSize * 4, (int) cellSize * 2);
         switchRT.setState(false);
-        switchRB = new Switch((int)cellSize * 16, (int)(cellSize * 2), (int)cellSize * 2, Orientation.HORIZONTAL);
+        switchRB = new Switch((int) cellSize * 16, (int) (cellSize * 2), (int) cellSize * 2, Orientation.HORIZONTAL);
         switchRB.setState(false);
-
 
         inputMultiplexer = new InputMultiplexer();
         inputMultiplexer.addProcessor(this);
@@ -254,14 +249,15 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             String connectedStr = ROVERS[selectedRover].getName();
 
             shapeRenderer.begin();
-            shapeRenderer.setColor(0.9f, 0.9f, 0.9f, 1f);
-            for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
-                shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
+            if (grid ) {
+                shapeRenderer.setColor(0.9f, 0.9f, 0.9f, 1f);
+                for (int x = 0; x < Gdx.graphics.getWidth(); x = (int) (x + cellSize)) {
+                    shapeRenderer.line(x, 0, x, Gdx.graphics.getHeight());
+                }
+                for (int y = 0; y < Gdx.graphics.getHeight(); y = (int) (y + cellSize)) {
+                    shapeRenderer.line(0, y, Gdx.graphics.getWidth(), y);
+                }
             }
-            for (int y = Gdx.graphics.getHeight(); y > 0 ; y = (int) (y - cellSize)) {
-                shapeRenderer.line(0, (float) (y + (cellSize / 2)), Gdx.graphics.getWidth(),(float)  (y + (cellSize / 2)));
-            }
-
             shapeRenderer.setColor(Color.BLACK);
 
             leftjoystick.draw(shapeRenderer);
@@ -338,7 +334,6 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         return false;
     }
 
-
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
         if (comboController != null) {
@@ -397,6 +392,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         switchLT.touchDragged(screenX, screenY, pointer);
         switchRT.touchDragged(screenX, screenY, pointer);
         return false;
+
     }
 
     @Override

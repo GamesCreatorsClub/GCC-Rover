@@ -41,15 +41,27 @@ public class JoyStick {
     public void draw(ShapeRenderer shapeRenderer) {
         shapeRenderer.setColor(0.5f, 0.5f, 0.5f, 1f);
 
-        shapeRenderer.set(ShapeType.Line);
+        shapeRenderer.set(ShapeType.Filled);
 
+
+        shapeRenderer.setColor(0.7f, 0.7f, 0.7f, 1f);
         shapeRenderer.circle(centreX, centreY, spaceSize / 2);
-
-        shapeRenderer.setColor(0.25f, 0.25f, 0.25f, 1f);
+        shapeRenderer.setColor(0.6f, 0.6f, 0.6f, 1f);
         shapeRenderer.circle(centreX, centreY, spaceSize / 2 - padSize / 2);
+        shapeRenderer.setColor(0.25f, 0.25f, 0.25f, 1f);
         shapeRenderer.circle(centreX, centreY, inactiveSize / 2);
 
+        shapeRenderer.set(ShapeType.Line);
+
+        shapeRenderer.setColor(0f, 0f, 0f, 1f);
+        shapeRenderer.circle(centreX, centreY, spaceSize / 2);
+        shapeRenderer.circle(centreX, centreY, spaceSize / 2 - padSize / 2);
+        shapeRenderer.circle(centreX, centreY, inactiveSize / 2);
+        shapeRenderer.circle(x, y, (padSize / 2) + 1);
+
         shapeRenderer.set(ShapeType.Filled);
+        shapeRenderer.setColor(0.9f, 0.9f, 0.9f, 0.5f);
+
         shapeRenderer.circle(x, y, padSize / 2);
     }
 

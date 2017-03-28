@@ -22,7 +22,6 @@ public class SquareButton extends ScreenButton{
     }
 
     public void draw(ShapeRenderer shapeRenderer) {
-        shapeRenderer.set(ShapeType.Filled);
 
         if (pressed) {
             shapeRenderer.setColor(Color.DARK_GRAY);
@@ -30,6 +29,10 @@ public class SquareButton extends ScreenButton{
             shapeRenderer.setColor(Color.GRAY);
         }
 
+        shapeRenderer.set(ShapeType.Filled);
+        shapeRenderer.rect(x, y, width, height);
+        shapeRenderer.set(ShapeType.Line);
+        shapeRenderer.setColor(Color.BLACK);
         shapeRenderer.rect(x, y, width, height);
 
     }
