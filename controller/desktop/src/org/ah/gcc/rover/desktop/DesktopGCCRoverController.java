@@ -8,6 +8,7 @@ import org.ah.gcc.rover.PlatformSpecific;
 import org.ah.gcc.rover.RoverDetails;
 import org.ah.gcc.rover.RoverDriver;
 import org.ah.gcc.rover.RoverHandler;
+import org.ah.gcc.rover.controllers.ControllerInterface;
 import org.ah.gcc.rover.controllers.ControllerState;
 import org.ah.gcc.rover.controllers.JoystickState;
 import org.ah.gcc.rover.controllers.ScreenController;
@@ -109,7 +110,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     private ScreenController screenController;
 
-    private RealController realController;
+    private ControllerInterface realController;
 
     public DesktopGCCRoverController(PlatformSpecific platformSpecific) {
         this.platformSpecific = platformSpecific;
@@ -181,14 +182,19 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
         Gdx.input.setInputProcessor(inputMultiplexer);
 
         screenController = new ScreenController();
-        realController = new RealController();
+        realController = platformSpecific.getRealController();
 
-        comboController = new ComboController(screenController, realController);
         screenController.setLeftJotstick(leftjoystick);
         screenController.setRightJotstick(rightjoystick);
         screenController.setHat(pov);
         screenController.setButton(switchLB, ControllerState.ButtonType.ORBIT_BUTTON);
-        roverDriver = new RoverDriver(roverHandler, comboController);
+
+        if (realController != null) {
+            comboController = new ComboController(screenController, realController);
+            roverDriver = new RoverDriver(roverHandler, comboController);
+        } else {
+            roverDriver = new RoverDriver(roverHandler, screenController);
+        }
 
         roverDriver.getLeftJoystick().addListener(new JoystickComponentListener() {
             @Override public void changed(JoystickState state) {
@@ -335,8 +341,9 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        comboController.setTouchState(true);
-
+        if (comboController != null) {
+            comboController.setTouchState(true);
+        }
         leftjoystick.touchDown(screenX, screenY, pointer);
         rightjoystick.touchDown(screenX, screenY, pointer);
         switchLB.touchDown(screenX, screenY, pointer);
@@ -356,7 +363,9 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
     @Override
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
-        comboController.setTouchState(false);
+        if (comboController != null) {
+            comboController.setTouchState(false);
+        }
         leftjoystick.touchUp(screenX, screenY, pointer);
         rightjoystick.touchUp(screenX, screenY, pointer);
         button1.touchUp(screenX, screenY, pointer);
