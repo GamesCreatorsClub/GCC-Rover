@@ -17,7 +17,8 @@ public interface ControllerState {
         SLING_SHOT_BUTTON,
         SELECT_BUTTON,
         SPEED_UP_BUTTON,
-        SPEED_DOWN_BUTTON
+        SPEED_DOWN_BUTTON,
+        HIT_BALL_BUTTON
     };
 
     JoystickState getLeft();

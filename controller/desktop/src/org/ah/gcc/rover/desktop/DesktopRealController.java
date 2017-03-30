@@ -193,6 +193,7 @@ public class DesktopRealController extends AbstractController implements Control
         } else if (buttonCode == 1) {
             return ButtonType.READ_DISTANCE_BUTTON;
         } else if (buttonCode == 2) {
+            return ButtonType.HIT_BALL_BUTTON;
         } else if (buttonCode == 3) {
         } else if (buttonCode == 4) {
             return ButtonType.ORBIT_BUTTON;

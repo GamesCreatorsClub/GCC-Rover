@@ -21,7 +21,7 @@ import org.ah.gcc.rover.controllers.JoystickState;
 
 public class RoverDriver implements ControllerListener {
 
-    private int divider = 0;
+    private long timer = 0;
 
     private RoverHandler roverHandler;
     private ControllerInterface controllerInterface;
@@ -52,6 +52,10 @@ public class RoverDriver implements ControllerListener {
     private float readDistance = 0f;
     private long timeWhenReadDistance = 0;
 
+    private boolean automatic = false;
+
+    private long kickuptime = -1;
+
     public RoverDriver(RoverHandler roverControl, ControllerInterface controllerInterface) {
         this.roverHandler = roverControl;
         this.controllerInterface = controllerInterface;
@@ -65,10 +69,14 @@ public class RoverDriver implements ControllerListener {
 
         controllerInterface.addListener(this);
         roverControl.subscribe("sensor/distance", new RoverMessageListener() {
-            @Override public void onMessage(String topic, String message) {
+            @Override
+            public void onMessage(String topic, String message) {
                 String[] splitMessage = message.split(",")[0].split(":");
 
                 readDistance = Float.parseFloat(splitMessage[1]);
+                if (readDistance < 0) {
+                    readDistance = 8100f;
+                }
                 timeWhenReadDistance = System.currentTimeMillis();
 
                 readDistanceValue.setValue(String.format("%.2f", readDistance));
@@ -111,97 +119,119 @@ public class RoverDriver implements ControllerListener {
     }
 
     public void processJoysticks() {
-        divider++;
+        timer++;
 
         JoystickState leftJoystickState = leftJoystick.getState();
         JoystickState rightJoystickState = rightJoystick.getState();
 
         if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
             roverHandler.publish("servo/9", "90");
+            automatic = false;
         } else {
             roverHandler.publish("servo/9", "165");
         }
 
-        if (leftJoystickState.getDistanceFromCentre() < 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
-            if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
-                float distance = rightJoystickState.getDistanceFromCentre();
-                rightExpo.setValue(distance);
-
-                distance = rightExpo.calculate(distance);
-
-                roverSpeed = calcRoverSpeed(distance);
-                double angleFromCentre = rightJoystickState.getAngleFromCentre();
-
-                if (buttons[ButtonType.LOCK_AXIS_BUTTON.ordinal()]) {
-                    if (angleFromCentre < 180) {
-                        angleFromCentre = 0;
-                    } else {
-                        angleFromCentre = 180;
-                    }
-                } else {
-                }
-                roverHandler.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float)(roverSpeed)));
-            } else {
-                float orbitDistance = 150;
-                if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {
-                    orbitDistance = readDistance + 100;
-                }
-
-                float distance = rightJoystickState.getX();
-                rightExpo.setValue(distance);
-                distance = rightExpo.calculate(distance);
-
-                roverSpeed = calcRoverSpeed(distance);
-                roverHandler.publish("move/orbit",  (int)orbitDistance + " " + roverSpeed);
-            }
-        } else if (leftJoystickState.getDistanceFromCentre() > 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
-            float rightY = rightJoystickState.getY();
-            float leftX = leftJoystickState.getX();
-
-            rightExpo.setValue(rightY);
-            rightY = rightExpo.calculate(rightY);
-
-            leftExpo.setValue(leftX);
-            leftX = leftExpo.calculate(leftX);
-
-            roverSpeed = -calcRoverSpeed(rightY);
-            roverTurningDistance = calcRoverDistance(leftX);
-            roverHandler.publish("move/steer", roverTurningDistance + " " + roverSpeed);
-        } else if (leftJoystickState.getDistanceFromCentre() > 0.1f) {
-            float leftX = leftJoystickState.getX();
-            leftExpo.setValue(leftX);
-            leftX = leftExpo.calculate(leftX);
-            roverSpeed = calcRoverSpeed(leftX) / 4;
-            roverHandler.publish("move/rotate", Integer.toString(roverSpeed));
-        } else {
-            roverHandler.publish("move/drive", rightJoystickState.getAngleFromCentre() + " 0");
-            roverSpeed = 0;
-            roverHandler.publish("move/stop", "0");
-        }
-        if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && divider % 10 == 0) {
+        if (buttons[ButtonType.HIT_BALL_BUTTON.ordinal()]) {
+            automatic = true;
+            roverHandler.publish("move/drive", "0 150");
             roverHandler.publish("sensor/distance/read", "0");
         }
 
-        if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
-            if (roverSpeedMultiplier < 10) {
-                roverSpeedMultiplier += 1;
-            } else if (roverSpeedMultiplier < 50) {
-                roverSpeedMultiplier += 5;
-            } else if (roverSpeedMultiplier < 300) {
-                roverSpeedMultiplier += 10;
-            }
-            roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
+        if (leftJoystickState.getDistanceFromCentre() > 0.1 || rightJoystickState.getDistanceFromCentre() > 0.1) {
+            automatic = false;
+            kickuptime = -2;
         }
 
-        if (buttons[ButtonType.SPEED_DOWN_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_DOWN_BUTTON.ordinal()]) {
-            if (roverSpeedMultiplier > 50) {
-                roverSpeedMultiplier -= 10;
-            } else if (roverSpeedMultiplier > 10) {
-                roverSpeedMultiplier -= 5;
-            } else if (roverSpeedMultiplier > 0) {
-                roverSpeedMultiplier -= 1;
+        if (automatic) {
+
+            roverHandler.publish("sensor/distance/read", "0");
+            if (readDistance < 1) {
+                roverHandler.publish("servo/9", "90");
+                roverHandler.publish("move/drive", "0 0");
+                automatic = false;
             }
-            roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
+        } else {
+            if (leftJoystickState.getDistanceFromCentre() < 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
+                if (!buttons[ButtonType.ORBIT_BUTTON.ordinal()]) {
+                    float distance = rightJoystickState.getDistanceFromCentre();
+                    rightExpo.setValue(distance);
+
+                    distance = rightExpo.calculate(distance);
+
+                    roverSpeed = calcRoverSpeed(distance);
+                    double angleFromCentre = rightJoystickState.getAngleFromCentre();
+
+                    if (buttons[ButtonType.LOCK_AXIS_BUTTON.ordinal()]) {
+                        if (angleFromCentre < 180) {
+                            angleFromCentre = 0;
+                        } else {
+                            angleFromCentre = 180;
+                        }
+                        roverHandler.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float) (roverSpeed)));
+                    } else {
+                        roverHandler.publish("move/drive", String.format("%.2f %.0f", angleFromCentre, (float) (roverSpeed)));
+                    }
+                } else {
+                    float orbitDistance = 150;
+                    if (System.currentTimeMillis() - timeWhenReadDistance < 2000) {
+                        orbitDistance = readDistance + 100;
+                    }
+
+                    float distance = rightJoystickState.getX();
+                    rightExpo.setValue(distance);
+                    distance = rightExpo.calculate(distance);
+                    roverSpeed = calcRoverSpeed(distance);
+                    roverHandler.publish("move/orbit", (int) orbitDistance + " " + roverSpeed);
+                }
+            } else if (leftJoystickState.getDistanceFromCentre() > 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
+                float rightY = rightJoystickState.getY();
+                float leftX = leftJoystickState.getX();
+
+                rightExpo.setValue(rightY);
+                rightY = rightExpo.calculate(rightY);
+
+                leftExpo.setValue(leftX);
+                leftX = leftExpo.calculate(leftX);
+
+                roverSpeed = -calcRoverSpeed(rightY);
+                roverTurningDistance = calcRoverDistance(leftX);
+                roverHandler.publish("move/steer", roverTurningDistance + " " + roverSpeed);
+            } else if (leftJoystickState.getDistanceFromCentre() > 0.1f) {
+                float leftX = leftJoystickState.getX();
+                leftExpo.setValue(leftX);
+                leftX = leftExpo.calculate(leftX);
+                roverSpeed = calcRoverSpeed(leftX) / 4;
+                roverHandler.publish("move/rotate", Integer.toString(roverSpeed));
+            } else {
+                roverHandler.publish("move/drive", rightJoystickState.getAngleFromCentre() + " 0");
+                roverSpeed = 0;
+                roverHandler.publish("move/stop", "0");
+            }
+            if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && timer % 10 == 0) {
+                roverHandler.publish("sensor/distance/read", "0");
+            }
+
+            if (buttons[ButtonType.SPEED_UP_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_UP_BUTTON.ordinal()]) {
+                if (roverSpeedMultiplier < 10) {
+                    roverSpeedMultiplier += 1;
+                } else if (roverSpeedMultiplier < 50) {
+                    roverSpeedMultiplier += 5;
+                } else if (roverSpeedMultiplier < 300) {
+                    roverSpeedMultiplier += 10;
+                }
+                roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
+            }
+
+            if (buttons[ButtonType.SPEED_DOWN_BUTTON.ordinal()] && !prevButtons[ButtonType.SPEED_DOWN_BUTTON.ordinal()]) {
+                if (roverSpeedMultiplier > 50) {
+                    roverSpeedMultiplier -= 10;
+                } else if (roverSpeedMultiplier > 10) {
+                    roverSpeedMultiplier -= 5;
+                } else if (roverSpeedMultiplier > 0) {
+                    roverSpeedMultiplier -= 1;
+                }
+                roverSpeedValue.setValue(Integer.toString(roverSpeedMultiplier));
+            }
         }
 
         if (buttons[ButtonType.SELECT_BUTTON.ordinal()] && !prevButtons[ButtonType.SELECT_BUTTON.ordinal()]) {
@@ -258,10 +288,10 @@ public class RoverDriver implements ControllerListener {
             distance = Math.abs(distance);
             distance = 1.0f - distance;
             distance = distance + 0.2f;
-            distance = - distance * 500f;
+            distance = -distance * 500f;
         }
 
-        return (int)distance;
+        return (int) distance;
     }
 
     @Override
@@ -291,7 +321,8 @@ public class RoverDriver implements ControllerListener {
         private List<JoystickComponentListener> listeners = new ArrayList<JoystickComponentListener>();
         private JoystickState state = new JoystickState(0f, 0f);
 
-        public JoystickAdapter() { }
+        public JoystickAdapter() {
+        }
 
         public JoystickState getState() {
             return state;
