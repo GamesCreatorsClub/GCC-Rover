@@ -1,3 +1,10 @@
+
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 import RPi.GPIO as GPIO
 import time
 import traceback

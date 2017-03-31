@@ -1,3 +1,9 @@
+/*
+ * Copyright 2016-2017 Games Creators Club
+ *
+ * MIT License
+ *
+ */
 package org.ah.gcc.rover;
 
 public class RoverDetails {
@@ -6,7 +12,7 @@ public class RoverDetails {
     private String address;
     private int port;
 
-    public 
+    public
     RoverDetails(String name, String address, int port) {
         this.name = name;
         this.address = address;
@@ -28,5 +34,5 @@ public class RoverDetails {
     public String getFullAddress() {
         return "tcp://" + address + ":" + port;
     }
-    
+
 }

@@ -1,11 +1,16 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
 
 import traceback
 import re
 import copy
 import pyroslib
 import storagelib
-
 
 #
 # wheels service

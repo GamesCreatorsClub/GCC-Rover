@@ -1,3 +1,10 @@
+
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 import paho.mqtt.client as mqtt
 import pygame, sys, threading, os, random
 import time

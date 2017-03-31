@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 print("usage: pyros [<host[:port]>] <command> [<args>]")
 print("")
 print("There are commond PyROS commands used in various situations:")

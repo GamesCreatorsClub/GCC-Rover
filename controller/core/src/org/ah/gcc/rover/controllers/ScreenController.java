@@ -1,3 +1,9 @@
+/*
+ * Copyright 2016-2017 Games Creators Club
+ *
+ * MIT License
+ *
+ */
 package org.ah.gcc.rover.controllers;
 
 import org.ah.gcc.rover.HatComponentListener;

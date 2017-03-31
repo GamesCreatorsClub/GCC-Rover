@@ -1,3 +1,9 @@
+/*
+ * Copyright 2016-2017 Games Creators Club
+ *
+ * MIT License
+ *
+ */
 package org.ah.gcc.rover.ui;
 
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;

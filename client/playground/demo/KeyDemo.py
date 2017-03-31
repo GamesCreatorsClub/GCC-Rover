@@ -1,3 +1,10 @@
+
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 import pygame, sys, time, random
 import paho.mqtt.client as mqtt
 import math

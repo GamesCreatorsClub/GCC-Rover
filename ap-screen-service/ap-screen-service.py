@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 import time
 import subprocess
 import RPi.GPIO as GPIO
@@ -106,12 +112,14 @@ def shutdown():
             print("Preparing to shut down... " + str(lastSeconds))
 
         previousSwitch = currentSwtich
-        currentSwtich = hasShutdownCombo()
         readKeys()
+        currentSwtich = hasShutdownCombo()
 
     if not (previousSwitch == 0 and currentSwtich == 1):
+        print("Shutting down...")
         doShutdown()
-
+    else:
+        print("Shutdown stopped.")
 
 screenOn()
 lastKeySeen = time.time()
@@ -127,6 +135,7 @@ while True:
             screenOn()
 
         if hasShutdownCombo():
+            print("Detected shutdown key combo...")
             shutdown()
 
     elif isScreenOn:

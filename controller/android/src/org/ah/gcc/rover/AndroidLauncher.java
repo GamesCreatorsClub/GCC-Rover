@@ -1,11 +1,16 @@
+/*
+ * Copyright 2016-2017 Games Creators Club
+ *
+ * MIT License
+ *
+ */
 package org.ah.gcc.rover;
-
-import android.content.Context;
-import android.os.Bundle;
 
 import com.badlogic.gdx.backends.android.AndroidApplication;
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
-import org.ah.gcc.rover.RoverController;
+
+import android.content.Context;
+import android.os.Bundle;
 
 public class AndroidLauncher extends AndroidApplication {
     @Override

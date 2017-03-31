@@ -1,4 +1,10 @@
 
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
 import array
 import struct
 import threading
