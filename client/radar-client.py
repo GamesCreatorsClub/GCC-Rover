@@ -7,14 +7,14 @@ import pyros.gcc
 import pyros.pygamehelper
 
 SCALE = 10
+WHITE = (255, 255, 255)
 
 pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
+font = pygame.font.SysFont("arial", 24)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 600))
 
-stopped = False
-received = True
+received = False
 
 distances = {}
 
@@ -72,28 +72,22 @@ def drawRadar():
 
 
 def onKeyDown(key):
-    global stopped, received, angle
+    global angle
 
     if key == pygame.K_ESCAPE:
         sys.exit()
-    elif key == pygame.K_SPACE:
-        if not stopped:
-            stopped = True
-    elif key == pygame.K_RETURN:
-        if received:
-            pyros.publish("sensor/distance/scan", "scan")
-            print("** asked for distance")
     elif key == pygame.K_s:
-        if received:
-            received = False
-            pyros.publish("sensor/distance/read", str(angle))
-            print("** asked for distance")
+        pyros.publish("sensor/distance/scan", "scan")
+        print("** asked for distance")
+    elif key == pygame.K_r:
+        pyros.publish("sensor/distance/read", str(angle))
+        print("** asked for distance")
     elif key == pygame.K_o:
-        angle -= 1
+        angle -= 11.25
         if angle < -90:
             angle = -90
     elif key == pygame.K_p:
-        angle += 1
+        angle += 11.25
         if angle > 90:
             angle = 90
     else:
@@ -122,14 +116,18 @@ while True:
     screen.fill((0, 0, 0))
 
     if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
+        text = font.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
     else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
+        text = font.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
 
     screen.blit(text, (0, 0))
 
-    text = bigFont.render("Stopped: " + str(stopped), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 80, 0, 0))
+    screen.blit(font.render("Angle (o, p): " + str(angle), 1, WHITE), (0, 80))
+
+    distanceStr = "---"
+    if angle in distances:
+        distanceStr = str(distances[angle])
+    screen.blit(font.render("Distance (r, s): " + str(distanceStr), 1, WHITE), (300, 80))
 
     drawRadar()
 

@@ -37,6 +37,8 @@ VL53L0X_REG_RESULT_RANGE_STATUS = 0x14
 SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60 (expecting servo to be twice as slow as per specs
 
+timing = 100
+
 lastServoAngle = 0
 newServoAngle = 0
 
@@ -68,7 +70,6 @@ def moveServo(angle):
     lastServoAngle = angle
     newServoAngle = lastServoAngle
 
-
     # angle is between -90 and 90
     angle += 150
     angle = int(angle)
@@ -88,10 +89,11 @@ def initVL53L0X():
     tof = VL53L0X.VL53L0X()
     tof.start_ranging(VL53L0X.VL53L0X_BETTER_ACCURACY_MODE)
     timing = tof.get_timing()
-    if (timing < 20000):
+    if timing < 20000:
         timing = 20000
+        print("Capped timing to 20000!")
 
-    print ("Timing %d ms" % (timing/1000))
+    print("Timing %d ms" % (timing/1000))
 
 
 def readDistance():
@@ -107,20 +109,19 @@ def readDistance():
 
     lastRead = time.time()
 
-    if distance > 10:
-        distance -= 10
+    # if distance > 10:
+    #     distance -= 10
 
     return distance
 
 
 def handleRead(topic, payload, groups):
-
     angle = float(payload)
     log(DEBUG_LEVEL_INFO, "Message", "Got read - moving to angle " + str(angle))
 
     moveServo(angle)
     distance = readDistance()
-    pyroslib.publish("sensor/distance", str(angle) + ":" + str(distance))
+    pyroslib.publish("sensor/distance", str(round(angle, 1)) + ":" + str(int(distance)))
 
 
 def handleScan(topic, payload, groups):
