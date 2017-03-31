@@ -14,10 +14,9 @@ from PIL import Image
 
 DEBUG = True
 
-MINIMAL_PIXELS = 3
+MIN_PIXLES = 5
 ACTION_TIMEOUT = 4
-STEER_GAIN = 10
-VALUE_EXPO = 0.2
+STEER_GAIN = 0.3
 
 TURNING_NONE = 0
 TURNING_WAIT = 1
@@ -31,7 +30,6 @@ ACTION_STEER = 2
 ACTION_TURN = 3
 
 action = ACTION_NONE
-actionTimeout = 0
 
 run = False
 continuousMode = False
@@ -46,11 +44,12 @@ processedImage = receivedProcessedImage.copy()
 frameTime = ""
 turnDistance = 0
 feedback = ""
+actionStr = ""
 
+actionTimeout = 0
 minAngle = 0
 maxAngle = 0
 angle = 0
-actionStr = ""
 forwardSpeed = 2
 
 turningState = TURNING_NONE
@@ -153,8 +152,9 @@ def stop():
 
 
 def start():
-    global run, continuousMode
+    global run, continuousMode, turningState
     print("Starting...")
+    turningState = TURNING_NONE
     run = True
     continuousMode = True
     pyroslib.publish("camera/continuous", "on")
@@ -207,116 +207,129 @@ def toPyImage(imageBytes):
     return Image.frombytes("L", (80, 64), imageBytes)
 
 
-def testRightValue(cameraImage, pixelMap, r):
-    value = 0
-    pixelMap = processedImage.load()
-    v = 1
-
-    for i in range(31, -1, -1):
-        x = 40 - r
-        y = i
-        p = cameraImage.getpixel((x, y))
-        if p < 128:
-            pixelMap[x, y] = (0, 255, 0)
-            value += v
-        else:
-            pixelMap[x, y] = (255, 0, 0)
-
-        v += VALUE_EXPO
-
-    return value
-
-
-def testLeftValue(cameraImage, pixelMap, r):
-    value = 0
-    pixelMap = processedImage.load()
-
-    v = 1
-
-    for i in range(32, 64, 1):
-        x = 40 - r
-        y = i
-        p = cameraImage.getpixel((x, y))
-        if p < 128:
-            pixelMap[x, y] = (0, 255, 0)
-            value += v
-        else:
-            pixelMap[x, y] = (255, 0, 0)
-
-        v += VALUE_EXPO
-
-    return value
-
-
 def processImage():
-    global processedImage, maxAngle, minAngle, angle, turnDistance, action, actionStr, actionTimeout, turningState
+    global processedImage, maxAngle, minAngle, angle, turnDistance, action, turningState, actionTimeout, actionStr
 
     cameraImage = receivedProcessedImage.copy()
 
     processedImage = Image.new("RGB", cameraImage.size)
     processedImage.paste(cameraImage)
 
-    r = 30  # 28 pixels = 35mm
+    r = 28  # 28 pixels = 35mm
+
+    ha = math.atan2(0.5, r + 0.5) * 180 / math.pi
+    ha *= 2
+
+    # print("Angle is " + str(ha))
+
+    p1 = 255
+    p2 = 0
 
     pixelMap = processedImage.load()
 
-    leftValue = testLeftValue(cameraImage, pixelMap, r)
-    rightValue = testRightValue(cameraImage, pixelMap, r)
+    angles = []
+    currentAngle = None
 
-    while leftValue < MINIMAL_PIXELS and rightValue < MINIMAL_PIXELS and r > -30:
-        r -= 10
-        leftValue = testLeftValue(cameraImage, pixelMap, r)
-        rightValue = testRightValue(cameraImage, pixelMap, r)
+    a = -135
+    c = 0
+    while a <= 135:
+        a += ha
+        ra = a * math.pi / 180 + math.pi
 
-    # - - -
+        x = int(r * math.cos(ra) + 40)
+        y = int(r * math.sin(ra) + 32)
 
-    if leftValue < MINIMAL_PIXELS and rightValue < MINIMAL_PIXELS:
+        p = cameraImage.getpixel((x, y))
+        if p > 127:
+            pixelMap[x, y] = (255, 0, 0)
+            if currentAngle is not None:
+                currentAngle["ae"] = a - ha
+                currentAngle["ce"] = c - 1
+                currentAngle = None
+        else:
+            pixelMap[x, y] = (0, 255, 0)
+            if currentAngle is None:
+                currentAngle = {"as": a, "cs": c}
+                angles.append(currentAngle)
+
+        c += 1
+
+    if currentAngle is not None:
+        currentAngle["ae"] = a - ha
+        currentAngle["ce"] = c - 1
+
+    print("Angles " + str(angles))
+
+    angle = None
+    for a in angles:
+        c = a["ce"] - a["cs"]
+        if c > MIN_PIXLES:
+            midAngle = (a["ae"] + a["as"]) / 2
+            if angle is None or abs(midAngle) < abs(angle):
+                angle = midAngle
+
+    rDistance = 35  # 28 pixels = 35mm
+
+    if angle is not None:
+        if angle > 0:
+            a = 90 - angle * STEER_GAIN
+
+            apr = a * math.pi / 180.0
+
+            divideWith = 2.0 * math.cos(apr)
+
+            if divideWith < 0.01:
+                turnDistance = 2000
+            else:
+                turnDistance = rDistance / divideWith
+                if turnDistance > 2000:
+                    turnDistance = 2000
+                elif turnDistance < 60:
+                    turnDistance = 60
+
+            # turnDistance = - turnDistance
+        else:
+            a = 90 + angle * STEER_GAIN
+
+            apr = a * math.pi / 180.0
+
+            divideWith = 2.0 * math.cos(apr)
+
+            if divideWith < 0.01:
+                turnDistance = 2000
+            else:
+                turnDistance = rDistance / divideWith
+                if turnDistance > 2000:
+                    turnDistance = 2000
+                elif turnDistance < 60:
+                    turnDistance = 60
+
+            turnDistance = - turnDistance
+        turnDistance = int(turnDistance)
+
+    if angle is None:
         actionTimeout += 1
         if actionTimeout >= ACTION_TIMEOUT:
             action = ACTION_NONE
             actionStr = "drive 0 0"
-    elif leftValue < MINIMAL_PIXELS:
+    elif abs(angle) < 2:
         actionTimeout = 0
-        turnDistance = 60
-        actionStr = "< steer " + str(turnDistance) + " " + str(forwardSpeed)
-        action = ACTION_STEER
-    elif rightValue < MINIMAL_PIXELS:
+        action = ACTION_FORWARD
+        actionStr = "drive 0 " + str(forwardSpeed)
+    elif abs(angle) <= 90:
         actionTimeout = 0
-        turnDistance = -60
-        actionStr = "> steer " + str(turnDistance) + " " + str(forwardSpeed)
         action = ACTION_STEER
+        actionStr = "steer " + str(turnDistance) + " " + str(forwardSpeed)
     else:
-        prefix = " "
         actionTimeout = 0
-        if leftValue < rightValue:
-            prefix = "> "
-            turnDistance = leftValue * 2000 / rightValue
-            turnDistance *= STEER_GAIN
-            turnDistance += 60
-        else:
-            prefix = "< "
-            turnDistance = rightValue * 2000 / leftValue
-            turnDistance *= STEER_GAIN
-            turnDistance = - turnDistance
-            turnDistance -= 60
-
-        if turnDistance > 2000:
-            turnDistance = 2000
-        elif turnDistance < -2000:
-            turnDistance = -2000
-
-        turnDistance = int(turnDistance)
-
-        actionStr = prefix + "steer " + str(turnDistance) + " " + str(forwardSpeed)
-        action = ACTION_STEER
+        action = ACTION_TURN
+        actionStr = "turn " + str(-round(angle, 1))
 
     pyroslib.publish("followLine/feedback",
                      "frameTime:" + frameTime + ","
                      + "angle:" + str(round(angle, 1)) + ","
                      + "turnDistance:" + str(turnDistance) + ","
-                     + "action:" + actionStr + ","
-                     + "left:" + str(round(leftValue, 1)) + ","
-                     + "right:" + str(round(rightValue, 1)))
+                     + "action:" + actionStr)
 
     message = processedImage.tobytes("raw")
     pyroslib.publish("followLine/processed", message)
@@ -328,15 +341,32 @@ def processImage():
 
 
 def goOneStep():
+    global turningState
+
+    # if action == ACTION_FORWARD:
+    #     pyroslib.publish("move/drive", "0 " + str(forwardSpeed - 2))
+    # elif action == ACTION_STEER:
+    #     pyroslib.publish("move/steer", str(turnDistance) + " " + str(forwardSpeed))
+
     if action == ACTION_FORWARD:
         # pyroslib.publish("move/drive", "0 " + str(forwardSpeed - 1))
+        wheelDeg("fl", str(0))
+        wheelDeg("bl", str(0))
+        wheelDeg("fr", str(0))
+        wheelDeg("br", str(0))
+
         wheelSpeed("fl", forwardSpeed - 1)
         wheelSpeed("fr", forwardSpeed - 1)
         wheelSpeed("bl", forwardSpeed - 1)
         wheelSpeed("br", forwardSpeed - 1)
     elif action == ACTION_STEER:
         # pyroslib.publish("move/steer", str(turnDistance) + " " + str(forwardSpeed))
+        print("STEER " + str(turnDistance) + " " + str(forwardSpeed))
         steer(turnDistance, forwardSpeed)
+    elif action == ACTION_TURN:
+        pyroslib.publish("move/turn", str(int(angle)))
+        print("PUBLISHED TURN!!!")
+        turningState = TURNING_WAIT
     else:
         wheelSpeed("fl", 0)
         wheelSpeed("fr", 0)

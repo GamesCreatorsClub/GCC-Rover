@@ -77,7 +77,7 @@ def capture():
         logt("        capture")
         # print('Captured %dx%d image' % (
         #     continuousOutput.array.shape[1], continuousOutput.array.shape[0]))
-        rawRGB = Image.frombuffer('RGB', (96, 64), continuousOutput.array,'raw', 'RGB', 0, 1).crop((0, 0, 80, 64))
+        rawRGB = Image.frombuffer('RGB', (96, 64), continuousOutput.array, 'raw', 'RGB', 0, 1).crop((0, 0, 80, 64))
         logt("        Image.open(stream)")
         continuousOutput.truncate(0)
 
@@ -86,7 +86,7 @@ def capture():
         logt("        seek(0)")
         camera.capture(singleOutput, "rgb", use_video_port=True)
         logt("        capture")
-        rawRGB = Image.frombuffer('RGB', (80, 64), singleOutput,'raw', 'RGB', 0, 1)
+        rawRGB = Image.frombuffer('RGB', (80, 64), singleOutput, 'raw', 'RGB', 0, 1)
         logt("        Image.open(stream)")
 
     rawL = rawRGB.convert("L")

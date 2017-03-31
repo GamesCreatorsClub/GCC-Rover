@@ -33,7 +33,7 @@ run = False
 
 driveAngle = 0
 pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
+bigFont = pygame.font.SysFont("arial", 24)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 600))
 

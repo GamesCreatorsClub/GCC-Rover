@@ -17,6 +17,9 @@ from PIL import Image
 
 
 GREY = (160, 160, 160)
+WHITE = (255, 255, 255)
+GREEN = (128, 255, 128)
+RED = (255, 128, 128)
 
 MAX_PING_TIMEOUT = 1
 MAX_PICTURES = 400
@@ -45,7 +48,6 @@ processedImages = []
 processedBigImages = []
 
 forwardSpeed = 5
-action = ""
 
 running = False
 
@@ -55,8 +57,14 @@ lastReceivedTime = time.time()
 frameTime = ""
 
 receivedFrameTime = ""
-angle = 0
-turnDistance = 0
+
+feedback = {
+    "angle": "",
+    "turnDistance": "",
+    "action": "",
+    "left": "",
+    "right": ""
+}
 
 imgNo = 0
 
@@ -65,7 +73,7 @@ ptr = -1
 
 def connected():
     pyros.publish("camera/processed/fetch", "")
-    pyros.agent.init(pyros.client, "follow-line-agent.py")
+    pyros.agent.init(pyros.client, "turning/follow-line-agent.py")
     print("Sent agent")
 
 
@@ -120,22 +128,16 @@ def handleAgentProcessed(topic, message, groups):
     processedImage = images[0]
     processedImageBig = images[1]
 
-    t = smallFont.render("A: " + str(angle), 1, GREY)
-    processedImageBig.blit(t, (0, 0))
-
-    t = smallFont.render("T: " + str(turnDistance), 1, GREY)
-    processedImageBig.blit(t, (220, 0))
-
-    t = smallFont.render("#: " + str(imgNo), 1, GREY)
-    processedImageBig.blit(t, (0, 230))
-
-    t = smallFont.render(action, 1, GREY)
-    processedImageBig.blit(t, (180, 230))
-
-    t = smallFont.render("T: " + receivedFrameTime, 1, GREY)
-    processedImageBig.blit(t, (180, 210))
+    processedImageBig.blit(smallFont.render("LR: " + str(feedback["left"]) + "/" + str(feedback["right"]), 1, GREY), (0, 0))
+    # processedImageBig.blit(smallFont.render("A: " + str(feedback["angle"]), 1, GREY), (0, 0))
+    processedImageBig.blit(smallFont.render("T: " + str(feedback["turnDistance"]), 1, GREY), (220, 0))
+    processedImageBig.blit(smallFont.render("#: " + str(imgNo), 1, GREY), (0, 230))
+    processedImageBig.blit(smallFont.render(feedback["action"], 1, GREY), (180, 230))
+    processedImageBig.blit(smallFont.render("T: " + feedback["frameTime"], 1, GREY), (180, 210))
 
     imgNo += 1
+
+    angle = float(feedback["angle"])
 
     pa = (angle + 180) * math.pi / 180
 
@@ -151,37 +153,56 @@ def handleAgentProcessed(topic, message, groups):
         del processedImages[0]
         del processedBigImages[0]
 
-    now = time.time()
-    if now - lastReceivedTime > 5:
+    now1 = time.time()
+    if now1 - lastReceivedTime > 5:
         frameTime = ">5s"
     else:
-        frameTime = str(round(now - lastReceivedTime, 2))
+        frameTime = str(round(now1 - lastReceivedTime, 2))
 
-    lastReceivedTime = now
-
-
-def handleAngle(topic, message, groups):
-    global angle
-
-    angle = float(message)
+    lastReceivedTime = now1
 
 
-def handleAction(topic, message, groups):
-    global action
+def handleFeedback(topic, message, groups):
+    global feedback
 
-    action = message
-
-
-def handleTurnDistance(topic, message, groups):
-    global turnDistance
-
-    turnDistance = float(message)
+    pairs = message.split(",")
+    for pair in pairs:
+        keyValue = pair.split(":")
+        feedback[keyValue[0]] = keyValue[1]
 
 
-def handleFrameTime(topic, message, groups):
-    global receivedFrameTime
+def toggleStart():
+    global imgNo, processedImages, processedBigImages, running
 
-    receivedFrameTime = message
+    running = not running
+    if running:
+        pyros.publish("followLine/speed", str(forwardSpeed))
+        pyros.publish("followLine/command", "start")
+        imgNo = 0
+        del processedImages[:]
+        del processedBigImages[:]
+    else:
+        pyros.publish("move/stop", "")
+        pyros.publish("followLine/command", "stop")
+
+
+def stop():
+    global running
+    pyros.publish("move/stop", "")
+    pyros.publish("followLine/command", "stop")
+    running = False
+
+
+def clear():
+    global imgNo, processedImages, processedBigImages
+
+    imgNo = 0
+    del processedImages[:]
+    del processedBigImages[:]
+
+
+def prepare():
+    pyros.publish("followLine/command", "prepare")
 
 
 def goOneStep():
@@ -225,8 +246,6 @@ def onKeyDown(key):
             print("  switching on lights")
             pyros.publish("lights/camera", "on")
             lights = True
-    elif key == pygame.K_g:
-        goOneStep()
     elif key == pygame.K_LEFT:
         if ptr == -1:
             ptr = len(processedImages) - 2
@@ -235,18 +254,7 @@ def onKeyDown(key):
     elif key == pygame.K_RIGHT:
         ptr += 1
         if ptr >= len(processedImages) - 1:
-            ptr -= 1
-    elif key == pygame.K_RETURN:
-        running = not running
-        if running:
-            pyros.publish("followLine/speed", str(forwardSpeed))
-            pyros.publish("followLine/command", "start")
-            imgNo = 0
-            del processedImages[:]
-            del processedBigImages[:]
-        else:
-            pyros.publish("move/stop", "")
-            pyros.publish("followLine/command", "stop")
+            ptr = -1
     elif key == pygame.K_LEFTBRACKET:
         forwardSpeed -= 1
         if forwardSpeed < 0:
@@ -255,10 +263,16 @@ def onKeyDown(key):
     elif key == pygame.K_RIGHTBRACKET:
         forwardSpeed += 1
         pyros.publish("followLine/speed", str(forwardSpeed))
+    elif key == pygame.K_c:
+        clear()
+    elif key == pygame.K_n:
+        prepare()
+    elif key == pygame.K_g:
+        goOneStep()
+    elif key == pygame.K_RETURN:
+        toggleStart()
     elif key == pygame.K_SPACE:
-        pyros.publish("move/stop", "")
-        pyros.publish("followLine/command", "stop")
-        running = False
+        stop()
     else:
         pyros.gcc.handleConnectKeys(key)
 
@@ -271,10 +285,7 @@ pyros.subscribeBinary("camera/whitebalance", handleWhiteBalance)
 pyros.subscribeBinary("camera/raw", handleCameraRaw)
 pyros.subscribeBinary("camera/processed", handleCameraProcessed)
 pyros.subscribeBinary("followLine/processed", handleAgentProcessed)
-pyros.subscribe("followLine/angle", handleAngle)
-pyros.subscribe("followLine/turnDistance", handleTurnDistance)
-pyros.subscribe("followLine/action", handleAction)
-pyros.subscribe("followLine/frameTime", handleFrameTime)
+pyros.subscribe("followLine/feedback", handleFeedback)
 pyros.init("camera-display-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
@@ -291,29 +302,19 @@ while True:
     screen.fill((0, 0, 0))
 
     if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
+        screen.blit(bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, GREEN), (0, 0))
     else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
+        screen.blit(bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, RED), (0, 0))
 
-    screen.blit(text, (0, 0))
+    screen.blit(font.render("Selected: " + str(ptr) + " of " + str(len(processedImages)), 1, WHITE), (400, 50))
+    screen.blit(font.render("Frame time: " + str(frameTime), 1, WHITE), (400, 80))
+    screen.blit(font.render("Angle: " + str(feedback["angle"]), 1, WHITE), (400, 110))
+    screen.blit(font.render("Speed: " + str(forwardSpeed), 1, WHITE), (750, 50))
+    screen.blit(font.render("Running: " + str(running), 1, WHITE), (750, 80))
+    screen.blit(font.render("Turn dist: " + str(feedback["turnDistance"]), 1, WHITE), (750, 110))
 
-    text = font.render("Selected: " + str(ptr), 1, (255, 255, 255))
-    screen.blit(text, (400, 50))
-
-    text = font.render("Frame time: " + str(frameTime), 1, (255, 255, 255))
-    screen.blit(text, (400, 80))
-
-    text = font.render("Angle: " + str(round(angle, 2)), 1, (255, 255, 255))
-    screen.blit(text, (400, 110))
-
-    text = font.render("Speed: " + str(forwardSpeed), 1, (255, 255, 255))
-    screen.blit(text, (750, 50))
-
-    text = font.render("Running: " + str(running), 1, (255, 255, 255))
-    screen.blit(text, (750, 80))
-
-    text = font.render("Turn dist: " + str(round(turnDistance, 2)), 1, (255, 255, 255))
-    screen.blit(text, (750, 110))
+    screen.blit(smallFont.render("[/]-speed, s-fetch and store wb, LEFT/RIGHT-scroll, g-one step, n-prepare", 1, WHITE), (0, 760))
+    screen.blit(smallFont.render("SPACE-stop, RETURN-start, p-processed img, w-whitebalace img, r-raw img, l-lights", 1, WHITE), (0, 780))
 
     screen.blit(rawImage, (10, 50))
     screen.blit(whiteBalanceImage, (110, 50))

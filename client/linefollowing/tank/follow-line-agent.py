@@ -16,7 +16,7 @@ DEBUG = True
 
 MINIMAL_PIXELS = 3
 ACTION_TIMEOUT = 4
-STEER_GAIN = 10
+STEER_GAIN = 20
 VALUE_EXPO = 0.2
 
 TURNING_NONE = 0
@@ -53,6 +53,9 @@ angle = 0
 actionStr = ""
 forwardSpeed = 2
 
+leftSpeed = 0
+rightSpeed = 0
+
 turningState = TURNING_NONE
 
 
@@ -73,75 +76,6 @@ def wheelSpeed(wheelName, speed):
     # print("Published topic=" +  topic + "; msg=" + str(speed))
 
 
-def sideAngleFront(dist):
-    x = math.atan2(69, dist - 36.5)
-
-    return math.degrees(x)
-
-
-def sideAngleBack(dist):
-    x = math.atan2(69, dist + 36.5)
-
-    return math.degrees(x)
-
-
-def calcInnerSpeed(spd, dist):
-    midc = 2 * math.pi * dist
-    inc = 2 * math.pi * (dist - 36.5)
-    return spd * (inc / midc)
-
-
-def calcOuterSpeed(spd, dist):
-    midc = 2 * math.pi * dist
-    outc = 2 * math.pi * (dist + 36.5)
-    return spd * (outc / midc)
-
-
-def steer(d, speed):
-
-    frontAngle = sideAngleFront(abs(d))
-    backAngle = sideAngleBack(abs(d))
-
-    innerSpeed = calcInnerSpeed(speed, abs(d))
-    outerSpeed = calcOuterSpeed(speed, abs(d))
-
-    adjust = 0
-    if innerSpeed > 300:
-        adjust = innerSpeed - 300
-    elif innerSpeed < -300:
-        adjust = innerSpeed + 300
-    elif outerSpeed > 300:
-        adjust = outerSpeed - 300
-    elif outerSpeed < -300:
-        adjust = outerSpeed + 300
-
-    innerSpeed -= adjust
-    outerSpeed -= adjust
-
-    log("steer", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust))
-
-    if d >= 0:
-        wheelDeg("fl", str(backAngle))
-        wheelDeg("bl", str(-backAngle))
-        wheelDeg("fr", str(frontAngle))
-        wheelDeg("br", str(-frontAngle))
-        if speed != 0:
-            wheelSpeed("fl", str(outerSpeed))
-            wheelSpeed("fr", str(innerSpeed))
-            wheelSpeed("bl", str(outerSpeed))
-            wheelSpeed("br", str(innerSpeed))
-    else:
-        wheelDeg("fl", str(-frontAngle))
-        wheelDeg("bl", str(frontAngle))
-        wheelDeg("fr", str(-backAngle))
-        wheelDeg("br", str(backAngle))
-        if speed != 0:
-            wheelSpeed("fl", str(innerSpeed))
-            wheelSpeed("fr", str(outerSpeed))
-            wheelSpeed("bl", str(innerSpeed))
-            wheelSpeed("br", str(outerSpeed))
-
-
 def stop():
     global run, continuousMode
     print("Stopping...")
@@ -154,6 +88,11 @@ def stop():
 
 def start():
     global run, continuousMode
+    wheelDeg("fl", str(0))
+    wheelDeg("bl", str(0))
+    wheelDeg("fr", str(0))
+    wheelDeg("br", str(0))
+
     print("Starting...")
     run = True
     continuousMode = True
@@ -249,7 +188,7 @@ def testLeftValue(cameraImage, pixelMap, r):
 
 
 def processImage():
-    global processedImage, maxAngle, minAngle, angle, turnDistance, action, actionStr, actionTimeout, turningState
+    global processedImage, maxAngle, minAngle, angle, turnDistance, action, actionStr, actionTimeout, turningState, leftSpeed, rightSpeed
 
     cameraImage = receivedProcessedImage.copy()
 
@@ -273,16 +212,18 @@ def processImage():
     if leftValue < MINIMAL_PIXELS and rightValue < MINIMAL_PIXELS:
         actionTimeout += 1
         if actionTimeout >= ACTION_TIMEOUT:
-            action = ACTION_NONE
-            actionStr = "drive 0 0"
+            leftSpeed = 0
+            rightSpeed = 0
     elif leftValue < MINIMAL_PIXELS:
+        leftSpeed = forwardSpeed * 2
+        rightSpeed = forwardSpeed / 2
         actionTimeout = 0
-        turnDistance = 60
         actionStr = "< steer " + str(turnDistance) + " " + str(forwardSpeed)
         action = ACTION_STEER
     elif rightValue < MINIMAL_PIXELS:
+        rightSpeed = forwardSpeed * 2
+        leftSpeed = forwardSpeed / 2
         actionTimeout = 0
-        turnDistance = -60
         actionStr = "> steer " + str(turnDistance) + " " + str(forwardSpeed)
         action = ACTION_STEER
     else:
@@ -290,22 +231,18 @@ def processImage():
         actionTimeout = 0
         if leftValue < rightValue:
             prefix = "> "
-            turnDistance = leftValue * 2000 / rightValue
+            turnDistance = leftValue / rightValue
             turnDistance *= STEER_GAIN
-            turnDistance += 60
+
+            leftSpeed = int(forwardSpeed - turnDistance)
+            rightSpeed = int(forwardSpeed + turnDistance)
         else:
             prefix = "< "
-            turnDistance = rightValue * 2000 / leftValue
+            turnDistance = rightValue / leftValue
             turnDistance *= STEER_GAIN
-            turnDistance = - turnDistance
-            turnDistance -= 60
 
-        if turnDistance > 2000:
-            turnDistance = 2000
-        elif turnDistance < -2000:
-            turnDistance = -2000
-
-        turnDistance = int(turnDistance)
+            leftSpeed = int(forwardSpeed + turnDistance)
+            rightSpeed = int(forwardSpeed - turnDistance)
 
         actionStr = prefix + "steer " + str(turnDistance) + " " + str(forwardSpeed)
         action = ACTION_STEER
@@ -328,21 +265,11 @@ def processImage():
 
 
 def goOneStep():
-    if action == ACTION_FORWARD:
-        # pyroslib.publish("move/drive", "0 " + str(forwardSpeed - 1))
-        wheelSpeed("fl", forwardSpeed - 1)
-        wheelSpeed("fr", forwardSpeed - 1)
-        wheelSpeed("bl", forwardSpeed - 1)
-        wheelSpeed("br", forwardSpeed - 1)
-    elif action == ACTION_STEER:
-        # pyroslib.publish("move/steer", str(turnDistance) + " " + str(forwardSpeed))
-        steer(turnDistance, forwardSpeed)
-    else:
-        wheelSpeed("fl", 0)
-        wheelSpeed("fr", 0)
-        wheelSpeed("bl", 0)
-        wheelSpeed("br", 0)
-        # pyroslib.publish("move/drive", "0 0")
+    print("LeftSpeed=" + str(leftSpeed) + " rightSpeed=" + str(rightSpeed))
+    wheelSpeed("fl", str(leftSpeed))
+    wheelSpeed("bl", str(leftSpeed))
+    wheelSpeed("fr", str(rightSpeed))
+    wheelSpeed("br", str(rightSpeed))
 
 
 def handleCameraProcessed(topic, message, groups):
