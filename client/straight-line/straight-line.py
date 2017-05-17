@@ -26,6 +26,8 @@ D_GAIN = 0.00
 
 pygame.init()
 bigFont = pygame.font.SysFont("apple casual", 32)
+veryBigFont = pygame.font.SysFont("apple casual", 300)
+
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 600))
 arrow_image = pygame.image.load("arrow.png")
@@ -168,6 +170,8 @@ while True:
     text = bigFont.render("d: " + str(round(dGain, 1)), 1, (255, 128, 128))
     screen.blit(text, (400, 20))
 
+    text = bigFont.render("Esc: exit    Enter: start    Space: stop", 1, (255, 255, 255))
+    screen.blit(text, (20, 540))
 
     loc = arrow_image.get_rect().center
     rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)

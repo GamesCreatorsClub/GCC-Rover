@@ -5,10 +5,13 @@
 # MIT License
 #
 
+import time
 import array
 import struct
 import threading
 from fcntl import ioctl
+
+disabled = False
 
 # We'll store the states here.
 axis_states = {}
@@ -162,7 +165,10 @@ def readEvents():
 
 def readEventsLoop():
     while True:
-        readEvents()
+        if not disabled:
+            readEvents()
+        else:
+            time.sleep(0.2)
 
 
 def startNewThread():

@@ -287,9 +287,10 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
             font.draw(batch, String.format("D: " + roverTurningDistance), 0, 0);
             batch.end();
 
-            if (alpha % 10 == 0) {
+            if (alpha % 12 == 0) {
                 roverDriver.processJoysticks();
             }
+
         }
     }
 

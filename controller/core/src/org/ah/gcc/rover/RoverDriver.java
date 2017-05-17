@@ -21,7 +21,7 @@ import org.ah.gcc.rover.controllers.JoystickState;
 
 public class RoverDriver implements ControllerListener {
 
-    private long timer = 0;
+    private long alpha = 0;
 
     private RoverHandler roverHandler;
     private ControllerInterface controllerInterface;
@@ -41,7 +41,6 @@ public class RoverDriver implements ControllerListener {
     private int selectedRover = 0;
     private int retryCounter = 10;
 
-
     private boolean[] buttons = new boolean[ButtonType.values().length];
     private boolean[] prevButtons = new boolean[ButtonType.values().length];
 
@@ -50,6 +49,7 @@ public class RoverDriver implements ControllerListener {
     private ValueAdapter<Integer> selectedRoverValue = new ValueAdapter<Integer>("selectedRover", selectedRover);
 
     private float readDistance = 0f;
+    private float lastReadDistance = 0f;
     private long timeWhenReadDistance = 0;
 
     private boolean automatic = false;
@@ -72,7 +72,7 @@ public class RoverDriver implements ControllerListener {
             @Override
             public void onMessage(String topic, String message) {
                 String[] splitMessage = message.split(",")[0].split(":");
-
+                lastReadDistance = readDistance;
                 readDistance = Float.parseFloat(splitMessage[1]);
                 if (readDistance < 0) {
                     readDistance = 8100f;
@@ -105,7 +105,6 @@ public class RoverDriver implements ControllerListener {
         return selectedRoverValue;
     }
 
-
     public void setRover(RoverHandler roverHandler) {
         this.roverHandler = roverHandler;
     }
@@ -119,22 +118,23 @@ public class RoverDriver implements ControllerListener {
     }
 
     public void processJoysticks() {
-        timer++;
+        alpha++;
 
         JoystickState leftJoystickState = leftJoystick.getState();
         JoystickState rightJoystickState = rightJoystick.getState();
 
-        if (buttons[ButtonType.KICK_BUTTON.ordinal()]) {
-            roverHandler.publish("servo/9", "90");
+        if (buttons[ButtonType.KICK_BUTTON.ordinal()] && !prevButtons[ButtonType.KICK_BUTTON.ordinal()]) {
+            roverHandler.publish("servo/9", "100");
             automatic = false;
-        } else {
+        }
+        if (!buttons[ButtonType.KICK_BUTTON.ordinal()] && prevButtons[ButtonType.KICK_BUTTON.ordinal()]) {
             roverHandler.publish("servo/9", "165");
         }
 
         if (buttons[ButtonType.HIT_BALL_BUTTON.ordinal()]) {
             automatic = true;
             roverHandler.publish("move/drive", "0 150");
-            roverHandler.publish("sensor/distance/read", "0");
+            roverHandler.publish("sensor/distance/continuous", "0");
         }
 
         if (leftJoystickState.getDistanceFromCentre() > 0.1 || rightJoystickState.getDistanceFromCentre() > 0.1) {
@@ -143,12 +143,16 @@ public class RoverDriver implements ControllerListener {
         }
 
         if (automatic) {
-
-            roverHandler.publish("sensor/distance/read", "0");
-            if (readDistance < 1) {
+            if (alpha % 20 == 0) {
+                roverHandler.publish("sensor/distance/continuous", "0");
+            }
+            float kickDistance = 40;
+            if (readDistance < kickDistance) {
                 roverHandler.publish("servo/9", "90");
-                roverHandler.publish("move/drive", "0 0");
                 automatic = false;
+            }
+            if (readDistance < kickDistance + 20) {
+                roverHandler.publish("move/drive", "0 0");
             }
         } else {
             if (leftJoystickState.getDistanceFromCentre() < 0.1f && rightJoystickState.getDistanceFromCentre() > 0.1f) {
@@ -207,7 +211,7 @@ public class RoverDriver implements ControllerListener {
                 roverSpeed = 0;
                 roverHandler.publish("move/stop", "0");
             }
-            if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && timer % 10 == 0) {
+            if (buttons[ButtonType.ORBIT_BUTTON.ordinal()] && alpha % 2 == 0) {
                 roverHandler.publish("sensor/distance/read", "0");
             }
 
@@ -268,7 +272,6 @@ public class RoverDriver implements ControllerListener {
         // System.out.println("Connecting to rover " + ROVERS[selectedRover].getName());
         roverHandler.connect(RoverHandler.ROVERS[selectedRover].getFullAddress());
     }
-
 
     private int calcRoverSpeed(float speed) {
         if (buttons[ButtonType.BOOST_BUTTON.ordinal()]) {

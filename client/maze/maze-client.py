@@ -13,6 +13,7 @@ import pyros.gcc
 import pyros.agent
 import pyros.pygamehelper
 
+WHITE = (255, 255, 255)
 MAX_PING_TIMEOUT = 1
 
 INITIAL_SPEED = 20
@@ -177,35 +178,25 @@ while True:
     screen.fill((0, 0, 0))
 
     if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
+        screen.blit(bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128)), (0, 0))
     else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
+        screen.blit(bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128)), (0, 0))
 
-    screen.blit(text, (0, 0))
+    screen.blit(bigFont.render("Stopped: " + str(not run), 1, WHITE), pygame.Rect(0, 80, 0, 0))
 
-    text = bigFont.render("Stopped: " + str(not run), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 80, 0, 0))
+    screen.blit(bigFont.render("Angle: " + str(angle), 1, WHITE), pygame.Rect(0, 120, 0, 0))
 
-    text = bigFont.render("Angle: " + str(angle), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 120, 0, 0))
+    screen.blit(bigFont.render("Speed: " + str(speed), 1, WHITE), pygame.Rect(300, 120, 0, 0))
 
-    text = bigFont.render("Speed: " + str(speed), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(300, 120, 0, 0))
+    screen.blit(bigFont.render("Dist: " + str(distanceAtAngle), 1, WHITE), pygame.Rect(0, 160, 0, 0))
 
-    text = bigFont.render("Dist: " + str(distanceAtAngle), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 160, 0, 0))
+    screen.blit(bigFont.render("Selected: " + str(driveAngle), 1, WHITE), pygame.Rect(0, 200, 0, 0))
 
-    text = bigFont.render("Selected: " + str(driveAngle), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(0, 200, 0, 0))
+    screen.blit(bigFont.render("Gain: " + str(round(gain, 1)), 1, WHITE), pygame.Rect(300, 200, 0, 0))
 
-    text = bigFont.render("Gain: " + str(round(gain, 1)), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(300, 200, 0, 0))
+    screen.blit(bigFont.render("Corridor: " + str(round(corridorWidth, 1)), 1, WHITE), pygame.Rect(300, 240, 0, 0))
 
-    text = bigFont.render("Corridor: " + str(round(corridorWidth, 1)), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(300, 240, 0, 0))
-
-    text = bigFont.render("Ideal dist: " + str(round(idealDistance, 1)), 1, (255, 255, 255))
-    screen.blit(text, pygame.Rect(300, 280, 0, 0))
+    screen.blit(bigFont.render("Ideal dist: " + str(round(idealDistance, 1)), 1, WHITE), pygame.Rect(300, 280, 0, 0))
 
     pygame.display.flip()
     frameclock.tick(30)

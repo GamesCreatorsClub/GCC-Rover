@@ -191,8 +191,9 @@ public class RPiRealController extends AbstractController implements ControllerL
         if (buttonCode == 0) {
             return ButtonType.SLING_SHOT_BUTTON;
         } else if (buttonCode == 1) {
-            return ButtonType.READ_DISTANCE_BUTTON;
+            return ButtonType.HIT_BALL_BUTTON;
         } else if (buttonCode == 2) {
+            return ButtonType.READ_DISTANCE_BUTTON;
         } else if (buttonCode == 3) {
         } else if (buttonCode == 4) {
             return ButtonType.ORBIT_BUTTON;
@@ -203,6 +204,7 @@ public class RPiRealController extends AbstractController implements ControllerL
         } else if (buttonCode == 7) {
             return ButtonType.KICK_BUTTON;
         } else if (buttonCode == 8) {
+            System.out.println("kill me! kill me!");
         } else if (buttonCode == 9) {
             return ButtonType.SELECT_BUTTON;
         } else if (buttonCode == 10) {

@@ -21,7 +21,6 @@ import com.badlogic.gdx.math.Vector3;
 public class DesktopRealController extends AbstractController implements ControllerListener {
 
     private ControllerStateImplementation state;
-
     private boolean speedModifier = false;
     private int lastX = 0;
 
@@ -213,4 +212,5 @@ public class DesktopRealController extends AbstractController implements Control
         }
         return null;
     }
+
 }

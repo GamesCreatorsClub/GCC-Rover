@@ -15,6 +15,6 @@ public class RPIDesktopLauncherJogl {
         config.width = 640;
         config.height = 480;
 
-        new JoglNewtApplication(new DesktopGCCRoverController(new RPiDesktopPlatformSpecfic()), config);
+        new JoglNewtApplication(new HeadlessGCCRoverController(new RPiDesktopPlatformSpecfic()), config);
     }
 }
