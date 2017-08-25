@@ -31,6 +31,7 @@ def moveServo(servoid, position):
 def handleServo(topic, payload, groups):
     servoId = int(groups[0])
     position = int(float(payload))
+
     moveServo(servoId, position)
 
 
