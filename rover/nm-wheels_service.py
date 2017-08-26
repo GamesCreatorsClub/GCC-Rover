@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
+print("At the beginning")
+
 import traceback
-import re
-import copy
 import pyroslib
-import storagelib
 import RPi.GPIO as GPIO
 
+
+print("After imports")
 
 #
 # wheels service
@@ -18,16 +19,9 @@ import RPi.GPIO as GPIO
 #     - storage map
 #
 
-DEBUG = False
-GPIO.setmode(GPIO.BCM)
-GPIO.setmode(GPIO.BOARD)
 
-GPIO.setup(11, GPIO.OUT)
-GPIO.setup(9, GPIO.OUT)
-GPIO.setup(10, GPIO.OUT)
-
-motorSpeed = None
-
+DEBUG = True
+motorSpeed = 0
 
 def moveServo(servoid, angle):
     # TODO move this out to separate service
@@ -36,24 +30,26 @@ def moveServo(servoid, angle):
     f.close()
 
 
-def servoTopic(topic, payload, groups):
-    moveServo(0, payload)
-
-
 def setMotorSpeed():
-
+    print(str(motorSpeed))
     if motorSpeed < 0:
-        GPIO.output(11, GPIO.HIGH)
-        GPIO.output(9, GPIO.LOW)
+        print("23-1, 21-0")
+        # GPIO.output(23, 1)
+        # GPIO.output(21, 0)
+        forwardPWM.ChangeDutyCycle(0)
+        backPWM.ChangeDutyCycle(-motorSpeed / 3)
     elif motorSpeed > 0:
-        GPIO.output(9, GPIO.HIGH)
-        GPIO.output(11, GPIO.LOW)
+        print("21-1, 23-0")
+        # GPIO.output(21, 1)
+        # GPIO.output(23, 0)
+        forwardPWM.ChangeDutyCycle(motorSpeed / 3)
+        backPWM.ChangeDutyCycle(0)
     else:
-        GPIO.output(9, GPIO.LOW)
-        GPIO.output(11, GPIO.LOW)
-
-def driveMotors():
-    setMotorSpeed()
+        print("23-0, 21-0")
+        # GPIO.output(21, 0)
+        # GPIO.output(23, 0)
+        forwardPWM.ChangeDutyCycle(0)
+        backPWM.ChangeDutyCycle(0)
 
 
 def servoTopic(topic, payload, groups):
@@ -61,23 +57,43 @@ def servoTopic(topic, payload, groups):
     moveServo(servo, payload)
 
 
+def steeringTopic(topic, payload, groups):
+    moveServo(0, payload)
+
+
 def motorTopic(topic, payload, groups):
-   motorSpeed = payload
+    global motorSpeed
+    motorSpeed = int(payload)
+    setMotorSpeed()
 
 
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
 
-        pyroslib.subscribe("servo/+", servoTopic)
-        pyroslib.subscribe("motor/+/speed", motorTopic)
-        pyroslib.init("wheels-service")
+        GPIO.setmode(GPIO.BOARD)
+        GPIO.setwarnings(False)
 
+        GPIO.setup(23, GPIO.OUT)
+        GPIO.setup(21, GPIO.OUT)
+
+        forwardPWM = GPIO.PWM(21, 50)
+        backPWM = GPIO.PWM(23, 50)
+
+        forwardPWM.start(0)
+        backPWM.start(0)
+
+        print("Set GPIO")
+
+        pyroslib.subscribe("steering", steeringTopic)
+        pyroslib.subscribe("servo/+", servoTopic)
+        pyroslib.subscribe("motor", motorTopic)
+        pyroslib.init("wheels-service")
         print("  Loading storage details")
 
         print("Started wheels service.")
 
-        pyroslib.forever(0.02, driveMotors)
+        pyroslib.forever(0.5)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
