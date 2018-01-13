@@ -96,7 +96,7 @@ def readDistance():
     return distance
 
 
-def onConnect(mqttClient, data, rc):
+def onConnect(mqttClient, data, flags, rc):
     global connected
     try:
         if rc == 0:

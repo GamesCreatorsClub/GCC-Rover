@@ -210,7 +210,7 @@ def wheelSpeed(wheelName, speed):
     # print("Published topic=" +  topic + "; msg=" + str(speed))
 
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     client.subscribe("drive/#")
     print("DriverAgent: Connected to rover")
     straightenWheels()

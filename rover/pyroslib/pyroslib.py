@@ -64,7 +64,7 @@ def _onDisconnect(mqttClient, data, rc):
     _connect()
 
 
-def _onConnect(mqttClient, data, rc):
+def _onConnect(mqttClient, data, flags, rc):
     global _connected
     if rc == 0:
         _connected = True
@@ -147,7 +147,8 @@ def init(name, unique=False, host="localhost", port=1883, onConnected=None, wait
     client.on_connect = _onConnect
     client.on_message = _onMessage
 
-    connect(host, port, waitToConnect)
+    if host is not None:
+        connect(host, port, waitToConnect)
 
 
 def connect(host, port=1883, waitToConnect=True):

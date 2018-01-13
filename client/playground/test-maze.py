@@ -28,7 +28,7 @@ MAZE_AGENT = "test-maze-agent"
 DRIVE_AGENT = "auto-drive-agent"
 
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     global connected
     if rc == 0:
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");

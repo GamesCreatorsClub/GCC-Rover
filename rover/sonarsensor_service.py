@@ -133,7 +133,6 @@ def handleScan(topic, payload, groups):
     pyroslib.publish("sensor/distance", str(",".join(distancesList)))
 
 
-
 if __name__ == "__main__":
     try:
         print("Starting sonar sensor service...")

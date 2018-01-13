@@ -26,7 +26,7 @@ def generateRandomName(name):
 client = mqtt.Client(generateRandomName("Demo"))
 
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     if rc == 0:
         print("CONNECTED")
     else:

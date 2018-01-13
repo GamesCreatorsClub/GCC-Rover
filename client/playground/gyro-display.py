@@ -30,7 +30,7 @@ gyroAngle = 0.0
 connected = False
 
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     global connected
     if rc == 0:
         print("DriveController: Connected to rover " + selectedRoverTxt + " @ " + roverAddress[selectedRover] + ".");

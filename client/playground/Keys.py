@@ -22,7 +22,7 @@ client = mqtt.Client("DriveController#" + str(random.randint(1000, 9999)))
 roverAddress = ["10.170.1.59", "172.24.1.184", "172.24.1.185", "172.24.1.186"]
 selectedRover = 2
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     global connected
     if rc == 0:
         print("DriveController: Connected to rover " + str(selectedRover + 2) + " @ " + roverAddress[selectedRover] + ".");

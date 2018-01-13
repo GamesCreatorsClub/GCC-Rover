@@ -531,7 +531,7 @@ def processSystemCommand(commandId, commandLine):
     systemOutputEOF(commandId)
 
 
-def onConnect(mqttClient, data, rc):
+def onConnect(mqttClient, data, flags, rc):
     try:
         if rc == 0:
             mqttClient.subscribe("system/+", 0)

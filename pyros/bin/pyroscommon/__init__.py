@@ -145,7 +145,7 @@ def printOutCommand(executeCommand, processLine, header, footer):
     connected = False
     afterCommand = False
 
-    def onConnect(c, data, rc):
+    def onConnect(c, data, flags, rc):
         global connected
 
         if rc == 0:
@@ -226,7 +226,7 @@ def processCommand(processId, executeCommand, processOut, processStatus):
     connected = False
     afterCommand = False
 
-    def onConnect(c, data, rc):
+    def onConnect(c, data, flags, rc):
         global connected
 
         if rc == 0:

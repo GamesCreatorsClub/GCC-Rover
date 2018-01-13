@@ -12,7 +12,7 @@ import time
 client = mqtt.Client("servoagent")
 
 
-def onConnect(client, data, rc):
+def onConnect(client, data, flags, rc):
     client.subscribe("s")
     print("Servo Agent: Connected to rover")
 
