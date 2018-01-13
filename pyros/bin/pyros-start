@@ -22,6 +22,7 @@ def printHelp(rc):
     print("    <processId>           process id")
     sys.exit(rc)
 
+
 if len(args) < 1:
     printHelp(1)
 

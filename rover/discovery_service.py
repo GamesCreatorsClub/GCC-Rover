@@ -56,14 +56,6 @@ def getIpAddress():
             pass
 
 
-def handleEcho(topic, payload, groups):
-    print("Got echo in " + payload)
-    if len(groups) > 0:
-        pyroslib.publish("echo/out", groups[0] + ":" + payload)
-    else:
-        pyroslib.publish("echo/out", "default:" + payload)
-
-
 if __name__ == "__main__":
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

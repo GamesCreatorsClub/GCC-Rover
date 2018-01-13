@@ -293,3 +293,81 @@ def processCommand(processId, executeCommand, processOut, processStatus):
                 countdown = 0
     except KeyboardInterrupt:
         sys.exit(1)
+
+
+def processGlobalCommand(topic, executeCommand, processOut, processStatus):
+    global connected, countdown, client
+
+    client = mqtt.Client("PyROS." + uniqueId)
+
+    connected = False
+    afterCommand = False
+
+    def onConnect(c, data, flags, rc):
+        global connected
+
+        if rc == 0:
+            c.subscribe(topic + "/out", 0)
+        else:
+            print("ERROR: Connection returned error result: " + str(rc))
+            sys.exit(rc)
+
+        connected = True
+
+    def onMessage(c, data, msg):
+        global connected, countdown
+
+        payload = str(msg.payload, 'utf-8')
+        topic = msg.topic
+
+        if afterCommand:
+            if topic.startswith("exec/"):
+                if topic.endswith("/out"):
+                    pid = topic[5:len(topic)-4]
+                    connected = processOut(payload, pid)
+                elif topic.endswith("/status"):
+                    pid = topic[5:len(topic)-7]
+                    connected = processStatus(payload, pid)
+            else:
+                connected = processOut(payload, -1)
+
+            countdown = getTimeout()
+        else:
+            print("Before command: " + payload)
+
+    client.on_connect = onConnect
+    client.on_message = onMessage
+
+    try:
+        client.connect(host, port, 60)
+
+        countdown = getTimeout()
+
+        while not connected:
+            for i in range(0, 50):
+                time.sleep(0.015)
+                client.loop(0.005)
+            countdown -= 1
+            if countdown == 0:
+                print("ERROR: reached timeout waiting to connect to " + str(host))
+                sys.exit(1)
+            elif countdown < 0:
+                countdown = 0
+
+        connected = executeCommand(client)
+        afterCommand = True
+
+        countdown = getTimeout()
+
+        while connected:
+            for i in range(0, 50):
+                time.sleep(0.015)
+                client.loop(0.005)
+            countdown -= 1
+            if countdown == 0:
+                print("ERROR: reached timeout waiting for response")
+                sys.exit(1)
+            elif countdown < 0:
+                countdown = 0
+    except KeyboardInterrupt:
+        sys.exit(1)
