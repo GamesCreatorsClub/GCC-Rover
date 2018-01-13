@@ -39,7 +39,11 @@ def getHostname():
         with open("/etc/hostname", "rt") as textFile:
             hostname = textFile.read()
 
-        return hostname.split(".")[0]
+        hostname = hostname.split(".")[0]
+        if hostname.endswith('\n'):
+            hostname = hostname[0:len(hostname) - 1]
+
+        return hostname
     else:
         return "UNKNOWN"
 
@@ -68,11 +72,11 @@ if __name__ == "__main__":
         s.bind(('', 0xd15c))
 
 
-        def send(packet):
+        def send(ip, port, packet):
             # print("Debug: sending packet " + packet)
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.sendto(bytes(packet, 'utf-8'), ('255.255.255.255', 0xd15c))
+            s.sendto(bytes(packet, 'utf-8'), (ip, port))
 
 
         def receive():
@@ -82,17 +86,28 @@ if __name__ == "__main__":
                 try:
                     data, addr = s.recvfrom(1024)
                     p = str(data, 'utf-8')
-                    # print("Debug: got reqest " + p)
 
                     if p.startswith("Q#"):
-                        ip = getIpAddress()
-                        # print("Debug: ip=" + ip)
-                        name = getHostname()
-                        # print("Debug: name=" + name)
-                        send("A#IP=" + ip + ";NAME=" + name + ";TYPE=ROVER")
-                        # print("Debug: got request " + p)
-                        # else:
-                        #     print("Unknown packet " + p)
+                        returnip = "255.255.255.255"
+                        returnport = 0xd15c
+                        kvs = p[2:].split(";")
+                        for kv in kvs:
+                            kvp = kv.split("=")
+                            if len(kvp) == 2:
+                                if kvp[0] == "IP":
+                                    returnip = kvp[1]
+                                elif kvp[0] == "PORT":
+                                    try:
+                                        returnport = int(kvp[1])
+                                    except:
+                                        pass
+
+                        myip = getIpAddress()
+                        myport = "1883"
+                        myname = getHostname()
+                        mytype = "ROVER"
+
+                        send(returnip, returnport, "A#IP=" + myip + ";PORT=" + str(myport) + ";NAME=" + myname + ";TYPE=" + mytype)
                 except:
                     pass
 

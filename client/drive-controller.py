@@ -144,9 +144,9 @@ while True:
     pygame.draw.rect(screen, (value, value, value), rects["SPEED"])
 
     if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
+        text = bigFont.render("R: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
     else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
+        text = bigFont.render("" + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
     screen.blit(text, (0, 0))
 
     text = bigFont.render("Speed: " + str(currentSpeed), 1, (255, 255, 255))

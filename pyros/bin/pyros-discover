@@ -65,6 +65,8 @@ else:
     listeningSocket.settimeout(timeout)
 
     listeningSocket.bind(('', 0xd15c))
+    sockets.append(listeningSocket)
+    ips.append('255.255.255.255')
 
     for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
         sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -123,7 +125,7 @@ else:
             ipSplit[3] = "255"
             sendIp = ".".join(ipSplit)
             s.sendto(bytes(packet, 'utf-8'), (sendIp, 0xd15c))
-        # print("Sent packet " + packet)
+            # print("Sent packet " + packet + " to  " + sendIp)
 
 
     thread = threading.Thread(target=receive, args=())
