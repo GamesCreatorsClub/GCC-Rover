@@ -60,7 +60,7 @@ def writeWifi(sidPass):
                 lines = file.readlines()
 
             lines.append("\n")
-            lines.append("networks={\n")
+            lines.append("network={\n")
             lines.append("    ssid=\"" + sid + "\"\n")
             lines.append("    psk=\"" + pwd + "\"\n")
             lines.append("}\n")

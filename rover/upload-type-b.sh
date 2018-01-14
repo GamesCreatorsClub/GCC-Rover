@@ -15,6 +15,18 @@ echo Restarting    storage
 pyros $1 restart   storage
 
 echo ""
+echo Uploading     discovery
+pyros $1 upload -s discovery    discovery_service.py
+echo Restarting    discovery
+pyros $1 restart   discovery
+
+echo ""
+echo Uploading     wifi
+pyros $1 upload -s wifi         wifi_service.py
+echo Restarting    wifi
+pyros $1 restart   wifi
+
+echo ""
 echo Uploading     wheels
 pyros $1 upload -s wheels       wheels_service.py
 echo Restarting    wheels

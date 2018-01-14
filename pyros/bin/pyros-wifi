@@ -45,6 +45,12 @@ args = pc.processCommonHostSwitches(pc.args)
 
 processArguments(args)
 
+if command.startswith("write "):
+    split = command.split(":")
+    if len(split[1]) < 8:
+        print("ERROR: password must be at least 8 chars, got " + len(split[1]))
+        sys.exit(1)
+
 
 def displayHelp(rc):
     print("usage: pyros wifi [command]")
