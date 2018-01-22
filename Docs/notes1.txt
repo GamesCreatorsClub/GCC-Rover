@@ -1,0 +1,15 @@
+Desired low power brushed ESC:
+    Botbitz – 10a 
+    2x RC ESC 10A Brush Motor Speed Controller w/o Brake for 1/16-24 Car Boat Tank
+    http://www.ebay.co.uk/itm/10A-Brushed-ESC-Speed-Controller-With-Brake-For-1-16-1-18-1-24-RC-Car-Boat-Tank-/272386045603?hash=item3f6b7936a3:g:wY8AAOSwYIxX40i7
+
+
+Servoblaster configuration:
+    sudo /usr/local/sbin/servod --idle-timeout=60000 --p1pins=11,12,13,15,16,22,26,29,31,32
+
+
+9OD I2C components addresses:
+    0x1e - HMC5883L - compass
+    0x53 - ADXL345 - accelerometer
+    0x34 - L3G4200D - gyroscope
+    0x77 - BMP180 - pressure sensor
