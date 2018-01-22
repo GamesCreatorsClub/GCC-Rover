@@ -31,8 +31,10 @@ def setLights(state):
 
 def handleLights(topic, payload, groups):
     if "on" == payload or "ON" == payload or "1" == payload:
+        print("Lights on.")
         setLights(True)
     else:
+        print("Lights off.")
         setLights(False)
 
 
