@@ -137,6 +137,7 @@ texts = {
 
     "+": bigFont.render("+", True, (0, 255, 0)),
     "-": bigFont.render("-", True, (0, 255, 0)),
+    "SWP": bigFont.render("SWP", True, (0, 255, 0)),
 }
 
 
@@ -217,6 +218,10 @@ buttons = {
         "texture": texts["-"],
         "rect": pygame.Rect(128, 424, getTextWidth("-"), getTextHeight("-")),
     },
+    "deg swap": {
+        "texture": texts["SWP"],
+        "rect": pygame.Rect(128, 544, getTextWidth("SWP"), getTextHeight("SWP")),
+    },
 
     "speed next": {
         "texture": texts["+"],
@@ -262,6 +267,11 @@ buttons = {
         "texture": texts["-"],
         "rect": pygame.Rect(428, 544, getTextWidth("-"), getTextHeight("-")),
     },
+    "speed swap": {
+        "texture": texts["SWP"],
+        "rect": pygame.Rect(500, 188, getTextWidth("SWP"), getTextHeight("SWP")),
+    },
+
 }
 
 
@@ -333,6 +343,29 @@ def doCalStuff():
             wheelMap[selectedWheel]["deg"][calDeg] = int(wheelMap[selectedWheel]["deg"][calDeg]) - 1
             pyros.publish("storage/write/wheels/cal/" + selectedWheel + "/deg/" + calDeg, str(wheelMap[selectedWheel]["deg"][calDeg]))
             pyros.publish("wheel/" + selectedWheel + "/deg", selectedDeg)
+
+    degSwap = buttons["deg swap"]
+    degSwapDown = buttonPressed(degSwap, mousePos, mouseDown)
+    drawButton(screen, degSwap, degSwapDown)
+
+    speedSwap = buttons["speed swap"]
+    speedSwapDown = buttonPressed(speedSwap, mousePos, mouseDown)
+    drawButton(screen, speedSwap, speedSwapDown)
+
+    speedLimitsChanged = False
+    if selectedWheel != "all" and speedSwapDown:
+        print("Swap pressed")
+        speedTemp = wheelMap[selectedWheel]["speed"]["-300"]
+        wheelMap[selectedWheel]["speed"]["-300"] = wheelMap[selectedWheel]["speed"]["300"]
+        wheelMap[selectedWheel]["speed"]["300"] = speedTemp
+
+        speedTemp = wheelMap[selectedWheel]["speed"]["-0"]
+        wheelMap[selectedWheel]["speed"]["-0"] = wheelMap[selectedWheel]["speed"]["0"]
+        wheelMap[selectedWheel]["speed"]["0"] = speedTemp
+        speedLimitsChanged = True
+
+
+
     todo = ["-300", "-0", "0", "300"]
 
     for calSpeed in todo:
@@ -345,12 +378,15 @@ def doCalStuff():
         drawButton(screen, buttonm, minusDown)
         if plusDown:
             wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) + 1
-            pyros.publish("storage/write/wheels/cal/" + selectedWheel + "/speed/" + calSpeed, str(wheelMap[selectedWheel]["speed"][calSpeed]))
-            pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
+            speedLimitsChanged = True
         elif minusDown:
             wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) - 1
+            speedLimitsChanged = True
+
+        if speedLimitsChanged:
             pyros.publish("storage/write/wheels/cal/" + selectedWheel + "/speed/" + calSpeed, str(wheelMap[selectedWheel]["speed"][calSpeed]))
             pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
+
 
 
 def doSpeedStettingstuff():
