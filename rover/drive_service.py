@@ -634,6 +634,8 @@ if __name__ == "__main__":
 
         print("Started drive service.")
 
+        stopAllWheels()
+
         pyroslib.forever(0.02, loop)
 
     except Exception as ex:
