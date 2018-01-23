@@ -543,6 +543,13 @@ def stopAllWheels():
     return
 
 
+def alignAllWheels():
+    wheelDeg("fl", 0)
+    wheelDeg("fr", 0)
+    wheelDeg("bl", 0)
+    wheelDeg("br", 0)
+
+
 commands = {
     "stop": {
         "start": stopAllWheels
@@ -635,6 +642,7 @@ if __name__ == "__main__":
         print("Started drive service.")
 
         stopAllWheels()
+        alignAllWheels()
 
         pyroslib.forever(0.02, loop)
 
