@@ -37,7 +37,7 @@ public class RoverDriver implements ControllerListener {
     private JoystickAdapter rightJoystick = new JoystickAdapter();
 
     private int roverTurningDistance;
-    private int roverSpeedMultiplier = 40;
+    private int roverSpeedMultiplier = 60;
     private int selectedRover = 0;
     private int retryCounter = 10;
 

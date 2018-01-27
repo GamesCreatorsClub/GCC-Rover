@@ -155,6 +155,7 @@ public class DesktopGCCRoverController extends ApplicationAdapter implements Inp
 
         pov = new POV((int) cellSize * 9, (int) cellSize * 4, (int) cellSize * 2);
 
+
         button1 = new RoundButton((int) cellSize * 6, (int) cellSize * 11, (int) cellSize / 2);
 
         switchLT = new SquareButton((int) cellSize * 0, (int) (cellSize * 0), (int) cellSize * 4, (int) cellSize * 2);
