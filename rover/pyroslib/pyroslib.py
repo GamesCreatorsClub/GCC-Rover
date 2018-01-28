@@ -178,8 +178,8 @@ def loop(deltaTime, inner=None):
         else:
             client.loop(0.0005)
 
-        if inner is not None:
-            inner()
+    if inner is not None:
+        inner()
 
 
 def forever(deltaTime, outer=None, inner=None):
