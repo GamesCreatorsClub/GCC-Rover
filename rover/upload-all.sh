@@ -9,6 +9,12 @@ echo Uploading     storagelib
 pyros $1 upload    storagelib   storagelib/storagelib.py
 
 echo ""
+echo Uploading     wifi
+pyros $1 upload -s wifi         wifi_service.py
+echo Restarting    wifi
+pyros $1 restart   wifi
+
+echo ""
 echo Uploading     storage
 pyros $1 upload -s storage      storage_service.py
 echo Restarting    storage
@@ -25,6 +31,12 @@ echo Uploading     drive
 pyros $1 upload -s drive        drive_service.py
 echo Restarting    drive
 pyros $1 restart   drive
+
+echo ""
+echo Uploading     jcontroller
+pyros $1 upload -s jcontroller  jcontroller_service.py
+echo Restarting    jcontroller
+pyros $1 restart   jcontroller
 
 echo ""
 echo Uploading     shutdown
