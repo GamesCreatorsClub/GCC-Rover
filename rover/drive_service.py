@@ -610,7 +610,6 @@ def handleAccel(topic, message, groups):
     global accelXReadOut, accelYReadOut, accelDeltaTime
 
     data = message.split(",")
-    # print("Received data " + str(data))
     accelXReadOut += float(data[0])
     accelYReadOut += float(data[1])
     accelDeltaTime = float(data[3])

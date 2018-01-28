@@ -225,9 +225,13 @@ def driveWheels():
 def servoTopic(topic, payload, groups):
     servo = int(groups[0])
     moveServo(servo, payload)
+    print("servo")
+
 
 
 def wheelDegTopic(topic, payload, groups):
+
+    print("wheel deg")
     wheelName = groups[0]
 
     if wheelName in wheelMap:
@@ -245,6 +249,8 @@ def wheelDegTopic(topic, payload, groups):
 
 def wheelSpeedTopic(topic, payload, groups):
     wheelName = groups[0]
+    print("wheel speed")
+
 
     if wheelName in wheelMap:
         wheel = wheelMap[wheelName]
