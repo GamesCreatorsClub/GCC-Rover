@@ -22,7 +22,10 @@ import storagelib
 #     - storage map
 #
 
-DEBUG = False
+DEBUG_SPEED = False
+DEBUG_SPEED_VERBOSE = False
+DEBUG_TURN = False
+
 PWM = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 
@@ -140,17 +143,17 @@ def handleSpeed(wheel, wheelCal, speedStr):
 
     if speedStr == "-0":
         servoPosition = interpolate(0, wheelCal["-0"], wheelCal["-300"])
-        if DEBUG:
+        if DEBUG_SPEED_VERBOSE:
             print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
         speed = 0
     elif speedStr == "+0":
         servoPosition = interpolate(0, wheelCal["0"], wheelCal["-300"])
-        if DEBUG:
+        if DEBUG_SPEED_VERBOSE:
             print("    got speed +0 @ " + str(servoPosition) + " for " + str(servoNumber))
         speed = 0
     elif speedStr == "0":
         servoPosition = int(interpolate(0.5, wheelCal["-0"], wheelCal["0"]))
-        if DEBUG:
+        if DEBUG_SPEED_VERBOSE:
             print("    got speed 0 @ " + str(servoPosition) + " for " + str(servoNumber))
         speed = 0
     else:
@@ -159,7 +162,7 @@ def handleSpeed(wheel, wheelCal, speedStr):
             servoPosition = interpolate(speed / 300, wheelCal["0"], wheelCal["300"])
         else:
             servoPosition = interpolate(-speed / 300, wheelCal["-0"], wheelCal["-300"])
-        if DEBUG:
+        if DEBUG_SPEED_VERBOSE:
             print("    got speed " + speedStr + " @ " + str(servoPosition) + " for " + str(servoNumber))
 
     wheel["speed"] = speedStr
@@ -228,17 +231,14 @@ def servoTopic(topic, payload, groups):
     print("servo")
 
 
-
 def wheelDegTopic(topic, payload, groups):
-
-    print("wheel deg")
     wheelName = groups[0]
 
     if wheelName in wheelMap:
         wheel = wheelMap[wheelName]
         wheelCal = wheelCalibrationMap[wheelName]
 
-        if DEBUG:
+        if DEBUG_TURN:
             print("  Turning wheel: " + wheelName + " to " + str(payload) + " degs")
 
         handleDeg(wheel, wheelCal["deg"], float(payload))
@@ -249,14 +249,12 @@ def wheelDegTopic(topic, payload, groups):
 
 def wheelSpeedTopic(topic, payload, groups):
     wheelName = groups[0]
-    print("wheel speed")
-
 
     if wheelName in wheelMap:
         wheel = wheelMap[wheelName]
         wheelCal = wheelCalibrationMap[wheelName]
 
-        if DEBUG:
+        if DEBUG_SPEED:
             print("  Setting wheel: " + wheelName + " speed to " + str(payload))
         handleSpeed(wheel, wheelCal["speed"], payload)
     else:
