@@ -14,6 +14,7 @@ import time
 import pyroscommon as pc
 
 hasHelpSwitch = False
+verboseFlag = True
 timeout = 5  # Default timeout 5 seconds
 
 
@@ -23,6 +24,8 @@ def processSwitches(arguments):
     while len(arguments) > 0 and arguments[0].startswith("-"):
         if arguments[0] == "-h":
             helpSwitch = True
+        elif arguments[0] == "-v":
+            verboseFlag = True
         elif arguments[0] == "-t":
             if len(arguments) > 1:
                 del arguments[0]

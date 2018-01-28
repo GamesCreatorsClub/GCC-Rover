@@ -86,7 +86,7 @@ def processLine(lines, pid):
 
 
 def processStatus(line, pid):
-    print("STATS: " + line)
+    print("STATUS: " + line)
 
 
 pc.processGlobalCommand("wifi", executeCommand, processLine, processStatus)
