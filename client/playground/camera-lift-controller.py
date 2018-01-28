@@ -40,11 +40,14 @@ S2_DOWN = 175
 S2_MID = 140
 S2_UP = 74
 
-direction = RESET
-stage = 0
-s1_pos = S1_MID
-s2_pos = S2_MID
-timer = 0
+
+def reset():
+    global direction, stage, s1_pos, s2_pos, timer
+    direction = RESET
+    stage = 0
+    s1_pos = S1_MID
+    s2_pos = S2_MID
+    timer = 0
 
 
 def driveCamera():
@@ -136,6 +139,8 @@ def onKeyDown(key):
             stage = 0
     elif key == pygame.K_SPACE:
         direction = IDLE
+    elif key == pygame.K_r:
+        reset()
     else:
         pyros.gcc.handleConnectKeys(key)
 
@@ -145,6 +150,8 @@ def onKeyUp(key):
 
     pass
 
+
+reset()
 
 pyros.init("camera-lift-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
