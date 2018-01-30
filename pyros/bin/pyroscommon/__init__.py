@@ -50,6 +50,7 @@ def loadAliases():
     if "default" in aliases:
         defaultAlias = aliases["default"]
 
+
 loadAliases()
 
 
@@ -254,8 +255,8 @@ def processCommand(processId, executeCommand, processOut, processStatus):
                     connected = processStatus(payload, pid)
 
             countdown = getTimeout()
-        else:
-            print("Before command: " + payload)
+        # else:
+        #     print("Before command: " + payload)
 
     client.on_connect = onConnect
     client.on_message = onMessage

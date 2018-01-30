@@ -237,7 +237,7 @@ def runProcess(processId):
         else:
             new_env["PYTHONPATH"] = ".."
 
-        process = subprocess.Popen(["python3", "-u", processId + ".py"],
+        process = subprocess.Popen(["python3", "-u", processId + ".py", processId],
                                    env=new_env,
                                    bufsize=0,
                                    stdout=subprocess.PIPE,

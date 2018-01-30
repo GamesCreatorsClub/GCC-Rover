@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+
+#
+# Copyright 2016-2017 Games Creators Club
+#
+# MIT License
+#
+
+import sys
+import pyroscommon as pc
+
+args = pc.processCommonHostSwitches(pc.args)
+gotStats = False
+
+
+def printHelp(rc):
+    print("usage: pyros [<host[:port]>] stats <command> <processId>")
+    print("")
+    print("    -h                    help message")
+    print("    <command>             command")
+    print("    <processId>           process id")
+    print("")
+    print("  Commands:")
+    print("    start")
+    print("    stop")
+    print("    read")
+    sys.exit(rc)
+
+
+if len(args) < 2:
+    printHelp(1)
+
+if pc.hasHelpSwitch:
+    printHelp(0)
+
+
+command = args[0]
+if command != "start" and command != "stop" and command != "read":
+    print("ERROR: unknown command " + command)
+    printHelp(1)
+
+processId = args[1]
+
+
+def executeCommand(client):
+    client.subscribe("exec/" + processId + "/stats/out", 0)
+    client.publish("exec/" + processId + "/stats", command)
+
+    return command == "read"
+
+
+def processOut(msg, pid):
+    global gotStats
+
+    if not pid.endswith("/stats"):
+        return not gotStats
+
+    tick = 0
+    startTime = 0
+    lastTime = 0
+    totalSent = 0
+    totalRec = 0
+    maxSent = 0
+    maxRec = 0
+    first = True
+    second = False
+    lines = msg.split("\n")
+    for line in lines:
+        line = line.strip()
+        if len(line) > 0:
+            data = line.split(",")
+            t = float(data[0])
+            sent = int(data[1])
+            rec = int(data[2])
+            if first:
+                startTime = t
+                first = False
+                second = True
+            elif second:
+                second = False
+                tick = t - startTime
+            lastTime = t
+            totalSent = totalSent + sent
+            totalRec = totalRec + rec
+            if sent > maxSent:
+                maxSent = sent
+            if rec > maxRec:
+                maxRec = rec
+
+    if tick > 0:
+        tickStr = "{0:13.2f}".format(tick * 1000) + "ms"
+    else:
+        tickStr = "no data"
+
+    totalTime = lastTime - startTime + tick
+    totalTimeStr = "{0:8.4f}".format(totalTime) + "s"
+
+    print("{0:<16} {1:<16} {2:<16} {3:<16} {4:<16} {5:<16}".format(
+                       "tick", "total time", "received", "sent", "max received", "max sent"))
+    print("{0:>16} {1:>16} {2:<16} {3:<16} {4:<16} {5:<16}".format(
+                       tickStr, totalTimeStr, str(totalRec), str(totalSent), str(maxRec), str(maxSent)))
+    gotStats = True
+    return False
+
+
+def processStatus(line, pid):
+    return True
+
+
+pc.processCommand(processId, executeCommand, processOut, processStatus)

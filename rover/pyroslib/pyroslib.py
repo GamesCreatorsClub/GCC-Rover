@@ -23,12 +23,28 @@ _port = 1883
 def doNothing():
     pass
 
+
+_processId = "unknown"
 _onConnected = doNothing
 _connected = False
 
 _subscribers = []
 _regexTextToLambda = {}
 _regexBinaryToLambda = {}
+
+_collectStats = False
+
+_stats = [[0, 0, 0]]
+
+
+def _addSendMessage():
+    currentStats = _stats[len(_stats) - 1]
+    currentStats[1] = currentStats[1] + 1
+
+
+def _addReceivedMessage():
+    currentStats = _stats[len(_stats) - 1]
+    currentStats[2] = currentStats[2] + 1
 
 
 def isConnected():
@@ -38,6 +54,8 @@ def isConnected():
 def publish(topic, message):
     if _connected:
         client.publish(topic, message)
+        if _collectStats:
+            _addSendMessage()
 
 
 def subscribe(topic, method):
@@ -60,6 +78,25 @@ def subscribeBinary(topic, method):
         client.subscribe(topic, 0)
 
 
+def _sendStats():
+    msg = ""
+    for stat in _stats:
+        msg = msg + str(stat[0]) + "," + str(stat[1]) + "," + str(stat[2]) + "\n"
+
+    publish("exec/" + _processId + "/stats/out", msg)
+
+
+def _handleStats(topic, payload, groups):
+    global _collectStats
+
+    if "start" == payload:
+        _collectStats = True
+    elif "stop" == payload:
+        _collectStats = False
+    elif "read" == payload:
+        _sendStats()
+
+
 def _onDisconnect(mqttClient, data, rc):
     _connect()
 
@@ -80,6 +117,9 @@ def _onConnect(mqttClient, data, flags, rc):
 
 def _onMessage(mqttClient, data, msg):
     topic = msg.topic
+
+    if _collectStats:
+        _addReceivedMessage()
 
     try:
         for regex in _regexTextToLambda:
@@ -133,7 +173,7 @@ def onDisconnect(mqttClient, data, rc):
 
 
 def init(name, unique=False, host="localhost", port=1883, onConnected=None, waitToConnect=True):
-    global client, _connected, _onConnected, _name
+    global client, _connected, _onConnected, _name, _processId
 
     _onConnected = onConnected
 
@@ -149,6 +189,13 @@ def init(name, unique=False, host="localhost", port=1883, onConnected=None, wait
 
     if host is not None:
         connect(host, port, waitToConnect)
+
+    if len(sys.argv) > 1:
+        _processId = sys.argv[1]
+        print("Started " + _processId + " process. Setting up pyros.")
+        subscribe("exec/" + _processId + "/stats", _handleStats)
+    else:
+        print("No processId argument supplied.")
 
 
 def connect(host, port=1883, waitToConnect=True):
@@ -171,22 +218,42 @@ def sleep(deltaTime):
 
 
 def loop(deltaTime, inner=None):
-    for it in range(0, int(deltaTime / 0.002)):
+    currentTime = time.time()
+    until = currentTime + deltaTime
+    while currentTime < until:
         time.sleep(0.0015)
         if client is None:
             time.sleep(0.0005)
         else:
             client.loop(0.0005)
 
-    if inner is not None:
-        inner()
+        if inner is not None:
+            inner()
+
+        currentTime = time.time()
 
 
 def forever(deltaTime, outer=None, inner=None):
+    currentTime = time.time()
+    nextTime = currentTime
+
     while True:
+        if _collectStats:
+            _stats.append([nextTime, 0, 0])
+            if len(_stats) > 100:
+                del _stats[0]
+
+        nextTime = nextTime + deltaTime
         try:
-            loop(deltaTime, inner=inner)
             if outer is not None:
                 outer()
-        except Exception as ex:
+        except BaseException as ex:
             print("ERROR: Got exception in main loop; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
+        currentTime = time.time()
+
+        sleepTime = nextTime - currentTime
+        if sleepTime < 0.002:
+            nextTime = currentTime
+        else:
+            loop(sleepTime, inner=inner)
