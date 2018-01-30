@@ -111,6 +111,18 @@ def processCurrentState():
     _currentState()
 
 
+def allWheels(fld, frd, bld, brd, fls, frs, bls, brs):
+    pyroslib.publish("wheel/all", "fld:" + str(fld) + " frd:" + str(frd) + " bld:" + str(bld) + " brd:" + str(brd) + " fls:" + str(fls) + " frs:" + str(frs) + " bls:" + str(bls) + " brs:" + str(brs))
+
+
+def allWheelsDeg(fld, frd, bld, brd):
+    pyroslib.publish("wheel/all", "fld:" + str(fld) + " frd:" + str(frd) + " bld:" + str(bld) + " brd:" + str(brd))
+
+
+def allWheelsSpeed(fls, frs, bls, brs):
+    pyroslib.publish("wheel/all", "fls:" + str(fls) + " frs:" + str(frs) + " bls:" + str(bls) + " brs:" + str(brs))
+
+
 def wheelDeg(wheelName, angle):
     topic = "wheel/" + wheelName + "/deg"
     pyroslib.publish(topic, str(angle))
@@ -156,10 +168,11 @@ def dontNeedAccel():
 def straightenWheels():
     global wheelPosition, DELAY, STRAIGHT
 
-    wheelDeg("fl", 0)
-    wheelDeg("fr", 0)
-    wheelDeg("bl", 0)
-    wheelDeg("br", 0)
+    allWheelsDeg(0, 0, 0, 0)
+    # wheelDeg("fl", 0)
+    # wheelDeg("fr", 0)
+    # wheelDeg("bl", 0)
+    # wheelDeg("br", 0)
 
     if wheelPosition != STRAIGHT:
         time.sleep(DELAY)
@@ -169,10 +182,12 @@ def straightenWheels():
 def slantWheels():
     global wheelPosition, DELAY, SLANT
 
-    wheelDeg("fl", 60.0)
-    wheelDeg("fr", -60.0)
-    wheelDeg("bl", -60.0)
-    wheelDeg("br", 60.0)
+    allWheelsDeg(60.0, -60.0, -60.0, 60.0)
+    # wheelDeg("fl", 60.0)
+    # wheelDeg("fr", -60.0)
+    # wheelDeg("bl", -60.0)
+    # wheelDeg("br", 60.0)
+
     if wheelPosition != SLANT:
         time.sleep(DELAY)
         wheelPosition = SLANT
@@ -181,22 +196,23 @@ def slantWheels():
 def sidewaysWheels():
     global wheelPosition, DELAY, SIDEWAYS
 
-    wheelDeg("fl", 90.0)
-    wheelDeg("fr", -90.0)
-    wheelDeg("bl", -90.0)
-    wheelDeg("br", 90.0)
+    allWheelsDeg(90.0, -90.0, -90.0, 90.0)
+    # wheelDeg("fl", 90.0)
+    # wheelDeg("fr", -90.0)
+    # wheelDeg("bl", -90.0)
+    # wheelDeg("br", 90.0)
+
     if wheelPosition != SIDEWAYS:
         time.sleep(DELAY)
         wheelPosition = SIDEWAYS
 
 
 def setRotationSpeed(speed):
-
-    wheelSpeed("fl", speed)
-    wheelSpeed("fr", -speed)
-    wheelSpeed("bl", speed)
-    wheelSpeed("br", -speed)
-
+    allWheelsSpeed(speed, -speed, speed, -speed)
+    # wheelSpeed("fl", speed)
+    # wheelSpeed("fr", -speed)
+    # wheelSpeed("bl", speed)
+    # wheelSpeed("br", -speed)
 
 def rotate():
     global gyroReadOut
@@ -421,15 +437,16 @@ def orbit():
 
     log("orbit", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust) + " args:" + str(args))
 
-    wheelDeg("fl", str(frontAngle))
-    wheelDeg("fr", str(-frontAngle))
-    wheelDeg("bl", str(backAngle))
-    wheelDeg("br", str(-backAngle))
-
-    wheelSpeed("fl", str(-innerSpeed))
-    wheelSpeed("fr", str(innerSpeed))
-    wheelSpeed("bl", str(-outerSpeed))
-    wheelSpeed("br", str(outerSpeed))
+    allWheels(str(frontAngle), str(-frontAngle), str(backAngle), str(-backAngle), str(-innerSpeed), str(innerSpeed), str(-outerSpeed), str(outerSpeed))
+    # wheelDeg("fl", str(frontAngle))
+    # wheelDeg("fr", str(-frontAngle))
+    # wheelDeg("bl", str(backAngle))
+    # wheelDeg("br", str(-backAngle))
+    #
+    # wheelSpeed("fl", str(-innerSpeed))
+    # wheelSpeed("fr", str(innerSpeed))
+    # wheelSpeed("bl", str(-outerSpeed))
+    # wheelSpeed("br", str(outerSpeed))
 
 
 def sideAngleFront(dist):
@@ -486,25 +503,32 @@ def steer():
     log("steer", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust) + " args:" + str(args))
 
     if d >= 0:
-        wheelDeg("fl", str(backAngle))
-        wheelDeg("bl", str(-backAngle))
-        wheelDeg("fr", str(frontAngle))
-        wheelDeg("br", str(-frontAngle))
+        # wheelDeg("fl", str(backAngle))
+        # wheelDeg("bl", str(-backAngle))
+        # wheelDeg("fr", str(frontAngle))
+        # wheelDeg("br", str(-frontAngle))
         if speed != 0:
-            wheelSpeed("fl", str(outerSpeed))
-            wheelSpeed("fr", str(innerSpeed))
-            wheelSpeed("bl", str(outerSpeed))
-            wheelSpeed("br", str(innerSpeed))
+            allWheels(backAngle, frontAngle, -backAngle, -frontAngle, outerSpeed, innerSpeed, outerSpeed, innerSpeed)
+            # wheelSpeed("fl", str(outerSpeed))
+            # wheelSpeed("fr", str(innerSpeed))
+            # wheelSpeed("bl", str(outerSpeed))
+            # wheelSpeed("br", str(innerSpeed))
+        else:
+            allWheelsDeg(backAngle, frontAngle, -backAngle, -frontAngle)
+
     else:
-        wheelDeg("fl", str(-frontAngle))
-        wheelDeg("bl", str(frontAngle))
-        wheelDeg("fr", str(-backAngle))
-        wheelDeg("br", str(backAngle))
+        # wheelDeg("fl", str(-frontAngle))
+        # wheelDeg("bl", str(frontAngle))
+        # wheelDeg("fr", str(-backAngle))
+        # wheelDeg("br", str(backAngle))
         if speed != 0:
-            wheelSpeed("fl", str(innerSpeed))
-            wheelSpeed("fr", str(outerSpeed))
-            wheelSpeed("bl", str(innerSpeed))
-            wheelSpeed("br", str(outerSpeed))
+            allWheels(-frontAngle, -backAngle, frontAngle, backAngle, innerSpeed, outerSpeed, innerSpeed, outerSpeed)
+            # wheelSpeed("fl", str(innerSpeed))
+            # wheelSpeed("fr", str(outerSpeed))
+            # wheelSpeed("bl", str(innerSpeed))
+            # wheelSpeed("br", str(outerSpeed))
+        else:
+            allWheelsDeg(-frontAngle, -backAngle, frontAngle, backAngle)
 
 
 def drive():
@@ -520,34 +544,37 @@ def drive():
             angle -= 180
             speed = -speed
 
-        wheelDeg("fl", angle)
-        wheelDeg("fr", angle)
-        wheelDeg("bl", angle)
-        wheelDeg("br", angle)
-
-        wheelSpeed("fl", speed)
-        wheelSpeed("fr", speed)
-        wheelSpeed("bl", speed)
-        wheelSpeed("br", speed)
+        allWheels(angle, angle, angle, angle, speed, speed, speed, speed)
+        # wheelDeg("fl", angle)
+        # wheelDeg("fr", angle)
+        # wheelDeg("bl", angle)
+        # wheelDeg("br", angle)
+        #
+        # wheelSpeed("fl", speed)
+        # wheelSpeed("fr", speed)
+        # wheelSpeed("bl", speed)
+        # wheelSpeed("br", speed)
 
     except:
         return
 
 
 def stopAllWheels():
-    wheelSpeed("fl", 0)
-    wheelSpeed("fr", 0)
-    wheelSpeed("bl", 0)
-    wheelSpeed("br", 0)
+    allWheelsSpeed(0, 0, 0, 0)
+    # wheelSpeed("fl", 0)
+    # wheelSpeed("fr", 0)
+    # wheelSpeed("bl", 0)
+    # wheelSpeed("br", 0)
     # print("Stopping all wheels!")
     return
 
 
 def alignAllWheels():
-    wheelDeg("fl", 0)
-    wheelDeg("fr", 0)
-    wheelDeg("bl", 0)
-    wheelDeg("br", 0)
+    allWheelsDeg(0, 0, 0, 0)
+    # wheelDeg("fl", 0)
+    # wheelDeg("fr", 0)
+    # wheelDeg("bl", 0)
+    # wheelDeg("br", 0)
 
 
 commands = {

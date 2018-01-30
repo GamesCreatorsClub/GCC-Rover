@@ -261,6 +261,24 @@ def wheelSpeedTopic(topic, payload, groups):
         print("ERROR: no wheel with name " + wheelName + " fonund.")
 
 
+def wheelsCombined(topic, payload, groups):
+    wheelCmds = payload.split(" ")
+    for wheelCmd in wheelCmds:
+        kv = wheelCmd.split(":")
+        if len(kv) > 1:
+            wheelName = kv[0][:2]
+            command = kv[0][2]
+            value = kv[1]
+
+            if wheelName in wheelMap:
+                wheel = wheelMap[wheelName]
+                wheelCal = wheelCalibrationMap[wheelName]
+                if command == "s":
+                    handleSpeed(wheel, wheelCal["speed"], value)
+                elif command == "d":
+                    handleDeg(wheel, wheelCal["deg"], float(value))
+
+
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
@@ -268,6 +286,7 @@ if __name__ == "__main__":
         initWheels()
 
         pyroslib.subscribe("servo/+", servoTopic)
+        pyroslib.subscribe("wheel/all", wheelsCombined)
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
         pyroslib.init("wheels-service")
