@@ -8,9 +8,7 @@
 import pygame
 import sys
 import time
-import pyros
-import pyros.gcc
-import pyros.pygamehelper
+
 
 storageMap = {}
 wheelMap = {}
@@ -21,6 +19,10 @@ normalFont = pygame.font.SysFont("apple casual", 32)
 frameclock = pygame.time.Clock()
 screen = pygame.display.set_mode((600, 800))
 mousePos = [0, 0]
+
+import pyros
+import pyros.gcc
+import pyros.pygamehelper
 
 mouseDown = False
 # lastMouseDown = False
