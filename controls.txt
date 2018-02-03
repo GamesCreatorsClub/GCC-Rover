@@ -1,0 +1,65 @@
+
+   _____  _____ _____                   _             _ _
+  / ____|/ ____/ ____|                 | |           | | |
+ | |  __| |   | |        ___ ___  _ __ | |_ _ __ ___ | | | ___ _ __
+ | | |_ | |   | |       / __/ _ \| '_ \| __| '__/ _ \| | |/ _ \ '__|
+ | |__| | |____ |____  | (__ (_) | | | | |_| | | (_) | | |  __/ |
+  \_____|\_____\_____|  \___\___/|_| |_|\__|_|  \___/|_|_|\___|_|
+
+
+
+                LT                                      RT
+                LB                                      RB
+               _=====_                               _=====_
+              / _____ \                             / _____ \
+            +.-'_____'-.---------------------------.-'_____'-.+
+           /   | HU  |  '.          GCC          .'  |  _  |   \
+          / ___| /|\ |___ \                     / ___| /_\ |___ \
+         / |      |      | ;  __           _   ; | _    X    _ | ;
+         | |HL<--   -->HR| | |__|         |_:> | ||_|Y     A(_)| |
+         | |___   |   ___| ;SELECT       START ; |___   B   ___| ;
+         |\    | \|/ |    /  _              _   \    | (X) |    /|
+         | \   |_HD__|  .','" "',        ,'" "', '.  |_____|  .' |
+         |  '-.______.-' /       \      /       \  '-._____.-'   |
+         |               |  LC   |------|  RC   |                |
+         |              /\       /      \       /\               |
+         |             /  '.___.'        '.___.'  \              |
+         |            /                            \             |
+          \          /       LS            RS       \           /
+           \________/                                \_________/
+
+
+LS: Rotating
+RS: Moving in direction
+RS+LS: Move with RS and steer with LS
+
+HAT: Speed
+    HU: +1
+    HD: -1
+    HL: -25
+    HR: +25
+
+LT: Orbit
+    Orbits an object at a set distance.
+    RS orbits left+right
+    OVERRIDES OTHER MOVEMENTS!
+
+RT: Lung / Kick / Shoot
+
+LB: Stick to left wall at current distance
+    RS left and right will adjust distance
+    RS drive forward+back
+    OVERRIDES OTHER MOVEMENTS!
+
+RB: Stick to left wall at current distance
+    RS left and right will adjust distance
+    RS drive forward+back
+    OVERRIDES OTHER MOVEMENTS!
+
+LC + RC: causes the corresponding sticks to only act at half the speed, slowing down movements.
+
+START: switches connected rover *(wifi controller only)*
+SELECT: toggles display mode *(wifi controller only)*
+
+
+A B X Y: functions
