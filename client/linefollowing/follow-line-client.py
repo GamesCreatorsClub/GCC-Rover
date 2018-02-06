@@ -228,7 +228,7 @@ def onKeyDown(key):
         print("  fetching white balance picture...")
         pyros.publish("camera/whitebalance/fetch", "")
     elif key == pygame.K_r:
-        print("  fetching white balance picture...")
+        print("  fetching raw picture...")
         pyros.publish("camera/raw/fetch", "")
     elif key == pygame.K_p:
         print("  fetching processed picture...")
