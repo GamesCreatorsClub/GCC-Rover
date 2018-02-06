@@ -1,0 +1,49 @@
+bluez:
+------
+sudo apt-get install bluez-hcidump
+sudo apt-get install libglib2.0-dev
+sudo apt-get install libapparmor1
+sudo apt-get install libdbus-1-dev
+sudo apt-get install libudev-dev
+sudo apt-get install libreadline-dev
+sudo apt-get install libical-dev
+sudo apt-get install gawk
+
+
+sudo apt-get install bluez-hcidump libglib2.0-dev libapparmor1 libdbus-1-dev libudev-dev libreadline-dev libical-dev gawk
+
+sudo systemctl enable bluetooth.service
+sudo usermod -G bluetooth -a pi
+
+sudo ./sixpair
+power off and power on...
+
+
+
+joystick:
+--------
+sudo apt-get install joystick
+
+
+
+mqtt:
+------
+??
+
+sudo pip3 install paho-mqtt
+
+
+
+.profile:
+---------
+add to the bottom
+
+PATH=$PATH:/home/pi/pyros/bin
+
+
+/boot/config.txt:
+-----------------
+
+disable w1 interface
+
+
