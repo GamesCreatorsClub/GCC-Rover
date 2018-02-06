@@ -8,8 +8,9 @@
 
 import time
 import traceback
+
 import pyroslib
-import VL53L0X
+import vl53l0xapi
 
 # VL53L0X sensor service
 #
@@ -92,8 +93,10 @@ def moveServo(angle):
 
 def initVL53L0X():
     global tof, timing
-    tof = VL53L0X.VL53L0X()
-    tof.start_ranging(VL53L0X.VL53L0X_BETTER_ACCURACY_MODE)
+    tof = vl53l0xapi.VL53L0X()
+    # tof.start_ranging(vl53l0xapi.VL53L0X_HIGH_SPEED_MODE)
+    tof.start_ranging(vl53l0xapi.VL53L0X_BETTER_ACCURACY_MODE)
+
     timing = tof.get_timing()
     if timing < 20000:
         timing = 20000
