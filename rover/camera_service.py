@@ -29,31 +29,52 @@ CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data 
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
 
-whiteBalance = Image.new("L", (80, 64))
-
-camera = PiCamera(resolution=(80, 64), framerate=10)
-camera.resolution = (80, 64)
-# camera.shutter_speed = 3000
-camera.iso = 800
-camera.hflip = False
-camera.vflip = False
-
-singleOutput = np.empty((96, 64, 3), dtype=np.uint8)
-continuousOutput = PiRGBArray(camera, size=(96, 64))
-
 continuousIterator = None
 
 stream = io.BytesIO()
+camera = None
+continuousOutput = None
 
 doReadSensor = False
 continuousMode = False
 lastTimeRead = 0
 lastTimeReceivedRequestForContMode = 0
 
-rawL = None
-rawRGB = None
 startTime = time.time()
 lastTime = time.time()
+
+imageFormat = 'BW'
+size = (80, 64)
+adjustedSize = (96, 64)
+postProcess = True
+
+
+def initCamera():
+    global whiteBalance, camera, singleOutput, continuousOutput
+
+    whiteBalance = Image.new("L", size)
+
+    if camera is not None:
+        print("  Closing existing camera.")
+        camera.close()
+
+    print("  Initialising camera, size " + str(size))
+    camera = PiCamera(resolution=size, framerate=10)
+    camera.resolution = size
+    # camera.shutter_speed = 3000
+    camera.iso = 800
+    camera.hflip = False
+    camera.vflip = False
+
+    singleOutput = np.empty((adjustedSize[0], adjustedSize[1], 3), dtype=np.uint8)
+
+    if imageFormat == 'HSV':
+        continuousOutput = PiRGBArray(camera, size=adjustedSize)
+    elif imageFormat == 'BW' or imageFormat == 'RGB':
+        continuousOutput = PiRGBArray(camera, size=adjustedSize)
+
+
+initCamera()
 
 
 def log(msg):
@@ -70,28 +91,43 @@ def logt(msg):
 
 
 def capture():
-    global rawL, rawRGB, continuousIterator
+    global continuousIterator
 
     if continuousMode:
         next(continuousIterator)
         logt("        capture")
         # print('Captured %dx%d image' % (
         #     continuousOutput.array.shape[1], continuousOutput.array.shape[0]))
-        rawRGB = Image.frombuffer('RGB', (96, 64), continuousOutput.array, 'raw', 'RGB', 0, 1).crop((0, 0, 80, 64))
-        logt("        Image.open(stream)")
+        if imageFormat == 'RGB' or imageFormat == 'BW':
+            rawRGB = Image.frombuffer('RGB', adjustedSize, continuousOutput.array, 'raw', 'RGB', 0, 1).crop((0, 0, size[0], size[1]))
+            logt("        Image.open(stream)")
+        elif imageFormat == 'HSV':
+            rawRGB = Image.frombuffer('HSV', adjustedSize, continuousOutput.array, 'raw', 'HSV', 0, 1).crop((0, 0, size[0], size[1]))
+            logt("        Image.open(stream)")
         continuousOutput.truncate(0)
 
     else:
         stream.seek(0)
         logt("        seek(0)")
-        camera.capture(singleOutput, "rgb", use_video_port=True)
-        logt("        capture")
-        rawRGB = Image.frombuffer('RGB', (80, 64), singleOutput, 'raw', 'RGB', 0, 1)
-        logt("        Image.open(stream)")
+        if imageFormat == 'RGB' or imageFormat == 'BW':
+            camera.capture(singleOutput, "rgb", use_video_port=True)
+            logt("        capture")
+            rawRGB = Image.frombuffer('RGB', size, singleOutput, 'raw', 'RGB', 0, 1)
+            logt("        Image.open(stream)")
+        elif imageFormat == 'HSV':
+            camera.capture(singleOutput, "hsv", use_video_port=True)
+            logt("        capture")
+            rawRGB = Image.frombuffer('HSV', size, singleOutput, 'raw', 'HSV', 0, 1)
+            logt("        Image.open(stream)")
 
-    rawL = rawRGB.convert("L")
-    logt("        convert(L)")
-    return rawL
+    if imageFormat == 'RGB':
+        return rawRGB
+    elif imageFormat == 'BW':
+        rawL = rawRGB.convert("L")
+        logt("        convert(L)")
+        return rawL
+    elif imageFormat == 'HSV':
+        return None
 
 
 def minLevel(histogram, level):
@@ -164,18 +200,22 @@ def blackAndWhite(img):
     return img
 
 
-def fetchRaw(topic, payload, groups):
-    captured = capture()
-
+def handleRaw(topic, payload, groups):
     log("  Asked to fetch raw image.")
-    message = captured.tobytes("raw")
-    pyroslib.publish("camera/raw", message)
-    log("  Sent raw image.")
+    fetchRaw()
 
 
 def handleFetchProcessed(topic, payload, groups):
     log("  Asked to fetch processed image.")
     fetchProcessed()
+
+
+def fetchRaw():
+    captured = capture()
+
+    message = captured.tobytes("raw")
+    pyroslib.publish("camera/raw", message)
+    # log("  Sent raw image.")
 
 
 def fetchProcessed():
@@ -236,17 +276,42 @@ def handleContinuousMode(topic, message, groups):
             continuousMode = True
             doReadSensor = True
             continuousOutput.truncate(0)
-            continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=True)
+            if imageFormat == 'RGB' or imageFormat == 'BW':
+                continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=True)
+            elif imageFormat == 'HSV':
+                continuousIterator = camera.capture_continuous(continuousOutput, format="hsv", resize=(96, 64), use_video_port=False, burst=True)
             print("  Started continuous mode...")
 
         lastTimeReceivedRequestForContMode = time.time()
+
+
+def handleFormat(topic, message, groups):
+    global imageFormat, postProcess, size, adjustedSize
+
+    split = message.split(" ")
+    if len(split) > 0:
+        imageFormat = split[0]
+    if len(split) > 1:
+        widthHeight = split[1].split(",")
+        if len(widthHeight) > 1:
+            size = (int(widthHeight[0]), int(widthHeight[1]))
+            adjustedSize = (int(size[0] * 1.2), size[1])
+    if len(split) > 2:
+        postProcess = bool(split[2])
+
+    print("  Got format " + imageFormat + " " + str(size) + " " + str(postProcess))
+
+    initCamera()
 
 
 def loop():
     global doReadSensor, lastTimeRead, continuousMode
 
     if doReadSensor:
-        fetchProcessed()
+        if postProcess:
+            fetchProcessed()
+        else:
+            fetchRaw()
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
                 continuousMode = False
@@ -265,11 +330,12 @@ if __name__ == "__main__":
             whiteBalance = Image.open("white-balance.png")
             whiteBalance = whiteBalance.convert('L')
 
-        pyroslib.subscribe("camera/raw/fetch", fetchRaw)
+        pyroslib.subscribe("camera/raw/fetch", handleRaw)
         pyroslib.subscribe("camera/processed/fetch", handleFetchProcessed)
         pyroslib.subscribe("camera/whitebalance/fetch", fetchWhiteBalance)
         pyroslib.subscribe("camera/whitebalance/store", storeWhiteBalance)
         pyroslib.subscribe("camera/continuous", handleContinuousMode)
+        pyroslib.subscribe("camera/format", handleFormat)
         pyroslib.init("camera-service")
 
         print("Started camera service.")
