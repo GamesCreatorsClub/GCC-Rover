@@ -11,6 +11,7 @@ import sys
 import time
 import subprocess
 import threading
+import traceback
 
 import paho.mqtt.client as mqtt
 
@@ -321,6 +322,21 @@ def storeCode(processId, payload):
         outputStatus(processId, "stored error")
 
 
+def storeExtraCode(processId, name, payload):
+    makeProcessDir(processId)
+
+    filename = processDir(processId) + "/" + name
+
+    try:
+        with open(filename, "wb") as textFile:
+            textFile.write(payload)
+
+        outputStatus(processId, "stored")
+    except:
+        important("ERROR: Cannot save file " + filename + " (" + os.path.abspath(filename) + "); ")
+        outputStatus(processId, "stored error")
+
+
 def stopProcess(processId):
     if processId in processes:
         process = getProcessProcess(processId)
@@ -537,6 +553,7 @@ def onConnect(mqttClient, data, flags, rc):
             mqttClient.subscribe("system/+", 0)
             mqttClient.subscribe("exec/+", 0)
             mqttClient.subscribe("exec/+/process", 0)
+            mqttClient.subscribe("exec/+/process/+", 0)
         else:
             important("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
@@ -546,25 +563,34 @@ def onConnect(mqttClient, data, flags, rc):
 
 def onMessage(mqttClient, data, msg):
     try:
-        payload = str(msg.payload, 'utf-8')
+        # payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
         if topic.startswith("exec/") and topic.endswith("/process"):
             processId = topic[5:len(topic) - 8]
+            payload = str(msg.payload, 'utf-8')
             storeCode(processId, payload)
         elif topic.startswith("exec/"):
-            processId = topic[5:]
-            if processId in processes:
-                processCommand(processId, payload)
-            else:
-                output(processId, "No such process '" + processId + "'")
+            split = topic[5:].split("/")
+            if len(split) == 1:
+                processId = topic[5:]
+                if processId in processes:
+                    payload = str(msg.payload, 'utf-8')
+                    processCommand(processId, payload)
+                else:
+                    output(processId, "No such process '" + processId + "'")
+            elif len(split) == 3 and split[1] == "process":
+                processId = split[0]
+                name = split[2]
+                storeExtraCode(processId, name, msg.payload)
         elif topic.startswith("system/"):
             commandId = topic[7:]
+            payload = str(msg.payload, 'utf-8')
             processSystemCommand(commandId, payload)
         else:
             important("ERROR: No such topic " + topic)
     except Exception as exception:
-        important("ERROR: Got exception on message; " + str(exception))
+        important("ERROR: Got exception on message; " + str(exception) + "\n" + ''.join(traceback.format_tb(exception.__traceback__)))
 
 
 def startupServices():

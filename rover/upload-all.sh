@@ -68,11 +68,11 @@ pyros $1 restart   camera
 # echo Restarting    accelsensor
 # pyros $1 restart   accelsensor
 
-# echo ""
-# echo Uploading     9dofsensor
-# pyros $1 upload -s 9dofsensor  9dofsensor_mpu9250_service.py
-# echo Restarting    9dofsensor
-# pyros $1 restart   9dofsensor
+echo ""
+echo Uploading     9dofsensor
+pyros $1 upload -s 9dofsensor  mpu9250_service.py
+echo Restarting    9dofsensor
+pyros $1 restart   9dofsensor
 
 # echo ""
 # echo Uploading     sonarsensor
@@ -80,11 +80,11 @@ pyros $1 restart   camera
 # echo Restarting    sonarsensor
 # pyros $1 restart   sonarsensor
 
-# echo ""
-# echo Uploading     vl53l0x
-# pyros $1 upload -s vl53l0x vl53l0x_service.py
-# echo Restarting    vl53l0x
-# pyros $1 restart   vl53l0x
+echo ""
+echo Uploading     vl53l0x
+pyros $1 upload -s vl53l0x vl53l0x/vl53l0x_service.py -e vl53l0x/vl53l0xapi.py vl53l0x/vl53l0x_python.so
+echo Restarting    vl53l0x
+pyros $1 restart   vl53l0x
 
 echo ""
 echo "Currently running processes:"
