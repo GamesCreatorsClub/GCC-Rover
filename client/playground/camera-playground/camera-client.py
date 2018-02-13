@@ -100,8 +100,97 @@ def handleCameraRaw(topic, message, groups):
 
 def processImage(image):
 
+    red_pixels = []
+    green_pixels = []
+    blue_pixels = []
+    yellow_pixels = []
+
+    for y in range(0, 256):
+        for x in range(0, 320):
+            p = image.getpixel((x, y))
+            if isRed(p):
+                red_pixels.append((x, y))
+            if isGreen(p):
+                green_pixels.append((x, y))
+            if isBlue(p):
+                blue_pixels.append((x, y))
+            if isYellow(p):
+                yellow_pixels.append((x, y))
+
+    if len(red_pixels) > 20:
+        centre = calculateCentre(red_pixels)
+
+        drawSpot(image, centre[0], centre[1], (255, 64, 64))
+
+    elif len(green_pixels) > 20:
+        centre = calculateCentre(green_pixels)
+
+        drawSpot(image, centre[0], centre[1], (64, 255, 64))
+
+    elif len(blue_pixels) > 20:
+        centre = calculateCentre(blue_pixels)
+
+        drawSpot(image, centre[0], centre[1], (64, 64, 255))
+
+    elif len(yellow_pixels) > 20:
+        centre = calculateCentre(yellow_pixels)
+
+        drawSpot(image, centre[0], centre[1], (255, 255, 64))
+
     processedImage = image
     return processedImage
+
+
+def isRed(p):
+    return p[0] > 128 and distance(p[0], p[1]) > 1.2 and distance(p[0], p[1]) > 1.2 and 0.8 < distance(p[1], p[2]) < 1.2
+
+
+def isGreen(p):
+    return p[1] > 128 and distance(p[1], p[0]) > 1.2 and distance(p[1], p[2]) > 1.2 and 0.8 < distance(p[0], p[2]) < 1.2
+
+
+def isBlue(p):
+    return p[2] > 128 and distance(p[2], p[0]) > 1.2 and distance(p[2], p[1]) > 1.2 and 0.8 < distance(p[0], p[1]) < 1.2
+
+
+def isYellow(p):
+    return p[0] > 128 and p[1] > 128 and 0.8 < distance(p[0], p[1]) < 1.2 and distance(p[0], p[2]) > 1.2 and distance(p[1], p[2]) > 1.2
+
+
+def distance(x, y):
+    if y != 0:
+        return x / y
+    else:
+        return x / 256
+
+
+def calculateCentre(pixels):
+    cx = 0
+    cy = 0
+    for p in pixels:
+        cx = cx + p[0]
+        cy = cy + p[1]
+
+    cx = int(cx / len(pixels))
+    cy = int(cy / len(pixels))
+    return cx, cy
+
+
+def drawSpot(image, cx, cy, color):
+    for x in range(cx - 30, cx + 30):
+        if x >= 0 and x < 320:
+            if cy > 0:
+                image.putpixel((x, cy - 1), (255, 255, 255))
+            image.putpixel((x, cy), color)
+            if cy < 256 - 1:
+                image.putpixel((x, cy + 1), (255, 255, 255))
+    for y in range(cy - 30, cy + 30):
+        if y >= 0 and y < 256:
+            if cx > 0:
+                image.putpixel((cx - 1, y), (255, 255, 255))
+            image.putpixel((cx, y), color)
+            if cx < 320 - 1:
+                image.putpixel((cx + 1, y), (255, 255, 255))
 
 
 def toggleStart():
