@@ -9,15 +9,12 @@
 import time
 import traceback
 
+import RPi.GPIO as GPIO
 import pyroslib
 import vl53l0xapi
 
-# VL53L0X sensor service
-#
-# Based on https://raw.githubusercontent.com/popunder/VL53L0X/master/VL53L0Xtest.py
-#
-# This service is responsible reading distance.
-#
+
+SENSORS_SWITCH_GPIO = 4
 
 CONTINUOUS_MODE_TIMEOUT = 3  # 5 seconds before giving up on sending accel data out
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
@@ -26,20 +23,6 @@ DEBUG_LEVEL_OFF = 0
 DEBUG_LEVEL_INFO = 1
 DEBUG_LEVEL_ALL = 2
 DEBUG_LEVEL = DEBUG_LEVEL_INFO
-
-I2C_BUS = 1
-I2C_ADDRESS = 0x29
-
-VL53L0X_REG_IDENTIFICATION_MODEL_ID = 0xc0
-VL53L0X_REG_IDENTIFICATION_REVISION_ID = 0xc2
-VL53L0X_REG_PRE_RANGE_CONFIG_VCSEL_PERIOD = 0x50
-VL53L0X_REG_FINAL_RANGE_CONFIG_VCSEL_PERIOD = 0x70
-VL53L0X_REG_SYSRANGE_START = 0x0
-
-VL53L0X_REG_SYSTEM_INTERRUPT_CLEAR = 0x0B
-
-VL53L0X_REG_RESULT_INTERRUPT_STATUS = 0x13
-VL53L0X_REG_RESULT_RANGE_STATUS = 0x14
 
 SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60 (expecting servo to be twice as slow as per specs
@@ -50,7 +33,6 @@ lastServoAngle = 0
 newServoAngle = 0
 
 stopVariable = 0
-i2cBus = None
 
 doReadSensor = False
 continuousMode = False
@@ -60,6 +42,8 @@ started = time.time()
 
 tof = None
 lastRead = time.time()
+
+twoSensorsMode = False
 
 
 def log(level, where, what):
@@ -122,6 +106,10 @@ def readDistance():
     #     distance -= 10
 
     return distance
+
+
+def readTwoDistances():
+    pass
 
 
 def handleRead(topic, payload, groups):
@@ -193,6 +181,17 @@ def handleDeg(topic, message, groups):
     log(DEBUG_LEVEL_INFO, "Message", "  Got new angle " + message)
 
 
+def handleConf(topic, message, groups):
+    global twoSensorsMode
+
+    split = message.split(";")
+    for conf in split:
+        kv = conf.split("=")
+        if len(kv) > 1:
+            if kv[0] == "TwoSensorMode":
+                twoSensorsMode = kv[1] in ("yes", "true", "t", "1")
+
+
 def loop():
     global doReadSensor, lastTimeRead, continuousMode, newServoAngle
 
@@ -223,6 +222,10 @@ if __name__ == "__main__":
     try:
         print("Starting vl53l0x sensor service...")
 
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(SENSORS_SWITCH_GPIO, GPIO.OUT)
+        GPIO.output(SENSORS_SWITCH_GPIO, 1)
+
         initVL53L0X()
 
         moveServo(lastServoAngle)
@@ -232,6 +235,7 @@ if __name__ == "__main__":
         pyroslib.subscribe("sensor/distance/deg", handleDeg)
         pyroslib.subscribe("sensor/distance/read", handleRead)
         pyroslib.subscribe("sensor/distance/scan", handleScan)
+        pyroslib.subscribe("sensor/distance/conf", handleConf)
         pyroslib.subscribe("sensor/distance/continuous", handleContinuousMode)
         pyroslib.init("vl53l0x-sensor-service")
 
