@@ -65,7 +65,7 @@ def processStatus(line, pid):
             print("Process " + pid + " is restarted.")
         return tail
     elif line.startswith("PyROS: exit"):
-        print("Process " + pid + " is exited.")
+        print("Process " + pid + " exited.")
         return not hadStart
     return True
 

@@ -70,7 +70,7 @@ def processOut(line, pid):
 
 def processStatus(line, pid):
     if line.startswith("PyROS: exit"):
-        print("** Process " + pid + " is exited.")
+        print("** Process " + pid + " exited.")
         return everything
     return True
 
