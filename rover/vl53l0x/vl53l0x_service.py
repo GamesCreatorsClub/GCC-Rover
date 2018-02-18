@@ -9,15 +9,18 @@
 import time
 import traceback
 
+import smbus
 import RPi.GPIO as GPIO
 import pyroslib
-import vl53l0xapi
+import vl53l0xWrapper
+import vl53l0xPython
 
+USE_PYTHON_IMPL = True
 
 SENSORS_SWITCH_GPIO = 4
 
 CONTINUOUS_MODE_TIMEOUT = 3  # 5 seconds before giving up on sending accel data out
-MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
+MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 20 times a second
 
 DEBUG_LEVEL_OFF = 0
 DEBUG_LEVEL_INFO = 1
@@ -44,6 +47,14 @@ tof = None
 lastRead = time.time()
 
 twoSensorsMode = False
+initialised = False
+
+haveFirstSensor = False
+haveSecondSensor = False
+
+FIRST_SENSOR_I2C_ADDRESS = vl53l0xPython.I2C_ADDRESS + 2
+SECOND_SENSOR_I2C_ADDRESS = vl53l0xPython.I2C_ADDRESS + 1
+ORIGINAL_SENSOR_I2C_ADDRESS = vl53l0xPython.I2C_ADDRESS
 
 
 def log(level, where, what):
@@ -65,9 +76,8 @@ def moveServo(angle):
     angle += 150
     angle = int(angle)
 
-    f = open("/dev/servoblaster", 'w')
-    f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
-    f.close()
+    with open("/dev/servoblaster", 'w') as f:
+        f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
 
     log(DEBUG_LEVEL_ALL, "Servo", "Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
@@ -75,11 +85,20 @@ def moveServo(angle):
     time.sleep(sleepAmount)
 
 
-def initVL53L0X():
-    global tof, timing
-    tof = vl53l0xapi.VL53L0X()
+def secondSensorOn():
+    GPIO.output(SENSORS_SWITCH_GPIO, 1)
+
+
+def secondSensorOff():
+    GPIO.output(SENSORS_SWITCH_GPIO, 0)
+
+
+def initWrapper():
+    global tof, timing, initialised
+
+    tof = vl53l0xWrapper.VL53L0X()
     # tof.start_ranging(vl53l0xapi.VL53L0X_HIGH_SPEED_MODE)
-    tof.start_ranging(vl53l0xapi.VL53L0X_BETTER_ACCURACY_MODE)
+    tof.start_ranging(vl53l0xWrapper.VL53L0X_BETTER_ACCURACY_MODE)
 
     timing = tof.get_timing()
     if timing < 20000:
@@ -89,7 +108,183 @@ def initVL53L0X():
     print("Timing %d ms" % (timing/1000))
 
 
-def readDistance():
+def initI2CSensor(address):
+    vl53l0xPython.initVL53L0X(address)
+    vl53l0xPython.startContinuous(address, 0)
+
+
+def testI2C(bus, address):
+    bus.read_byte_data(address, vl53l0xPython.VL53L0X_REG_RESULT_RANGE_STATUS)
+
+
+def init():
+    global twoSensorsMode, initialised, haveFirstSensor, haveSecondSensor
+
+    if USE_PYTHON_IMPL:
+        i2cBus = smbus.SMBus(vl53l0xPython.I2C_BUS)
+
+        haveFirstSensor = False
+        haveSecondSensor = False
+
+        try:
+            testI2C(i2cBus, FIRST_SENSOR_I2C_ADDRESS)
+            initI2CSensor(FIRST_SENSOR_I2C_ADDRESS)
+            print("    got first sensor")
+
+            haveFirstSensor = True
+
+            try:
+                testI2C(i2cBus, SECOND_SENSOR_I2C_ADDRESS)
+                initI2CSensor(SECOND_SENSOR_I2C_ADDRESS)
+                print("    got second sensor")
+
+                haveSecondSensor = True
+                twoSensorsMode = True
+                initialised = True
+                print("  initialised two sensors")
+            except:
+                print("    second sensor missing")
+                secondSensorOn()
+
+                try:
+                    testI2C(i2cBus, ORIGINAL_SENSOR_I2C_ADDRESS)
+                    print("    found defalt address sensor (1)")
+                    vl53l0xPython.setAddress(ORIGINAL_SENSOR_I2C_ADDRESS, SECOND_SENSOR_I2C_ADDRESS)
+                    initI2CSensor(SECOND_SENSOR_I2C_ADDRESS)
+                    print("    second sensor address set")
+
+                    haveSecondSensor = True
+                    twoSensorsMode = True
+                    initialised = True
+                    print("  initialised two sensors")
+                except:
+                    print("    no default sensor found (1)")
+                    haveSecondSensor = False
+                    twoSensorsMode = False
+                    initialised = True
+                    print("  initialised one sensor")
+
+        except BaseException as x:
+            print("    first sensor missing" + str(x))
+            secondSensorOff()
+            try:
+                testI2C(i2cBus, ORIGINAL_SENSOR_I2C_ADDRESS)
+                print("    found defalt address sensor (2)")
+                vl53l0xPython.setAddress(ORIGINAL_SENSOR_I2C_ADDRESS, FIRST_SENSOR_I2C_ADDRESS)
+                print("    first sensor address set")
+                initI2CSensor(FIRST_SENSOR_I2C_ADDRESS)
+                haveFirstSensor = True
+
+                secondSensorOn()
+                time.sleep(0.1)
+                try:
+                    testI2C(i2cBus, ORIGINAL_SENSOR_I2C_ADDRESS)
+                    print("    found defalt address sensor (3)")
+                    vl53l0xPython.setAddress(ORIGINAL_SENSOR_I2C_ADDRESS, SECOND_SENSOR_I2C_ADDRESS)
+                    initI2CSensor(SECOND_SENSOR_I2C_ADDRESS)
+                    print("    second sensor address set")
+
+                    haveSecondSensor = True
+                    twoSensorsMode = True
+                    initialised = True
+                    print("  initialised two sensors")
+                except BaseException as x:
+                    print("    second sensor missing, no default address sensor found " + str(x))
+                    haveSecondSensor = False
+                    twoSensorsMode = False
+                    initialised = True
+                    print("  initialised one sensor")
+            except BaseException as x:
+                print("    no default sensor found (2) " + str(x))
+                haveFirstSensor = False
+                haveSecondSensor = False
+                twoSensorsMode = False
+                initialised = False
+                print("  no sensors available")
+
+    else:
+        twoSensorsMode = False
+        initWrapper()
+
+
+def stopRangingWrapper():
+    if tof is not None:
+        tof.stop_ranging()
+
+
+def stopRangingPython():
+    if haveFirstSensor:
+        vl53l0xPython.stopContinuous(FIRST_SENSOR_I2C_ADDRESS)
+    if haveSecondSensor:
+        vl53l0xPython.stopContinuous(SECOND_SENSOR_I2C_ADDRESS)
+
+
+def stopRanging():
+    if USE_PYTHON_IMPL:
+        stopRangingPython()
+    else:
+        stopRangingWrapper()
+
+
+def readDistancePython():
+    global lastRead, lastReadSensor, initialised
+
+    if not initialised:
+        init()
+
+    if not initialised:
+        return -1
+
+    now = time.time()
+    if now - lastRead < timing/1000000.00:
+        time.sleep(timing / 1000000.00)
+        log(DEBUG_LEVEL_ALL, "Read", "Slept for " + str(timing / 1000000.00) + "s")
+
+    if twoSensorsMode:
+        timeout_start_ms = time.time()
+        distance1 = -1
+        distance2 = -1
+        lastReadSensor = 1
+
+        budget = vl53l0xPython.getMeasurementTimingBudget(FIRST_SENSOR_I2C_ADDRESS)
+        timeout = budget/1000000 + MAX_TIMEOUT
+        # while (distance1 <= 0 or distance2 <= 0) and time.time() - timeout_start_ms < timeout:
+        #     if distance1 <= 0:
+        #         if lastReadSensor != 1:
+        #             sensorOne()
+        #             time.sleep(0.001)
+        #         distance1 = vl53l0xPython.readRangeContinuousMillimetersFastFail()
+        #     if distance2 <= 0:
+        #         if lastReadSensor != 2:
+        #             sensorTwo()
+        #             time.sleep(0.001)
+        #         distance2 = vl53l0xPython.readRangeContinuousMillimetersFastFail()
+
+        try:
+            distance1 = vl53l0xPython.readRangeContinuousMillimeters(FIRST_SENSOR_I2C_ADDRESS)
+            distance2 = vl53l0xPython.readRangeContinuousMillimeters(SECOND_SENSOR_I2C_ADDRESS)
+        except:
+            initialised = False
+            distance1 = -1
+            distance2 = -1
+
+        log(DEBUG_LEVEL_INFO, "Read", "Got distances " + str(distance1) + "mm and " + str(distance2) + "mm after "
+            + str(time.time() - timeout_start_ms) + "s, budget " + str(budget))
+
+        lastRead = time.time()
+
+        return distance1, distance2
+
+    else:
+        distance = vl53l0xPython.readRangeContinuousMillimeters(FIRST_SENSOR_I2C_ADDRESS)
+        log(DEBUG_LEVEL_INFO, "Read", "Got distance " + str(distance) + "mm")
+
+        lastRead = time.time()
+
+        return distance
+
+
+def readDistanceWrapper():
     global lastRead
 
     now = time.time()
@@ -102,49 +297,95 @@ def readDistance():
 
     lastRead = time.time()
 
-    # if distance > 10:
-    #     distance -= 10
-
     return distance
 
 
-def readTwoDistances():
-    pass
+def readDistance():
+    if USE_PYTHON_IMPL:
+        return readDistancePython()
+    else:
+        return readDistanceWrapper()
 
 
 def handleRead(topic, payload, groups):
     angle = float(payload)
     log(DEBUG_LEVEL_INFO, "Message", "Got read - moving to angle " + str(angle))
 
-    moveServo(angle)
+    if lastServoAngle != angle:
+        moveServo(angle)
+
     distance = readDistance()
-    pyroslib.publish("sensor/distance", str(round(angle, 1)) + ":" + str(int(distance)))
+    if twoSensorsMode:
+        distance1 = distance[0]
+        distance2 = distance[1]
+        if distance1 > 0 or distance2 > 0:
+            message = ""
+            if distance1 > 0:
+                message = message + str(round(angle, 1)) + ":" + str(int(distance1))
+
+            if distance2 > 0:
+                if distance1 > 0:
+                    message = message + ","
+                message = message + str(round(angle - 90.0, 1)) + ":" + str(int(distance2))
+
+            pyroslib.publish("sensor/distance", message)
+
+    else:
+        if distance > 0:
+            pyroslib.publish("sensor/distance", str(round(angle, 1)) + ":" + str(int(distance)))
+        else:
+            log(DEBUG_LEVEL_INFO, "handleRead", "Failed reading - got " + str(distance))
 
 
 def handleScan(topic, payload, groups):
+    distances = {}
+
+    def update(a, d):
+        if d <= 0:
+            if a not in distances:
+                distances[a] = 2000
+        else:
+            if a not in distances:
+                distances[a] = d
+            elif d < distances[a]:
+                distances[a] = d
+
     startScan = True
 
     log(DEBUG_LEVEL_INFO, "Message", "  Got scan...")
 
-    distances = {}
-    angle = -90
-    while angle <= 90:
+    if twoSensorsMode:
+        startAngle = 0
+        finalAngle = 90
+    else:
+        startAngle = -90
+        finalAngle = 90
+
+    angle = startAngle
+    while angle <= finalAngle:
         moveServo(float(angle))
         distance = readDistance()
-        if distance < 0:
-            distance = 2000
-        distances[angle] = distance
+        if twoSensorsMode:
+            distance1 = distance[0]
+            distance2 = distance[1]
+            update(angle, distance1)
+            update(angle - 90.0, distance2)
+        else:
+            update(angle, distance)
         angle += 22.5
 
-    angle = 90
-    while angle >= -90:
+    angle = finalAngle
+    while angle >= startAngle:
         moveServo(float(angle))
         distance = readDistance()
-        if distance < 0:
-            distance = 2000
-            distances[angle] = 2000
-        elif distance < distances[angle]:
-            distances[angle] = distance
+        if twoSensorsMode:
+            distance1 = distance[0]
+            distance2 = distance[1]
+            update(angle, distance1)
+            update(angle - 90.0, distance2)
+
+        else:
+            update(angle, distance)
         angle -= 22.5
 
     angles = list(distances.keys())
@@ -186,10 +427,16 @@ def handleConf(topic, message, groups):
 
     split = message.split(";")
     for conf in split:
+        # log(DEBUG_LEVEL_INFO, "Config", "Config segment: " + conf)
         kv = conf.split("=")
         if len(kv) > 1:
-            if kv[0] == "TwoSensorMode":
-                twoSensorsMode = kv[1] in ("yes", "true", "t", "1")
+            if kv[0].lower() == "twosensormode":
+                newTwoSensorsMode = kv[1].lower() in ("yes", "true", "t", "1")
+                log(DEBUG_LEVEL_INFO, "Config", "Set two sensor mode to " + str(twoSensorsMode))
+                if newTwoSensorsMode != twoSensorsMode:
+                    stopRanging()
+                    twoSensorsMode = newTwoSensorsMode
+                    init()
 
 
 def loop():
@@ -200,15 +447,24 @@ def loop():
             moveServo(newServoAngle)
             log(DEBUG_LEVEL_INFO, "Loop", "  Moved to the new angle " + str(newServoAngle))
 
-        count = 0
-        distance = -1
-        while count < 3 and distance == -1:
-            distance = readDistance()
-            if distance == -1:
-                pyroslib.sleep(0.001)
+        distance = readDistance()
+        if twoSensorsMode:
+            distance1 = distance[0]
+            distance2 = distance[1]
+            if distance1 > 0 or distance2 > 0:
+                message = ""
+                if distance1 > 0:
+                    message = message + str(round(lastServoAngle, 1)) + ":" + str(int(distance1))
 
-        if distance != -1:
-            pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
+                if distance2 > 0:
+                    if distance1 > 0:
+                        message = message + ","
+                    message = message + str(round(lastServoAngle - 90.0, 1)) + ":" + str(int(distance2))
+
+                pyroslib.publish("sensor/distance", message)
+        else:
+            if distance > 0:
+                pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
 
         if continuousMode:
             if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
@@ -224,9 +480,8 @@ if __name__ == "__main__":
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(SENSORS_SWITCH_GPIO, GPIO.OUT)
-        GPIO.output(SENSORS_SWITCH_GPIO, 1)
 
-        initVL53L0X()
+        init()
 
         moveServo(lastServoAngle)
 
