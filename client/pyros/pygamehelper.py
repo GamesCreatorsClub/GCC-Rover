@@ -7,6 +7,8 @@
 
 import sys
 import pygame
+import pyros
+import pyros.gccui
 
 lastkeys = []
 keys = []

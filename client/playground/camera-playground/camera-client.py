@@ -16,21 +16,15 @@ import pyros.pygamehelper
 from PIL import Image
 
 
-GREY = (160, 160, 160)
-WHITE = (255, 255, 255)
-GREEN = (128, 255, 128)
-RED = (255, 128, 128)
-
 MAX_PING_TIMEOUT = 1
 MAX_PICTURES = 400
 pingLastTime = 0
 
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
-font = pygame.font.SysFont("arial", 24)
-smallFont = pygame.font.SysFont("arial", 16)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((1024, 800))
+
+screen_size = (1024, 800)
+
+pyros.gccui.initAll(screen_size, True)
+
 
 cameraImage = Image.new("L", [80, 64])
 
@@ -66,6 +60,14 @@ imgNo = 0
 ptr = -1
 size = (320, 256)
 
+record = False
+sequence = False
+continuous = False
+
+localFPS = 0
+lastProcessed = time.time()
+renewContinuous = time.time()
+
 
 def connected():
     pyros.publish("camera/processed/fetch", "")
@@ -83,7 +85,16 @@ def toPyImage(pilImage):
 
 
 def handleCameraRaw(topic, message, groups):
-    global rawImage, rawImageBig
+    global rawImage, rawImageBig, lastProcessed, localFPS
+
+    now = time.time()
+    delta = now - lastProcessed
+    lastProcessed = now
+
+    if delta < 5:
+        localFPS = "%.2f" % round(1 / delta, 2)
+    else:
+        localFPS = "-"
 
     pilImage = toPILImage(message)
 
@@ -94,8 +105,12 @@ def handleCameraRaw(topic, message, groups):
     rawImage = pygame.transform.scale(image, (80, 64))
     rawImageBig = pygame.transform.scale(image, (320, 256))
 
-    processedImages.append(rawImage)
-    processedBigImages.append(rawImageBig)
+    if record:
+        processedImages.append(rawImage)
+        processedBigImages.append(rawImageBig)
+
+    if sequence and not continuous:
+        pyros.publish("camera/raw/fetch", "")
 
 
 def processImage(image):
@@ -216,17 +231,27 @@ def clear():
 
 def onKeyDown(key):
     global lights, forwardSpeed, running, ptr, imgNo
+    global sequence, record, continuous
     global processedImages, processedBigImages
 
     if key == pygame.K_ESCAPE:
         sys.exit()
-    elif key == pygame.K_r:
-        print("  fetching raw picture...")
+    elif key == pygame.K_f:
+        print("  fetching picture...")
         pyros.publish("camera/raw/fetch", "")
     elif key == pygame.K_s:
-        print("  fetching continuous pictures...")
-        pyros.publish("camera/continuous", "")
+        sequence = not sequence
+    elif key == pygame.K_r:
+        record = not record
     elif key == pygame.K_c:
+        continuous = not continuous
+        if continuous:
+            print("  fetching continuous pictures...")
+            pyros.publish("camera/continuous", "")
+        else:
+            print("  stopping continuous pictures...")
+            pyros.publish("camera/continuous", "stop")
+    elif key == pygame.K_x:
         clear()
     elif key == pygame.K_RETURN:
         toggleStart()
@@ -259,31 +284,33 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+        if event.type == pygame.VIDEORESIZE:
+            pyros.gccui.screenResized(event.size)
 
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
+    if continuous and time.time() > renewContinuous:
+        pyros.publish("camera/continuous", "")
+        renewContinuous = time.time() + 1
+
     pyros.loop(0.03)
 
-    screen.fill((0, 0, 0))
+    pyros.gccui.background()
+    pyros.gcc.drawConnection()
 
-    if pyros.isConnected():
-        screen.blit(bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, GREEN), (0, 0))
-    else:
-        screen.blit(bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, RED), (0, 0))
+    hpos = 40
+    hpos = pyros.gccui.drawKeyValue("Local FPS", str(localFPS), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Recording", str(record), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Sequence", str(sequence), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Continuous", str(continuous), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Selected", str(ptr) + " of " + str(len(processedImages)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Running", str(running), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Turn dist", str(feedback["turnDistance"]), 8, hpos)
 
-    screen.blit(font.render("Selected: " + str(ptr) + " of " + str(len(processedImages)), 1, WHITE), (400, 50))
-    screen.blit(font.render("Frame time: " + str(frameTime), 1, WHITE), (400, 80))
-    screen.blit(font.render("Angle: " + str(feedback["angle"]), 1, WHITE), (400, 110))
-    screen.blit(font.render("Speed: " + str(forwardSpeed), 1, WHITE), (750, 50))
-    screen.blit(font.render("Running: " + str(running), 1, WHITE), (750, 80))
-    screen.blit(font.render("Turn dist: " + str(feedback["turnDistance"]), 1, WHITE), (750, 110))
+    pyros.gccui.drawSmall("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, x- clear", (0, pyros.gccui.screen.get_height() - pyros.gccui.smallFont.get_height()))
 
-    screen.blit(smallFont.render("[/]-speed, s-fetch and store wb, LEFT/RIGHT-scroll, g-one step, n-prepare", 1, WHITE), (0, 760))
-    screen.blit(smallFont.render("SPACE-stop, RETURN-start, p-processed img, w-whitebalace img, r-raw img, l-lights", 1, WHITE), (0, 780))
-
-    screen.blit(rawImage, (10, 50))
-
-    screen.blit(rawImageBig, (10, 150))
+    pyros.gccui.drawImage(rawImage, (200, 50), 10)
+    pyros.gccui.drawImage(rawImageBig, (688, 50), 10)
 
     if ptr >= 0:
         if ptr > len(processedImages) - 1:
@@ -291,14 +318,14 @@ while True:
         i = ptr
     else:
         i = len(processedImages) - 1
-    x = 724
+
+    x = 1024 - 320 - 16
     while i >= 0 and x >= 0:
-        screen.blit(processedBigImages[i], (x, 420))
-        x -= 362
+        pyros.gccui.drawImage(processedBigImages[i], (x, 420))
+        x -= 341
         i -= 1
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gccui.frameEnd()
 
     now = time.time()
 

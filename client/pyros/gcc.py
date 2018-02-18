@@ -48,8 +48,19 @@ DISCOVERY_PORT = 0xd15c
 WAIT_TIMEOUT = 20 # 5 seconds
 
 sckt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sckt.bind(('', THIS_PORT))
+
+connected = 5
+
+while connected > 0:
+    try:
+        sckt.bind(('', THIS_PORT))
+        connected = 0
+    except:
+        THIS_PORT = THIS_PORT + 1
+
+
 broadcasts = []
+
 
 def poplulateBroadcasts():
     ifacenames = netifaces.interfaces()
@@ -125,8 +136,11 @@ def discover():
 
 def discovery():
     while True:
-        discover()
-        time.sleep(15)
+        try:
+            discover()
+        except:
+            pass
+        time.sleep(5)
 
 
 poplulateBroadcasts()
@@ -187,3 +201,60 @@ def getSelectedRoverDetailsText():
         name = rovers[selectedRover]["name"]
 
     return "(" + str(len(rovers)) + ") " + name + " @ " + str(rovers[selectedRover]["address"]) + ":" + str(rovers[selectedRover]["port"])
+
+
+_connectionCounter = 1
+_state = 1
+
+
+def _drawRedIndicator():
+    if _state == 1:
+        pyros.gccui.drawRect((9, 10), (16, 16), (96, 0, 0, 128), 2, 0)
+        pyros.gccui.drawRect((11, 12), (11, 11), (160, 0, 0, 64), 2, 0)
+        pyros.gccui.drawFilledRect((13, 14), (8, 8), (255, 0, 0, 64))
+    if _state == 0:
+        pyros.gccui.drawFilledRect((9, 10), (16, 16), (160, 0, 0, 128))
+        pyros.gccui.drawRect((11, 12), (11, 11), (180, 0, 0, 64), 2, 0)
+        pyros.gccui.drawFilledRect((13, 14), (8, 8), (255, 0, 0, 64))
+
+
+def _drawGreenIndicator():
+    if _state == 0 or _state == 1:
+        pyros.gccui.drawFilledRect((9, 10), (16, 16), (0, 128, 0, 128))
+        pyros.gccui.drawRect((11, 12), (11, 11), (0, 180, 0, 64), 2, 0)
+        pyros.gccui.drawFilledRect((13, 14), (8, 8), (0, 255, 0, 64))
+    if _state == 2:
+        pyros.gccui.drawFilledRect((11, 10), (16, 16), (0, 96, 0, 128))
+        pyros.gccui.drawRect((9, 12), (15, 11), (0, 160, 0, 64), 2, 0)
+        pyros.gccui.drawFilledRect((11, 14), (12, 8), (0, 220, 0, 64))
+
+
+def drawConnection():
+    global _connectionCounter, _state
+    if pyros.isConnected():
+        _connectionCounter -= 1
+        if _connectionCounter < 0:
+            if _state == 0:
+                _state = 2
+                _connectionCounter = 10
+            elif _state == 1:
+                _state = 0
+                _connectionCounter = 10
+            elif _state == 2:
+                _state = 1
+                _connectionCounter = 10
+
+        _drawGreenIndicator()
+
+        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, pyros.gccui.GREEN), (32, 0))
+    else:
+        _connectionCounter -= 1
+        if _connectionCounter < 0:
+            _connectionCounter = 10
+            _state -= 1
+            if _state < 0:
+                _state = 3
+
+        _drawRedIndicator()
+
+        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, pyros.gccui.RED), (32, 0))
