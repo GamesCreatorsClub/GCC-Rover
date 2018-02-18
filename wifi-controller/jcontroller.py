@@ -398,7 +398,6 @@ def processKeys():
     lastSelect = select
 
 
-
 def calcRoverSpeed(speed):
     if boost:
         spd = int(speed * topSpeed * 2)

@@ -46,7 +46,7 @@ lastTime = time.time()
 imageFormat = 'BW'
 size = (80, 64)
 adjustedSize = (96, 64)
-postProcess = True
+postProcess = False
 
 
 def initCamera():
@@ -65,6 +65,7 @@ def initCamera():
     camera.iso = 800
     camera.hflip = False
     camera.vflip = False
+    camera.rotation = 90
 
     singleOutput = np.empty((adjustedSize[0], adjustedSize[1], 3), dtype=np.uint8)
 
@@ -277,9 +278,9 @@ def handleContinuousMode(topic, message, groups):
             doReadSensor = True
             continuousOutput.truncate(0)
             if imageFormat == 'RGB' or imageFormat == 'BW':
-                continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=(96,64), use_video_port=False, burst=True)
+                continuousIterator = camera.capture_continuous(continuousOutput, format="rgb", resize=adjustedSize, use_video_port=False, burst=True)
             elif imageFormat == 'HSV':
-                continuousIterator = camera.capture_continuous(continuousOutput, format="hsv", resize=(96, 64), use_video_port=False, burst=True)
+                continuousIterator = camera.capture_continuous(continuousOutput, format="hsv", resize=adjustedSize, use_video_port=False, burst=True)
             print("  Started continuous mode...")
 
         lastTimeReceivedRequestForContMode = time.time()
@@ -297,9 +298,9 @@ def handleFormat(topic, message, groups):
             size = (int(widthHeight[0]), int(widthHeight[1]))
             adjustedSize = (int(size[0] * 1.2), size[1])
     if len(split) > 2:
-        postProcess = bool(split[2])
+        postProcess = split[2].lower() in ["true", "t", "1", "yes"]
 
-    print("  Got format " + imageFormat + " " + str(size) + " " + str(postProcess))
+    print("  Got format " + imageFormat + " " + str(size[0]) + "," + str(size[1]) + " " + str(postProcess))
 
     initCamera()
 
