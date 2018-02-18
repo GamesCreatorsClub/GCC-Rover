@@ -24,7 +24,7 @@ selectedSpeed = 4
 
 def connected():
     pyros.agent.init(pyros.client, "drive-agent.py")
-    pass
+
 
 rects = {
     "UP": pygame.Rect(200, 0, 200, 200),
@@ -132,6 +132,7 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
+    pyros.agent.keepAgents()
 
     screen.fill((0, 0, 0))
 

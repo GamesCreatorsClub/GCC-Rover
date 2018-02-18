@@ -33,6 +33,7 @@ def straightenWheels():
         time.sleep(DELAY)
         wheelPosition = STRAIGHT
 
+
 def slantWheels():
     global wheelPosition, DELAY, SLANT
 
@@ -79,6 +80,7 @@ def moveMotors(amount):
     wheelSpeed("bl", amount)
     wheelSpeed("br", amount)
 
+
 def crabAlong(amount):
     sidewaysWheels()
     wheelSpeed("fl", amount)
@@ -91,6 +93,7 @@ def wheelDeg(wheelName, angle):
     topic = "wheel/" + wheelName + "/deg"
     pyroslib.publish(topic, str(angle))
     # print("Published topic=" +  topic + "; msg=" + str(angle))
+
 
 def wheelSpeed(wheelName, speed):
     topic = "wheel/" + wheelName + "/speed"
@@ -136,6 +139,7 @@ def handleMessage(topic, message, groups):
             crabAlong(-int(args1))
         elif command == "crabRight":
             crabAlong(int(args1))
+
 
 if __name__ == "__main__":
     try:
