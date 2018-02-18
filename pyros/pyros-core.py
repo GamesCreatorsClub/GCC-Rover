@@ -17,7 +17,10 @@ import paho.mqtt.client as mqtt
 
 startedInDir = os.getcwd()
 
-DEBUG_LEVEL = 0
+AGENTS_CHECK_TIMEOUT = 1.0
+AGENT_KILL_TIMEOT = 5
+
+DEBUG_LEVEL = 1
 
 CODE_DIR_NAME = "code"
 
@@ -125,7 +128,14 @@ def processInitFilename(processId):
 
 
 def processServiceFilename(processId):
-    return processDir(processId) + "/.service"
+    oldServiceFilename = processDir(processId) + "/.service"
+    processConfigFilename = processDir(processId) + "/.process"
+
+    # convert from old .service files to .process file
+    if os.path.exists(oldServiceFilename):
+        os.rename(oldServiceFilename, processConfigFilename)
+
+    return processConfigFilename
 
 
 def makeProcessDir(processId):
@@ -154,7 +164,7 @@ def saveServiceFile(processId, properties):
     def _line(t):
         return t[0] + "=" + t[1]
 
-    serviceFile = processDir(processId) + "/.service"
+    serviceFile = processDir(processId) + "/.process"
 
     lines = "\n".join(list(map(_line, list(properties.items())))) + "\n"
     with open(serviceFile, 'wt') as f:
@@ -218,6 +228,10 @@ def isService(processId):
     return processId in processes and processes[processId]["type"] == "service"
 
 
+def isAgent(processId):
+    return processId in processes and processes[processId]["type"] == "agent"
+
+
 def runProcess(processId):
     time.sleep(0.25)
     processIsService = isService(processId)
@@ -275,6 +289,10 @@ def getProcessTypeName(processId):
             return "service"
         else:
             return "service(disabled)"
+    elif isAgent(processId):
+        return "agent"
+    elif "type" in processes[processId]:
+        return processes[processId]["type"]
     else:
         return "process"
 
@@ -305,7 +323,8 @@ def storeCode(processId, payload):
     if processId not in processes:
         processes[processId] = {}
 
-    processes[processId]["type"] = "process"
+    if "type" not in processes[processId]:
+        processes[processId]["type"] = "process"
 
     filename = processFilename(processId)
     initFilename = processInitFilename(processId)
@@ -344,10 +363,14 @@ def stopProcess(processId):
             if process.returncode is None:
                 process.kill()
                 output(processId, "PyROS: killed " + getProcessTypeName(processId))
+            else:
+                output(processId, "PyROS INFO: already finished " + getProcessTypeName(processId))
 
             time.sleep(0.01)
             # Just in case - we really need that process killed!!!
             subprocess.call(["/usr/bin/pkill", "-9", "python3 -u " + processId + ".py"])
+        else:
+            output(processId, "PyROS INFO: process " + processId + " is not running.")
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
 
@@ -421,7 +444,7 @@ def unmakeServiceProcess(processId):
     if processId in processes:
         if os.path.exists(processServiceFilename(processId)):
             if not os.remove(processServiceFilename(processId)):
-                output(processId, "PyROS ERROR: failed to unmake process " + processId + "; failed deleting .service file.")
+                output(processId, "PyROS ERROR: failed to unmake process " + processId + "; failed deleting .process file.")
 
         processes[processId]["type"] = "process"
         del processes[processId]["enabled"]
@@ -463,6 +486,31 @@ def disableServiceProcess(processId):
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
 
 
+def makeAgentProcess(processId):
+    if processId in processes:
+        if processes[processId]["type"] == "agent":
+            output(processId, "PyROS: " + processId + " is already agent")
+
+            processes[processId]["lastPing"] = time.time()
+        else:
+            processes[processId]["type"] = "agent"
+            processes[processId]["enabled"] = "True"
+            processes[processId]["lastPing"] = time.time()
+
+            properties = {"type": "agent", "enabled": "True"}
+            saveServiceFile(processId, properties)
+            output(processId, "PyROS: made " + processId + " an agent")
+    else:
+        output(processId, "PyROS ERROR: process " + processId + " does not exist.")
+
+
+def pingProcess(processId):
+    if processId in processes:
+        processes[processId]["lastPing"] = time.time()
+    else:
+        output(processId, "PyROS ERROR: process " + processId + " does not exist.")
+
+
 def psComamnd(commandId, arguments):
     for processId in processes:
         process = getProcessProcess(processId)
@@ -491,14 +539,19 @@ def psComamnd(commandId, arguments):
             fileLen = str(fileStat.st_size)
             fileDate = str(fileStat.st_mtime)
 
+        lastPing = "-"
+        if "lastPing" in processes[processId]:
+            lastPing = str(processes[processId]["lastPing"])
+
         systemOutput(commandId,
-                     "{0} {1} {2} {3} {4} {5}".format(
+                     "{0} {1} {2} {3} {4} {5} {6}".format(
                          processId,
                          getProcessTypeName(processId),
                          status,
                          returnCode,
                          fileLen,
-                         fileDate))
+                         fileDate,
+                         lastPing))
 
 
 def servicesCommand(commandId, arguments):
@@ -527,6 +580,10 @@ def processCommand(processId, command):
         disableServiceProcess(processId)
     elif "enable-service" == command:
         enableServiceProcess(processId)
+    elif "make-agent" == command:
+        makeAgentProcess(processId)
+    elif "ping" == command:
+        pingProcess(processId)
     else:
         output(processId, "PyROS ERROR: Unknown command " + command)
 
@@ -615,6 +672,13 @@ def startupServices():
                         startProcess(programDir)
 
 
+def testForAgents(currentTime):
+    for processId in processes:
+        if isAgent(processId) and isRunning(processId):
+            if "lastPing" not in processes[processId] or processes[processId]["lastPing"] < currentTime - AGENT_KILL_TIMEOT:
+                stopProcess(processId)
+
+
 client.on_connect = onConnect
 client.on_message = onMessage
 
@@ -628,11 +692,17 @@ important("Started PyROS.")
 
 startupServices()
 
+lastCheckedAgents = time.time()
 
 while True:
     try:
         for it in range(0, 10):
             time.sleep(0.0015)
             client.loop(0.0005)
+        now = time.time()
+        if now - lastCheckedAgents > AGENTS_CHECK_TIMEOUT:
+            lastCheckedAgents = now
+            testForAgents(now)
+
     except Exception as e:
         important("ERROR: Got exception in main loop; " + str(e))

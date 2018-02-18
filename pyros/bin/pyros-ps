@@ -50,16 +50,28 @@ def processLine(line):
         except:
             pass
 
-    if len(split) == 6:
+    if len(split) >= 6:
         try:
             t = float(split[5])
             split[5] = "\"" + time.ctime(t) + "\""
         except:
             pass
+    else:
+        split.append("")
+
+    if len(split) >= 7:
+        try:
+            t = float(split[6])
+            split[6] = "\"" + time.ctime(t) + "\""
+        except:
+            pass
+    else:
+        split.append("")
 
     # print("split=" + str(split))
-    print("{0!s:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(*split))
+    print("{0!s:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15} {6:<15}".format(*split))
+
 
 pc.printOutCommand(executeCommand, processLine,
-                   "{0:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15}".format(
-                       "name", "type", "status", "rc", "len", "date"), "")
+                   "{0:<20} {1:<18} {2:<15} {3:<7} {4:<10} {5:<15} {6:<15}".format(
+                       "name", "type", "status", "rc", "len", "date", "pinged"), "")
