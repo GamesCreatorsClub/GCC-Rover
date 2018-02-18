@@ -5,9 +5,16 @@
 # MIT License
 #
 
+import time
 import pyros
 
+AGENT_PING_TIMEOUT = 1
+
 _returncodes = {}
+
+_agents = []
+
+_lastPinged = 0
 
 
 def init(client, filename, agentId=None):
@@ -27,16 +34,17 @@ def init(client, filename, agentId=None):
     fileContent = file.read()
     file.close()
 
+    _agents.append(agentId)
     _returncodes[agentId] = None
 
     pyros.subscribe("exec/" + str(agentId) + "/out", process)
     pyros.subscribe("exec/" + str(agentId) + "/status", process)
     pyros.publish("exec/" + str(agentId), "stop")
     pyros.publish("exec/" + str(agentId) + "/process", fileContent)
+    pyros.publish("exec/" + str(agentId), "make-agent")
 
 
 def process(topic, message, groups):
-
     if topic.startswith("exec/"):
         if topic.endswith("/out"):
             if len(message) > 0:
@@ -63,6 +71,17 @@ def process(topic, message, groups):
 
 def stopAgent(client, processId):
     pyros.publish("exec/" + processId, "stop")
+    del _agents[processId]
+
+
+def keepAgents():
+    global _lastPinged
+    now = time.time()
+
+    if now - _lastPinged > AGENT_PING_TIMEOUT:
+        _lastPinged = now
+        for agentId in _agents:
+            pyros.publish("exec/" + agentId, "ping")
 
 
 def returncode(agentId):
