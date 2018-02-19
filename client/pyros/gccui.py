@@ -91,3 +91,49 @@ def drawImage(image, pos, stick = 6):
     screen.blit(image, pos)
 
     drawRect(pos, image.get_size(), stick = stick, outside = 1)
+
+
+def drawGraph(pos, size, data, minData, maxData, maxPoints, axisColour = LIGHT_BLUE, dataColour = GREEN, stick = 0):
+
+    def calcPoint(d, mn, mx, x, y, h):
+        r = mx - mn - 1
+        if r < 5:
+            r = 5
+
+        d = d - mn
+        if d > mx:
+            d = mx
+        if d < 0:
+            d = 0
+        d = r - d
+
+        return x, y + int(d / r * h)
+
+    outside = 0
+
+    # pygame.draw.line(screen, axisColour, (pos[0] - stick, pos[1] - outside), (pos[0] + size[0] + stick, pos[1] - outside))
+    pygame.draw.line(screen, axisColour, (pos[0] - stick, pos[1] + size[1] + outside), (pos[0] + size[0] + stick, pos[1] + size[1] + outside))
+
+    pygame.draw.line(screen, axisColour, (pos[0] - outside, pos[1] - stick), (pos[0] - outside, pos[1] + size[1] + stick))
+    # pygame.draw.line(screen, axisColour, (pos[0] + size[0] + outside, pos[1] - stick), (pos[0] + size[0] + outside, pos[1] + size[1] + stick))
+
+    if len(data) > 1:
+        to = len(data) - maxPoints
+        if to < 0:
+            to = 0
+
+        stretch = size[0] / min([maxPoints, len(data) - 1])
+
+        x = pos[0] + size[0] - 1
+
+        ld = data[len(data) - 1]
+        lp = calcPoint(ld, minData, maxData, x, pos[1], size[1])
+
+        for i in range(len(data) - 2, to - 1, -1):
+            x = x - int(stretch)
+            d = data[i]
+            p = calcPoint(d, minData, maxData, x, pos[1], size[1])
+
+            pygame.draw.line(screen, dataColour, lp, p)
+            ld = d
+            lp = p
