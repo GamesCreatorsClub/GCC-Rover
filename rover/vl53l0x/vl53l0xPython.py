@@ -348,7 +348,7 @@ def readRangeContinuousMillimeters(address):
     while (i2cBus.read_byte_data(address, VL53L0X_REG_RESULT_INTERRUPT_STATUS) & 0x07) == 0:
         if io_timeout > 0 and time.time() - timeout_start_ms > io_timeout:
             didTimeout = True
-            return 65535
+            return -1
 
     # assumptions: Linearity Corrective Gain is 1000(default);
     # fractional ranging is not enabled
@@ -368,7 +368,6 @@ def readRangeContinuousMillimetersFastFail(address):
 
     i2cBus.write_byte_data(address, VL53L0X_REG_SYSTEM_INTERRUPT_CLEAR, 0x01)
 
-    print("  result range " + str(resultRange))
     return resultRange
 
 
@@ -467,24 +466,24 @@ def setMeasurementTimingBudget(address, budget_us):
     if enables["final_range"]:
         used_budget_us += FinalRangeOverhead
 
-        # // "Note that the final range timeout is determined by the timing
-        # // budget and the sum of all other timeouts within the sequence.
-        # // If there is no room for the final range timeout, then an error
-        # // will be set. Otherwise the remaining time will be applied to
-        # // the final range."
+        # "Note that the final range timeout is determined by the timing
+        # budget and the sum of all other timeouts within the sequence.
+        # If there is no room for the final range timeout, then an error
+        # will be set. Otherwise the remaining time will be applied to
+        # the final range."
 
         if used_budget_us > budget_us:
-            return False  # // "Requested timeout too big."
+            return False  # "Requested timeout too big."
 
         final_range_timeout_us = budget_us - used_budget_us
 
-        # // set_sequence_step_timeout() begin
-        # // (SequenceStepId == VL53L0X_SEQUENCESTEP_FINAL_RANGE)
+        # set_sequence_step_timeout() begin
+        # (SequenceStepId == VL53L0X_SEQUENCESTEP_FINAL_RANGE)
         #
-        # // "For the final range timeout, the pre-range timeout
-        # //  must be added. To do this both final and pre-range
-        # //  timeouts must be expressed in macro periods MClks
-        # //  because they have different vcsel periods."
+        # "For the final range timeout, the pre-range timeout
+        #  must be added. To do this both final and pre-range
+        #  timeouts must be expressed in macro periods MClks
+        #  because they have different vcsel periods."
 
         final_range_timeout_mclks = _timeoutMicrosecondsToMclks(final_range_timeout_us, timeouts["final_range_vcsel_period_pclks"])
 
@@ -493,14 +492,14 @@ def setMeasurementTimingBudget(address, budget_us):
 
         _writeReg16Bit(address, VL53L0X_REG_FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI, _encodeTimeout(final_range_timeout_mclks))
 
-        # // set_sequence_step_timeout() end
+        # set_sequence_step_timeout() end
 
-        measurement_timing_budget_us = budget_us  # // store for internal reuse
+        measurement_timing_budget_us = budget_us  # store for internal reuse
     return True
 
 
 def _encodeTimeout(timeout_mclks):
-    # // format: "(LSByte * 2^MSByte) + 1"
+    # format: "(LSByte * 2^MSByte) + 1"
 
     ls_byte = 0
     ms_byte = 0
@@ -521,7 +520,7 @@ def _encodeTimeout(timeout_mclks):
 def _timeoutMicrosecondsToMclks(timeout_period_us, vcsel_period_pclks):
     macro_period_ns = _calcMacroPeriod(vcsel_period_pclks)
 
-    return ((timeout_period_us * 1000) + (macro_period_ns / 2)) / macro_period_ns
+    return ((timeout_period_us * 1000) + (macro_period_ns // 2)) // macro_period_ns
 
 
 def _getSequenceStepEnables(address):

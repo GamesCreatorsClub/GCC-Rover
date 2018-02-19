@@ -110,6 +110,7 @@ def initWrapper():
 
 def initI2CSensor(address):
     vl53l0xPython.initVL53L0X(address)
+    vl53l0xPython.setMeasurementTimingBudget(address, 50000)
     vl53l0xPython.startContinuous(address, 0)
 
 
@@ -165,7 +166,7 @@ def init():
                     print("  initialised one sensor")
 
         except BaseException as x:
-            print("    first sensor missing" + str(x))
+            print("    first sensor missing, " + str(x))
             secondSensorOff()
             try:
                 testI2C(i2cBus, ORIGINAL_SENSOR_I2C_ADDRESS)
@@ -247,29 +248,26 @@ def readDistancePython():
         lastReadSensor = 1
 
         budget = vl53l0xPython.getMeasurementTimingBudget(FIRST_SENSOR_I2C_ADDRESS)
-        timeout = budget/1000000 + MAX_TIMEOUT
-        # while (distance1 <= 0 or distance2 <= 0) and time.time() - timeout_start_ms < timeout:
-        #     if distance1 <= 0:
-        #         if lastReadSensor != 1:
-        #             sensorOne()
-        #             time.sleep(0.001)
-        #         distance1 = vl53l0xPython.readRangeContinuousMillimetersFastFail()
-        #     if distance2 <= 0:
-        #         if lastReadSensor != 2:
-        #             sensorTwo()
-        #             time.sleep(0.001)
-        #         distance2 = vl53l0xPython.readRangeContinuousMillimetersFastFail()
-
-        try:
-            distance1 = vl53l0xPython.readRangeContinuousMillimeters(FIRST_SENSOR_I2C_ADDRESS)
-            distance2 = vl53l0xPython.readRangeContinuousMillimeters(SECOND_SENSOR_I2C_ADDRESS)
-        except:
-            initialised = False
-            distance1 = -1
-            distance2 = -1
+        timeout = (budget / 1000000) * 2 + MAX_TIMEOUT
+        while (distance1 <= 0 or distance2 <= 0) and time.time() - timeout_start_ms < timeout:
+            if distance1 <= 0:
+                distance1 = vl53l0xPython.readRangeContinuousMillimetersFastFail(FIRST_SENSOR_I2C_ADDRESS)
+            if distance2 <= 0:
+                distance2 = vl53l0xPython.readRangeContinuousMillimetersFastFail(SECOND_SENSOR_I2C_ADDRESS)
 
         log(DEBUG_LEVEL_INFO, "Read", "Got distances " + str(distance1) + "mm and " + str(distance2) + "mm after "
             + str(time.time() - timeout_start_ms) + "s, budget " + str(budget))
+
+        # try:
+        #     distance1 = vl53l0xPython.readRangeContinuousMillimeters(FIRST_SENSOR_I2C_ADDRESS)
+        #     distance2 = vl53l0xPython.readRangeContinuousMillimeters(SECOND_SENSOR_I2C_ADDRESS)
+        # except:
+        #     initialised = False
+        #     distance1 = -1
+        #     distance2 = -1
+
+        # log(DEBUG_LEVEL_INFO, "Read", "Got distances " + str(distance1) + "mm and " + str(distance2) + "mm after "
+        #     + str(time.time() - timeout_start_ms) + "s")
 
         lastRead = time.time()
 
