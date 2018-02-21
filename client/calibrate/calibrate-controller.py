@@ -8,16 +8,18 @@
 import pygame
 import sys
 import time
-
+import pyros.gccui
 
 storageMap = {}
 wheelMap = {}
 
-pygame.init()
-bigFont = pygame.font.SysFont("apple casual", 64)
-normalFont = pygame.font.SysFont("apple casual", 32)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 800))
+pyros.gccui.initAll((600, 800), True)
+
+screen = pyros.gccui.screen
+
+bigFont = pyros.gccui.bigFont
+normalFont = pyros.gccui.font
+
 mousePos = [0, 0]
 
 import pyros
@@ -29,6 +31,7 @@ mouseDown = False
 
 selectedWheel = "fl"
 selectedDeg = "0"
+selectedSpeed = "0"
 
 initialisationDone = False
 
@@ -118,6 +121,7 @@ def initWheel(wheelName, motorServo, steerServo):
     if "300" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["300"] = defaultWheelCal["speed"]["300"]
 
+
 initWheel("fr", 0, 1)
 initWheel("fl", 2, 3)
 initWheel("br", 4, 5)
@@ -125,20 +129,22 @@ initWheel("bl", 6, 7)
 
 texts = {
     "Wheel Calibration": bigFont.render("Wheel Calibration", True, (0, 255, 0)),
-    "fl": bigFont.render("fl", True, (0, 255, 0)),
-    "fr": bigFont.render("fr", True, (0, 255, 0)),
-    "bl": bigFont.render("bl", True, (0, 255, 0)),
-    "br": bigFont.render("br", True, (0, 255, 0)),
-    "all": bigFont.render("all", True, (0, 255, 0)),
+    "fl": bigFont.render("  fl  ", True, (0, 255, 0)),
+    "fr": bigFont.render("  fr  ", True, (0, 255, 0)),
+    "bl": bigFont.render("  bl  ", True, (0, 255, 0)),
+    "br": bigFont.render("  br  ", True, (0, 255, 0)),
+    "all": bigFont.render(" all ", True, (0, 255, 0)),
 
-    "-90": bigFont.render("-90", True, (0, 255, 0)),
-    "-45": bigFont.render("-45", True, (0, 255, 0)),
-    "0": bigFont.render("0", True, (0, 255, 0)),
-    "45": bigFont.render("45", True, (0, 255, 0)),
-    "90": bigFont.render("90", True, (0, 255, 0)),
+    "-90": bigFont.render(" -90 ", True, (0, 255, 0)),
+    "-45": bigFont.render(" -45 ", True, (0, 255, 0)),
+    "0": bigFont.render("  0  ", True, (0, 255, 0)),
+    "45": bigFont.render(" 45 ", True, (0, 255, 0)),
+    "90": bigFont.render(" 90 ", True, (0, 255, 0)),
 
-    "+": bigFont.render("+", True, (0, 255, 0)),
-    "-": bigFont.render("-", True, (0, 255, 0)),
+    "+": bigFont.render("  +  ", True, (0, 255, 0)),
+    "-": bigFont.render("  -  ", True, (0, 255, 0)),
+    ">": bigFont.render("  <  ", True, (0, 255, 0)),
+    "<": bigFont.render("  >  ", True, (0, 255, 0)),
     "SWP": bigFont.render("SWP", True, (0, 255, 0)),
 }
 
@@ -152,25 +158,25 @@ def getTextHeight(t):
 
 
 buttons = {
-    "br select": {
-        "texture": texts["br"],
-        "rect": pygame.Rect(64, 64, getTextWidth("br"), getTextHeight("br")),
-    },
     "bl select": {
         "texture": texts["bl"],
-        "rect": pygame.Rect(4, 64, getTextWidth("bl"), getTextHeight("bl")),
+        "rect": pygame.Rect(304, 80, getTextWidth("bl"), getTextHeight("bl")),
+    },
+    "br select": {
+        "texture": texts["br"],
+        "rect": pygame.Rect(364, 80, getTextWidth("br"), getTextHeight("br")),
     },
     "fl select": {
         "texture": texts["fl"],
-        "rect": pygame.Rect(124, 64, getTextWidth("fl"), getTextHeight("fl")),
+        "rect": pygame.Rect(424, 80, getTextWidth("fl"), getTextHeight("fl")),
     },
     "fr select": {
         "texture": texts["fr"],
-        "rect": pygame.Rect(184, 64, getTextWidth("fr"), getTextHeight("fr")),
+        "rect": pygame.Rect(484, 80, getTextWidth("fr"), getTextHeight("fr")),
     },
     "all select": {
         "texture": texts["all"],
-        "rect": pygame.Rect(244, 64, getTextWidth("all"), getTextHeight("all")),
+        "rect": pygame.Rect(544, 80, getTextWidth("all"), getTextHeight("all")),
     },
 
     "-90deg select": {
@@ -234,58 +240,64 @@ buttons = {
         "rect": pygame.Rect(328, 188, getTextWidth("-"), getTextHeight("-")),
     },
 
+    "speed next2": {
+        "texture": texts["<"],
+        "rect": pygame.Rect(470, 188, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed back2": {
+        "texture": texts[">"],
+        "rect": pygame.Rect(308, 188, getTextWidth("-"), getTextHeight("-")),
+    },
+
     "speed -300 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(540, 304, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 304, getTextWidth("+"), getTextHeight("+")),
     },
     "speed -300 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(428, 304, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 304, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed -0 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(540, 394, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 394, getTextWidth("+"), getTextHeight("+")),
     },
     "speed -0 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(428, 394, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 394, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed 0 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(540, 454, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 454, getTextWidth("+"), getTextHeight("+")),
     },
     "speed 0 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(428, 454, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 454, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed 300 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(540, 544, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 544, getTextWidth("+"), getTextHeight("+")),
     },
     "speed 300 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(428, 544, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 544, getTextWidth("-"), getTextHeight("-")),
     },
     "speed swap": {
         "texture": texts["SWP"],
-        "rect": pygame.Rect(500, 188, getTextWidth("SWP"), getTextHeight("SWP")),
+        "rect": pygame.Rect(530, 188, getTextWidth("SWP"), getTextHeight("SWP")),
     },
 
 }
 
 
 splitingRects = [
-    pygame.Rect(2, 2, 596, 126),
+    pygame.Rect(2, 72, 596, 56),
     pygame.Rect(2, 130, 298, 468),
     pygame.Rect(302, 130, 296, 468),
 ]
 
-speeds = ["-300", "-150", "-75", "-50", "-25", "-24", "-23", "-22", "-19", "-18", "-17", "-16", "-15", "-14", "-13", "-12", "-11", "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "-0", "0", "+0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "22", "23", "24", "25", "50", "75", "150", "300"]
-selectedSpeedIndex = 9
-selectedSpeed = speeds[selectedSpeedIndex]
 lastButton = None
 lastPressed = time.time()
 
@@ -324,8 +336,6 @@ def doCalStuff():
     global buttons
     global selectedDeg
     global selectedWheel
-    global selectedSpeedIndex
-    global speeds
 
     todo = ["-90", "0", "90"]
 
@@ -366,8 +376,6 @@ def doCalStuff():
         wheelMap[selectedWheel]["speed"]["0"] = speedTemp
         speedLimitsChanged = True
 
-
-
     todo = ["-300", "-0", "0", "300"]
 
     for calSpeed in todo:
@@ -390,33 +398,72 @@ def doCalStuff():
             pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
 
 
-
 def doSpeedStettingstuff():
     global buttons
     global selectedDeg
     global selectedWheel
-    global selectedSpeedIndex
-    global speeds
+    global selectedSpeed
 
     buttona = buttons["speed next"]
     buttonm = buttons["speed back"]
+    buttona2 = buttons["speed next2"]
+    buttonm2 = buttons["speed back2"]
+
     plusDown = buttonPressed(buttona, mousePos, mouseDown)
+    plusDown2 = buttonPressed(buttona, mousePos, mouseDown)
     drawButton(screen, buttona, plusDown)
-    drawText(screen, speeds[selectedSpeedIndex], (372, buttona["rect"].y), bigFont)
+    drawButton(screen, buttona2, plusDown2)
+    drawText(screen, selectedSpeed, (372, buttona["rect"].y), bigFont)
     minusDown = buttonPressed(buttonm, mousePos, mouseDown)
+    minusDown2 = buttonPressed(buttonm2, mousePos, mouseDown)
     drawButton(screen, buttonm, minusDown)
+    drawButton(screen, buttonm2, minusDown2)
 
     if plusDown:
-        if selectedSpeedIndex + 1 > len(speeds) - 1:
-            pass
+        if selectedSpeed == "-0":
+            selectedSpeed = "0"
+        elif selectedSpeed == "0":
+            selectedSpeed = "+0"
         else:
-            selectedSpeedIndex += 1
+            selectedSpeed = str(int(selectedSpeed) + 1)
+            if selectedSpeed == "301":
+                selectedSpeed = "300"
+
+    if plusDown2:
+        s = int(selectedSpeed)
+        if selectedSpeed == "-0":
+            selectedSpeed = "0"
+        elif selectedSpeed == "0":
+            selectedSpeed = "+0"
+        elif s > -11 and s < 0:
+            selectedSpeed = "-0"
+        elif s > 290:
+            selectedSpeed = "300"
+        else:
+            selectedSpeed = str(s + 10)
 
     if minusDown:
-        if selectedSpeedIndex - 1 < 0:
-            pass
+        if selectedSpeed == "+0":
+            selectedSpeed = "0"
+        elif selectedSpeed == "0":
+            selectedSpeed = "-0"
         else:
-            selectedSpeedIndex -= 1
+            selectedSpeed = str(int(selectedSpeed) - 1)
+            if selectedSpeed == "-301":
+                selectedSpeed = "-300"
+
+    if minusDown2:
+        s = int(selectedSpeed)
+        if selectedSpeed == "+0":
+            selectedSpeed = "0"
+        elif selectedSpeed == "0":
+            selectedSpeed = "-0"
+        elif s < 11 and s > 0:
+            selectedSpeed = "+0"
+        elif s < -290:
+            selectedSpeed = "-300"
+        else:
+            selectedSpeed = str(s - 10)
 
 
 def onKeyDown(key):
@@ -437,7 +484,6 @@ pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.
 
 while True:
     lastMouseDown = mouseDown
-    selectedSpeed = speeds[selectedSpeedIndex]
     if selectedWheel == "all":
         for wheel in wheelsList:
             pyros.publish("wheel/" + wheel + "/speed", selectedSpeed)
@@ -459,18 +505,19 @@ while True:
 
     pyros.loop(0.03)
 
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        text = normalFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = normalFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-    screen.blit(text, pygame.Rect(0, 620, 0, 0))
+    pyros.gccui.background()
+    pyros.gcc.drawConnection()
+    #
+    # if pyros.isConnected():
+    #     text = normalFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
+    # else:
+    #     text = normalFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
+    # screen.blit(text, pygame.Rect(0, 620, 0, 0))
 
     for rect in splitingRects:
-        pygame.draw.rect(screen, (100, 100, 100), rect)
+        pygame.draw.rect(screen, (100, 100, 100), rect, 3)
 
-    screen.blit(texts["Wheel Calibration"], (4, 4))
+    screen.blit(texts["Wheel Calibration"], (4, 74))
 
     drawButton(screen, buttons["bl select"], selectedWheel == "bl")
     drawButton(screen, buttons["br select"], selectedWheel == "br")
@@ -530,5 +577,4 @@ while True:
 
     drawText(screen, "Degrees:           Speed:", (4, 128), bigFont)
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gccui.frameEnd()
