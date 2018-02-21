@@ -247,16 +247,21 @@ def readDistancePython():
         distance2 = -1
         lastReadSensor = 1
 
-        budget = vl53l0xPython.getMeasurementTimingBudget(FIRST_SENSOR_I2C_ADDRESS)
-        timeout = (budget / 1000000) * 2 + MAX_TIMEOUT
-        while (distance1 <= 0 or distance2 <= 0) and time.time() - timeout_start_ms < timeout:
-            if distance1 <= 0:
-                distance1 = vl53l0xPython.readRangeContinuousMillimetersFastFail(FIRST_SENSOR_I2C_ADDRESS)
-            if distance2 <= 0:
-                distance2 = vl53l0xPython.readRangeContinuousMillimetersFastFail(SECOND_SENSOR_I2C_ADDRESS)
+        try:
+            budget = vl53l0xPython.getMeasurementTimingBudget(FIRST_SENSOR_I2C_ADDRESS)
+            timeout = (budget / 1000000) * 2 + MAX_TIMEOUT
+            while (distance1 <= 0 or distance2 <= 0) and time.time() - timeout_start_ms < timeout:
+                if distance1 <= 0:
+                    distance1 = vl53l0xPython.readRangeContinuousMillimetersFastFail(FIRST_SENSOR_I2C_ADDRESS)
+                if distance2 <= 0:
+                    distance2 = vl53l0xPython.readRangeContinuousMillimetersFastFail(SECOND_SENSOR_I2C_ADDRESS)
 
-        log(DEBUG_LEVEL_INFO, "Read", "Got distances " + str(distance1) + "mm and " + str(distance2) + "mm after "
-            + str(time.time() - timeout_start_ms) + "s, budget " + str(budget))
+            log(DEBUG_LEVEL_INFO, "Read", "Got distances " + str(distance1) + "mm and " + str(distance2) + "mm after "
+                + str(time.time() - timeout_start_ms) + "s, budget " + str(budget))
+        except:
+            initialised = False
+            distance1 = -1
+            distance2 = -1
 
         # try:
         #     distance1 = vl53l0xPython.readRangeContinuousMillimeters(FIRST_SENSOR_I2C_ADDRESS)
