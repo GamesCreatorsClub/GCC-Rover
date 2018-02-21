@@ -11,6 +11,7 @@ import threading
 import time
 import socket
 import netifaces
+import sys
 
 rovers = []
 
@@ -145,9 +146,16 @@ def discovery():
 
 poplulateBroadcasts()
 
-thread = threading.Thread(target=discovery, args=())
-thread.daemon = True
-thread.start()
+if len(sys.argv) > 1:
+    kv = sys.argv[1].split(":")
+    if len(kv) == 1:
+        kv.append("1883")
+    addToList(kv[0], int(kv[1]), "Rover")
+
+else:
+    thread = threading.Thread(target=discovery, args=())
+    thread.daemon = True
+    thread.start()
 
 
 def getHost():
