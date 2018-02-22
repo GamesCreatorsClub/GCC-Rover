@@ -86,8 +86,10 @@ def initWheel(wheelName, motorServo, steerServo):
         "speed": {
             "servo": motorServo,
             "-300": "95",
+            "-240": "107",
             "-0": "155",
             "0": "155",
+            "240": "203",
             "300": "215"
         }
     }
@@ -258,6 +260,15 @@ buttons = {
         "rect": pygame.Rect(390, 304, getTextWidth("-"), getTextHeight("-")),
     },
 
+    "speed -240 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(510, 349, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed -240 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(390, 349, getTextWidth("-"), getTextHeight("-")),
+    },
+
     "speed -0 add": {
         "texture": texts["+"],
         "rect": pygame.Rect(510, 394, getTextWidth("+"), getTextHeight("+")),
@@ -274,6 +285,15 @@ buttons = {
     "speed 0 minus": {
         "texture": texts["-"],
         "rect": pygame.Rect(390, 454, getTextWidth("-"), getTextHeight("-")),
+    },
+
+    "speed 240 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(510, 495, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed 240 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(390, 495, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed 300 add": {
@@ -376,24 +396,33 @@ def doCalStuff():
         wheelMap[selectedWheel]["speed"]["0"] = speedTemp
         speedLimitsChanged = True
 
-    todo = ["-300", "-0", "0", "300"]
+    # calibrationPoints = ["-300", "-0", "0", "300"]
+    calibrationPoints = ["-300", "-240", "-0", "0", "240", "300"]
 
-    for calSpeed in todo:
+    for calSpeed in calibrationPoints:
+        speedLimitsChanged = False
         buttona = buttons["speed " + calSpeed + " add"]
         buttonm = buttons["speed " + calSpeed + " minus"]
+
         plusDown = buttonPressed(buttona, mousePos, mouseDown)
-        drawButton(screen, buttona, plusDown)
-        drawText(screen, str(wheelMap[selectedWheel]["speed"][calSpeed]), (442, buttona["rect"].y), bigFont)
         minusDown = buttonPressed(buttonm, mousePos, mouseDown)
+
+        drawButton(screen, buttona, plusDown)
         drawButton(screen, buttonm, minusDown)
+
+        if calSpeed in wheelMap[selectedWheel]["speed"]:
+            drawText(screen, str(wheelMap[selectedWheel]["speed"][calSpeed]), (442, buttona["rect"].y), bigFont)
+
         if plusDown:
-            wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) + 1
+            if calSpeed in wheelMap[selectedWheel]["speed"]:
+                wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) + 1
             speedLimitsChanged = True
         elif minusDown:
-            wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) - 1
+            if calSpeed in wheelMap[selectedWheel]["speed"]:
+                wheelMap[selectedWheel]["speed"][calSpeed] = int(wheelMap[selectedWheel]["speed"][calSpeed]) - 1
             speedLimitsChanged = True
 
-        if speedLimitsChanged:
+        if calSpeed in wheelMap[selectedWheel]["speed"] and speedLimitsChanged:
             pyros.publish("storage/write/wheels/cal/" + selectedWheel + "/speed/" + calSpeed, str(wheelMap[selectedWheel]["speed"][calSpeed]))
             pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
 
@@ -533,8 +562,10 @@ while True:
     drawButton(screen, buttons["90deg select"], selectedDeg == "90")
 
     drawText(screen, "-300", (328, buttons["speed -300 minus"]["rect"].y), bigFont)
+    drawText(screen, "-240", (328, buttons["speed -240 minus"]["rect"].y), bigFont)
     drawText(screen, "-0", (328, buttons["speed -0 minus"]["rect"].y), bigFont)
     drawText(screen, "0", (328, buttons["speed 0 minus"]["rect"].y), bigFont)
+    drawText(screen, "240", (328, buttons["speed 240 minus"]["rect"].y), bigFont)
     drawText(screen, "300", (328, buttons["speed 300 minus"]["rect"].y), bigFont)
     if not selectedWheel == "all":
         doCalStuff()
