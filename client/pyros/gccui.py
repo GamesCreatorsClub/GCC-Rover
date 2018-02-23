@@ -70,7 +70,15 @@ def drawKeyValue(key, value, x, y, colour = WHITE):
     return y + 20  # font.get_height()
 
 
-def drawSmall(text, pos, colour = WHITE):
+def drawBigText(text, pos, colour = WHITE):
+    screen.blit(bigFont.render(text, 1, colour), pos)
+
+
+def drawText(text, pos, colour = WHITE):
+    screen.blit(font.render(text, 1, colour), pos)
+
+
+def drawSmallText(text, pos, colour = WHITE):
     screen.blit(smallFont.render(text, 1, colour), pos)
 
 

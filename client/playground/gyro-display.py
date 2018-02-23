@@ -135,7 +135,6 @@ while True:
 
     screen.blit(rot_arrow_image, (150, 150))
 
-
     pygame.display.flip()
     frameclock.tick(30)
 

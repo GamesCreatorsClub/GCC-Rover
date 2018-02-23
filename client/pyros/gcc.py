@@ -7,6 +7,7 @@
 
 import pygame
 import pyros
+import pyros.gccui
 import threading
 import time
 import socket
@@ -46,9 +47,10 @@ selectedRover = 0
 
 THIS_PORT = 0xd15d
 DISCOVERY_PORT = 0xd15c
-WAIT_TIMEOUT = 20 # 5 seconds
+WAIT_TIMEOUT = 20  # 5 seconds
 
 sckt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sckt.settimeout(5)
 
 connected = 5
 
@@ -61,9 +63,13 @@ while connected > 0:
 
 
 broadcasts = []
+doDiscovery = True
 
 
 def poplulateBroadcasts():
+    global broadcasts
+    broadcasts = []
+
     ifacenames = netifaces.interfaces()
     for ifname in ifacenames:
         addrs = netifaces.ifaddresses(ifname)
@@ -75,30 +81,33 @@ def poplulateBroadcasts():
 
 
 def removeFromList(ip, port):
-    for i in range(len(rovers) -1, -1, -1):
+    for i in range(len(rovers) - 1, -1, -1):
         rover = rovers[i]
         if rover["address"] == ip and rover["port"] == port:
             del rovers[i]
 
 
 def addToList(ip, port, name):
-    rovers.append({ "address": ip, "port": port, "name": name })
+    rovers.append({"address": ip, "port": port, "name": name})
 
 
 def discover():
     packet = "Q#IP=255.255.255.255;PORT=" + str(THIS_PORT)
 
-    for broadcast in broadcasts:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        bs = bytes(packet, 'utf-8')
-        s.sendto(bs, (broadcast, DISCOVERY_PORT))
+    receivedSomething = False
 
     now = time.time()
-    while time.time() - now < WAIT_TIMEOUT:
-        data, addr = sckt.recvfrom(1024)
+    while not receivedSomething and time.time() - now < WAIT_TIMEOUT:
+        for broadcast in broadcasts:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            bs = bytes(packet, 'utf-8')
+            s.sendto(bs, (broadcast, DISCOVERY_PORT))
+
 
         try:
+            data, addr = sckt.recvfrom(1024)
+
             p = str(data, 'utf-8')
 
             if p.startswith("A#"):
@@ -107,10 +116,10 @@ def discover():
                 ip = None
                 name = None
                 port = None
-                type = None
+                deviceType = None
 
-                for kv in kvs:
-                    kvp = kv.split("=")
+                for keyValue in kvs:
+                    kvp = keyValue.split("=")
                     if len(kvp) == 2:
                         if kvp[0] == "IP":
                             ip = kvp[1]
@@ -122,13 +131,14 @@ def discover():
                         elif kvp[0] == "NAME":
                             name = kvp[1]
                         elif kvp[0] == "TYPE":
-                            type = kvp[1]
+                            deviceType = kvp[1]
 
                 if name is None:
                     name = ip
-                if (not port is None) and (not ip is None) and type == "ROVER":
+                if (port is not None) and (ip is not None) and deviceType == "ROVER":
                     removeFromList(ip, port)
                     addToList(ip, port, name)
+                    receivedSomething = True
 
             print("Got " + p + "  Rovers: " + str(rovers))
         except:
@@ -136,15 +146,23 @@ def discover():
 
 
 def discovery():
+    global doDiscovery
+
+    counter = 1
     while True:
-        try:
-            discover()
-        except:
-            pass
-        time.sleep(5)
+        if len(rovers) == 0 or doDiscovery:
+            try:
+                print("Getting interfaces to send UDP packets to.")
+                poplulateBroadcasts()
+                print("Starting discovery")
+                discover()
+                counter = 10
+                doDiscovery = False
+            except:
+                pass
 
+        time.sleep(1)
 
-poplulateBroadcasts()
 
 if len(sys.argv) > 1:
     kv = sys.argv[1].split(":")
@@ -178,24 +196,32 @@ def connect():
 
 
 def handleConnectKeys(key):
-    global selectedRover
+    global selectedRover, doDiscovery
 
-    if key == pygame.K_2 and len(rovers) > 0:
+    if key == pygame.K_1 and len(rovers) > 0:
+        doDiscovery = True
+    elif key == pygame.K_2 and len(rovers) > 0:
+        # doDiscovery = True
         selectedRover = 0
         connect()
     elif key == pygame.K_3 and len(rovers) > 1:
+        # doDiscovery = True
         selectedRover = 1
         connect()
     elif key == pygame.K_4 and len(rovers) > 2:
+        # doDiscovery = True
         selectedRover = 2
         connect()
     elif key == pygame.K_5 and len(rovers) > 3:
+        # doDiscovery = True
         selectedRover = 3
         connect()
     elif key == pygame.K_6 and len(rovers) > 4:
+        # doDiscovery = True
         selectedRover = 4
         connect()
     elif key == pygame.K_7 and len(rovers) > 5:
+        # doDiscovery = True
         selectedRover = 5
         connect()
 
@@ -254,7 +280,7 @@ def drawConnection():
 
         _drawGreenIndicator()
 
-        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, pyros.gccui.GREEN), (32, 0))
+        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connected to rover: " + getSelectedRoverDetailsText(), 1, pyros.gccui.GREEN), (32, 0))
     else:
         _connectionCounter -= 1
         if _connectionCounter < 0:
@@ -265,4 +291,4 @@ def drawConnection():
 
         _drawRedIndicator()
 
-        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, pyros.gccui.RED), (32, 0))
+        pyros.gccui.screen.blit(pyros.gccui.bigFont.render("Connecting to rover: " + getSelectedRoverDetailsText(), 1, pyros.gccui.RED), (32, 0))

@@ -23,6 +23,7 @@ normalFont = pyros.gccui.font
 mousePos = [0, 0]
 
 import pyros
+import pyros.agent
 import pyros.gcc
 import pyros.pygamehelper
 
@@ -32,6 +33,7 @@ mouseDown = False
 selectedWheel = "fl"
 selectedDeg = "0"
 selectedSpeed = "0"
+selectedRPM = 240
 
 initialisationDone = False
 
@@ -39,6 +41,10 @@ initialisationDone = False
 def connected():
     print("Requesting calibration data from rover... ", end="")
     pyros.publish("storage/read", "READ")
+    print("Done.")
+
+    print("Starting agent... ", end="")
+    pyros.agent.init(pyros.client, "calibrate-agent.py")
     print("Done.")
 
 
@@ -115,11 +121,17 @@ def initWheel(wheelName, motorServo, steerServo):
     if "servo" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["servo"] = defaultWheelCal["speed"]["servo"]
     if "-300" not in wheelMap[wheelName]["speed"]:
-        wheelMap[wheelName]["-300"]["servo"] = defaultWheelCal["speed"]["-300"]
+        wheelMap[wheelName]["speed"]["-300"] = defaultWheelCal["speed"]["-300"]
+    if "-240" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["-240"] = {}
+        wheelMap[wheelName]["speed"]["-240"] = defaultWheelCal["speed"]["-240"]
     if "-0" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["-0"] = defaultWheelCal["speed"]["-0"]
     if "0" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
+    if "240" not in wheelMap[wheelName]["speed"]:
+        wheelMap[wheelName]["speed"]["240"] = {}
+        wheelMap[wheelName]["speed"]["240"] = defaultWheelCal["speed"]["240"]
     if "300" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["300"] = defaultWheelCal["speed"]["300"]
 
@@ -309,6 +321,24 @@ buttons = {
         "rect": pygame.Rect(530, 188, getTextWidth("SWP"), getTextHeight("SWP")),
     },
 
+    "RPM next": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(440, 600, getTextWidth("+"), getTextHeight("+")),
+    },
+    "RPM back": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(328, 600, getTextWidth("-"), getTextHeight("-")),
+    },
+
+    "RPM next2": {
+        "texture": texts["<"],
+        "rect": pygame.Rect(470, 600, getTextWidth("+"), getTextHeight("+")),
+    },
+    "RPM back2": {
+        "texture": texts[">"],
+        "rect": pygame.Rect(308, 600, getTextWidth("-"), getTextHeight("-")),
+    },
+
 }
 
 
@@ -391,6 +421,10 @@ def doCalStuff():
         wheelMap[selectedWheel]["speed"]["-300"] = wheelMap[selectedWheel]["speed"]["300"]
         wheelMap[selectedWheel]["speed"]["300"] = speedTemp
 
+        speedTemp = wheelMap[selectedWheel]["speed"]["-240"]
+        wheelMap[selectedWheel]["speed"]["-240"] = wheelMap[selectedWheel]["speed"]["240"]
+        wheelMap[selectedWheel]["speed"]["240"] = speedTemp
+
         speedTemp = wheelMap[selectedWheel]["speed"]["-0"]
         wheelMap[selectedWheel]["speed"]["-0"] = wheelMap[selectedWheel]["speed"]["0"]
         wheelMap[selectedWheel]["speed"]["0"] = speedTemp
@@ -439,7 +473,7 @@ def doSpeedStettingstuff():
     buttonm2 = buttons["speed back2"]
 
     plusDown = buttonPressed(buttona, mousePos, mouseDown)
-    plusDown2 = buttonPressed(buttona, mousePos, mouseDown)
+    plusDown2 = buttonPressed(buttona2, mousePos, mouseDown)
     drawButton(screen, buttona, plusDown)
     drawButton(screen, buttona2, plusDown2)
     drawText(screen, selectedSpeed, (372, buttona["rect"].y), bigFont)
@@ -449,7 +483,9 @@ def doSpeedStettingstuff():
     drawButton(screen, buttonm2, minusDown2)
 
     if plusDown:
-        if selectedSpeed == "-0":
+        if selectedSpeed == "-1":
+            selectedSpeed = "-0"
+        elif selectedSpeed == "-0":
             selectedSpeed = "0"
         elif selectedSpeed == "0":
             selectedSpeed = "+0"
@@ -460,7 +496,9 @@ def doSpeedStettingstuff():
 
     if plusDown2:
         s = int(selectedSpeed)
-        if selectedSpeed == "-0":
+        if selectedSpeed == "-1":
+            selectedSpeed = "-0"
+        elif selectedSpeed == "-0":
             selectedSpeed = "0"
         elif selectedSpeed == "0":
             selectedSpeed = "+0"
@@ -472,7 +510,9 @@ def doSpeedStettingstuff():
             selectedSpeed = str(s + 10)
 
     if minusDown:
-        if selectedSpeed == "+0":
+        if selectedSpeed == "1":
+            selectedSpeed = "+0"
+        elif selectedSpeed == "+0":
             selectedSpeed = "0"
         elif selectedSpeed == "0":
             selectedSpeed = "-0"
@@ -483,7 +523,9 @@ def doSpeedStettingstuff():
 
     if minusDown2:
         s = int(selectedSpeed)
-        if selectedSpeed == "+0":
+        if selectedSpeed == "1":
+            selectedSpeed = "+0"
+        elif selectedSpeed == "+0":
             selectedSpeed = "0"
         elif selectedSpeed == "0":
             selectedSpeed = "-0"
@@ -493,6 +535,48 @@ def doSpeedStettingstuff():
             selectedSpeed = "-300"
         else:
             selectedSpeed = str(s - 10)
+
+
+def doRPMStuff():
+    global buttons
+    global selectedRPM
+
+    buttona = buttons["RPM next"]
+    buttonm = buttons["RPM back"]
+    buttona2 = buttons["RPM next2"]
+    buttonm2 = buttons["RPM back2"]
+
+    plusDown = buttonPressed(buttona, mousePos, mouseDown)
+    plusDown2 = buttonPressed(buttona2, mousePos, mouseDown)
+    drawButton(screen, buttona, plusDown)
+    drawButton(screen, buttona2, plusDown2)
+    drawText(screen, str(selectedRPM), (372, buttona["rect"].y), bigFont)
+    drawText(screen, "Strobo RPM", (50, buttona["rect"].y), bigFont)
+
+    minusDown = buttonPressed(buttonm, mousePos, mouseDown)
+    minusDown2 = buttonPressed(buttonm2, mousePos, mouseDown)
+    drawButton(screen, buttonm, minusDown)
+    drawButton(screen, buttonm2, minusDown2)
+
+    stroboChanged = False
+    if plusDown:
+        selectedRPM = selectedRPM + 1
+        stroboChanged = True
+
+    if plusDown2:
+        selectedRPM = selectedRPM + 10
+        stroboChanged = True
+
+    if minusDown:
+        selectedRPM = selectedRPM - 1
+        stroboChanged = True
+
+    if minusDown2:
+        selectedRPM = selectedRPM - 10
+        stroboChanged = True
+
+    if stroboChanged:
+        pyros.publish("calibrate/strobo", str(60 / (selectedRPM * 16)))
 
 
 def onKeyDown(key):
@@ -533,6 +617,7 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
+    pyros.agent.keepAgents()
 
     pyros.gccui.background()
     pyros.gcc.drawConnection()
@@ -570,6 +655,7 @@ while True:
     if not selectedWheel == "all":
         doCalStuff()
     doSpeedStettingstuff()
+    doRPMStuff()
 
     # if mouseDown and not lastMouseDown:
     if mouseDown:
