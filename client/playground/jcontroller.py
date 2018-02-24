@@ -178,11 +178,11 @@ axis_states["ry"] = 0
 def drawText(xy, t, s):
     global font
 
-    s.blit(font.render(str(t), 1, pyros.gccui.WHITE), (xy[0], xy[1] + 50))
+    s.blit(font.render(str(t), 1, pyros.gccui.WHITE), (xy[0], xy[1]))
 
 
 def drawLine(start, end):
-    pygame.draw.line(screen, (255, 255, 255), (start[0], start[1] + 50), (end[0], end[1] + 50))
+    pygame.draw.line(screen, (255, 255, 255), (start[0] + 20, start[1] + 70), (end[0] + 20, end[1] + 70))
 
 
 def drawRect(start, end):
@@ -246,7 +246,7 @@ def drawTopSpeed(x, y):
 
     if pyros.isConnected():
         x = x - 16
-        drawText((x, y), str(spd),screen)
+        drawText((x, y), "Speed: " + str(spd), screen)
 
 
 def doShutdown():
@@ -522,8 +522,8 @@ def processJoysticks():
 def onKeyDown(key):
     global topSpeed, useGyro
 
-    if key == pygame.K_ESCAPE:
-        sys.exit(0)
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
     elif key == pygame.K_a:
         axis_states['x'] = -1.0
     elif key == pygame.K_d:
@@ -569,14 +569,12 @@ def onKeyDown(key):
     elif key == pygame.K_g:
         useGyro = not useGyro
 
-    else:
-        pyros.gcc.handleConnectKeys(key)
-
 
 def onKeyUp(key):
-    global stopped
 
-    if key == pygame.K_a:
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
+    elif key == pygame.K_a:
         axis_states['x'] = 0.0
     elif key == pygame.K_d:
         axis_states['x'] = 0.0
@@ -612,7 +610,7 @@ pyros.init("gcc-jcontroller-local-#", unique=False, host=pyros.gcc.getHost(), po
 
 
 try:
-    j = pygame.joystick.Joystick(0) # create a joystick instance
+    j = pygame.joystick.Joystick(0)  # create a joystick instance
     j.init() # init instance
     print('Enabled joystick: ' + j.get_name())
     ljx = 0
@@ -663,16 +661,11 @@ while True:
 
     pyros.loop(0.03)
 
-    pyros.gccui.background()
+    pyros.gccui.background(True)
 
-    drawTopSpeed(105, 50)
+    drawTopSpeed(30, 30)
 
     drawJoysticks()
-
-    loc = arrow_image.get_rect().center
-    rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
-    rot_arrow_image.get_rect().center = loc
-    screen.blit(rot_arrow_image, (450, 50))
 
     now = time.time()
     thisGyroAngle = gyroAngle
@@ -681,15 +674,22 @@ while True:
     if len(rotSpeeds) > 30:
         del rotSpeeds[0]
 
-    if len(rotSpeeds) > 0:
-        gyroDegPersSecText = str(round(sum(rotSpeeds) / len(rotSpeeds), 2))
-        pyros.gccui.drawBigText(gyroDegPersSecText, (350, 50))
+    if useGyro:
+        loc = arrow_image.get_rect().center
+        rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
+        rot_arrow_image.get_rect().center = loc
+        screen.blit(rot_arrow_image, (450, 50))
+
+        if len(rotSpeeds) > 0:
+            gyroDegPersSecText = str(round(sum(rotSpeeds) / len(rotSpeeds), 2))
+            pyros.gccui.drawBigText(gyroDegPersSecText, (440, 10))
+
+            pyros.gccui.drawText("º/s", (445 + pyros.gccui.bigFont.size(gyroDegPersSecText)[0], 15))
 
     gyroLastReadTime = now
     gyroLastAngle = thisGyroAngle
 
     pyros.gcc.drawConnection()
-
     pyros.gccui.frameEnd()
 
     if useGyro and time.time() - pingLastTime > MAX_PING_TIMEOUT:

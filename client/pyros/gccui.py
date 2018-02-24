@@ -8,6 +8,8 @@ import pygame
 import os
 import inspect
 
+BLACK = (0, 0, 0)
+DARK_GREY = (80, 80, 80)
 GREY = (160, 160, 160)
 WHITE = (255, 255, 255)
 LIGHT_BLUE = (160, 255, 255)
@@ -23,6 +25,8 @@ screen = None
 backgroundImage = None
 scaledBackground = None
 
+SCREEN_RECT = None
+
 
 def _thisPath(filename):
     return os.path.join(os.path.dirname(__file__), filename)
@@ -31,6 +35,7 @@ def _thisPath(filename):
 def initAll(screenSize, loadBackground = False):
     global screen, backgroundImage, scaledBackground
     global smallFont, font, bigFont
+    global SCREEN_RECT
 
     pygame.init()
 
@@ -40,6 +45,7 @@ def initAll(screenSize, loadBackground = False):
     smallFont = pygame.font.Font(fontFile, 12)
 
     screen = pygame.display.set_mode(screenSize)
+    SCREEN_RECT = pygame.Rect(0, 0, screen.get_width(), screen.get_height())
 
     if loadBackground:
         backgroundImage = pygame.image.load(_thisPath("blue-background.png"))
@@ -52,11 +58,14 @@ def screenResized(size):
     scaledBackground = pygame.transform.scale(backgroundImage, size)
 
 
-def background():
+def background(topFrame = False):
     if scaledBackground is not None:
         screen.blit(scaledBackground, (0, 0))
     else:
         screen.fill((0, 0, 0))
+
+    if topFrame:
+        drawTopFrame()
 
 
 def frameEnd():
@@ -91,6 +100,27 @@ def drawRect(pos, size, colour = LIGHT_BLUE, stick = 0, outside = 1):
     pygame.draw.line(screen, colour, (pos[0] + size[0] + outside, pos[1] - stick), (pos[0] + size[0] + outside, pos[1] + size[1] + stick))
 
 
+def drawFrame(rect, colour = LIGHT_BLUE, backgroundColour = BLACK):
+    if backgroundColour is not None:
+        pygame.draw.rect(screen, backgroundColour, rect, 0)
+    pygame.draw.rect(screen, colour, (rect[0] + 4, rect[1] + 4, rect[2] - 8, rect[3] - 8), 1)
+    for i in range(6, 12):
+        pygame.draw.line(screen, colour, (rect[0] + rect[2] - i, rect[1] + rect[3] - 6), (rect[0] + rect[2] - 6, rect[1] + rect[3] - i), 1)
+
+
+def drawTopFrame(colour = LIGHT_BLUE):
+    rect = SCREEN_RECT
+
+    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 4), (rect[0] + 330, rect[1] + 4))
+    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 4), (rect[0] + 4, rect[1] + 30))
+    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 30), (rect[0] + 300, rect[1] + 30))
+    pygame.draw.line(screen, colour, (rect[0] + 300, rect[1] + 30), (rect[0] + 330, rect[1] + 4))
+    pygame.draw.line(screen, colour, (rect[0] + 330, rect[1] + 4), (rect[0] + rect[2] - 4, rect[1] + 4))
+    pygame.draw.line(screen, colour, (rect[0] + rect[2] - 4, rect[1] + 4), (rect[0] + rect[2] - 4, rect[1] + rect[3] - 4))
+    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + rect[3] - 4), (rect[0] + rect[2] - 4, rect[1] + rect[3] - 4))
+    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + rect[3] - 4), (rect[0] + 4, rect[1] + 30))
+
+
 def drawFilledRect(pos, size, colour = LIGHT_BLUE):
     pygame.draw.rect(screen, colour, pygame.Rect(pos, size))
 
@@ -99,6 +129,18 @@ def drawImage(image, pos, stick = 6):
     screen.blit(image, pos)
 
     drawRect(pos, image.get_size(), stick = stick, outside = 1)
+
+
+def drawUpArrow(x1, y1, x2, y2, colour):
+    pygame.draw.line(screen, colour, (x1, y2), (x1 + (x2 - x1) / 2, y1))
+    pygame.draw.line(screen, colour, (x1 + (x2 - x1) / 2, y1), (x2, y2))
+    pygame.draw.line(screen, colour, (x1, y2), (x2, y2))
+
+
+def drawDownArrow(x1, y1, x2, y2, colour):
+    pygame.draw.line(screen, colour, (x1, y1), (x1 + (x2 - x1) / 2, y2))
+    pygame.draw.line(screen, colour, (x1 + (x2 - x1) / 2, y2), (x2, y1))
+    pygame.draw.line(screen, colour, (x1, y1), (x2, y1))
 
 
 def drawGraph(pos, size, data, minData, maxData, maxPoints, axisColour = LIGHT_BLUE, dataColour = GREEN, stick = 0):

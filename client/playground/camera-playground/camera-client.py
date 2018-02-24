@@ -267,8 +267,8 @@ def onKeyDown(key):
     global sequence, record, continuous, readingDistance
     global processedImages, processedBigImages
 
-    if key == pygame.K_ESCAPE:
-        sys.exit()
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
     elif key == pygame.K_f:
         print("  fetching picture...")
         pyros.publish("camera/raw/fetch", "")
@@ -306,11 +306,10 @@ def onKeyDown(key):
         ptr += 1
         if ptr >= len(processedImages) - 1:
             ptr = -1
-    else:
-        pyros.gcc.handleConnectKeys(key)
 
 
 def onKeyUp(key):
+    pyros.gcc.handleConnectKeyUp(key)
     return
 
 
@@ -355,7 +354,7 @@ while True:
         else:
             fps = "-"
 
-        distanceValues[i] = str(distances[d]) + " a:" + str(av) + " m:" + str(mn) + " x:" + str(mx) + " r:" + str(abs(mn - mx)) + " c:" + str(len(historyDistances[i])) + " fps: " + fps
+        distanceValues[i] = str(distances[d]) + " a:" + str(av) + " m:" + str(mn) + " x:" + str(mx) + " e:" + str(abs(mn - mx)) + " s:" + str(len(historyDistances[i])) + " fps: " + fps
         i += 1
 
     # if distanceDegs[1] > distanceDegs[0]:
@@ -373,8 +372,7 @@ while True:
 
     pyros.loop(0.03)
 
-    pyros.gccui.background()
-    pyros.gcc.drawConnection()
+    pyros.gccui.background(True)
 
     hpos = 40
     hpos = pyros.gccui.drawKeyValue("Local FPS", str(localFPS), 8, hpos)
@@ -398,7 +396,7 @@ while True:
         mx = max(historyDistances[1])
         pyros.gccui.drawGraph((320, 50), (81, 65), historyDistances[1], mn, mx, 80, stick = 10)
 
-    pyros.gccui.drawSmall("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear", (0, pyros.gccui.screen.get_height() - pyros.gccui.smallFont.get_height()))
+    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear", (8, pyros.gccui.screen.get_height() - pyros.gccui.smallFont.get_height()))
 
     pyros.gccui.drawImage(rawImage, (500, 50), 10)
     pyros.gccui.drawImage(rawImageBig, (688, 50), 10)
@@ -413,9 +411,10 @@ while True:
     x = 1024 - 320 - 16
     while i >= 0 and x >= 0:
         pyros.gccui.drawImage(processedBigImages[i], (x, 420))
-        x -= 341
+        x -= 336
         i -= 1
 
+    pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
 
     now = time.time()

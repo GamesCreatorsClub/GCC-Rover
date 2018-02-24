@@ -10,6 +10,12 @@ import sys
 import time
 import pyros.gccui
 
+import pyros
+import pyros.agent
+import pyros.gcc
+import pyros.pygamehelper
+
+
 storageMap = {}
 wheelMap = {}
 
@@ -21,11 +27,6 @@ bigFont = pyros.gccui.bigFont
 normalFont = pyros.gccui.font
 
 mousePos = [0, 0]
-
-import pyros
-import pyros.agent
-import pyros.gcc
-import pyros.pygamehelper
 
 mouseDown = False
 # lastMouseDown = False
@@ -195,23 +196,23 @@ buttons = {
 
     "-90deg select": {
         "texture": texts["-90"],
-        "rect": pygame.Rect(4, 184, getTextWidth("-90"), getTextHeight("-90")),
+        "rect": pygame.Rect(18, 184, getTextWidth("-90"), getTextHeight("-90")),
     },
     "-45deg select": {
         "texture": texts["-45"],
-        "rect": pygame.Rect(4, 244, getTextWidth("-45"), getTextHeight("-45")),
+        "rect": pygame.Rect(18, 244, getTextWidth("-45"), getTextHeight("-45")),
     },
     "0deg select": {
         "texture": texts["0"],
-        "rect": pygame.Rect(4, 304, getTextWidth("0"), getTextHeight("0")),
+        "rect": pygame.Rect(18, 304, getTextWidth("0"), getTextHeight("0")),
     },
     "45deg select": {
         "texture": texts["45"],
-        "rect": pygame.Rect(4, 364, getTextWidth("45"), getTextHeight("45")),
+        "rect": pygame.Rect(18, 364, getTextWidth("45"), getTextHeight("45")),
     },
     "90deg select": {
         "texture": texts["90"],
-        "rect": pygame.Rect(4, 424, getTextWidth("90"), getTextHeight("90")),
+        "rect": pygame.Rect(18, 424, getTextWidth("90"), getTextHeight("90")),
     },
 
     "deg -90 add": {
@@ -323,29 +324,30 @@ buttons = {
 
     "RPM next": {
         "texture": texts["+"],
-        "rect": pygame.Rect(440, 600, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(440, 608, getTextWidth("+"), getTextHeight("+")),
     },
     "RPM back": {
         "texture": texts["-"],
-        "rect": pygame.Rect(328, 600, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(328, 608, getTextWidth("-"), getTextHeight("-")),
     },
 
     "RPM next2": {
         "texture": texts["<"],
-        "rect": pygame.Rect(470, 600, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(470, 608, getTextWidth("+"), getTextHeight("+")),
     },
     "RPM back2": {
         "texture": texts[">"],
-        "rect": pygame.Rect(308, 600, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(308, 608, getTextWidth("-"), getTextHeight("-")),
     },
 
 }
 
 
 splitingRects = [
-    pygame.Rect(2, 72, 596, 56),
-    pygame.Rect(2, 130, 298, 468),
-    pygame.Rect(302, 130, 296, 468),
+    pygame.Rect(8, 72, 580, 56),
+    pygame.Rect(8, 130, 288, 468),
+    pygame.Rect(302, 130, 286, 468),
+    pygame.Rect(8, 600, 580, 56),
 ]
 
 lastButton = None
@@ -580,14 +582,13 @@ def doRPMStuff():
 
 
 def onKeyDown(key):
-    if key == pygame.K_ESCAPE:
-        sys.exit()
-    else:
-        pyros.gcc.handleConnectKeys(key)
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 wheelsList = ["fr", "fl", "br", "bl"]
 
@@ -618,8 +619,8 @@ while True:
     pyros.loop(0.03)
     pyros.agent.keepAgents()
 
-    pyros.gccui.background()
-    pyros.gcc.drawConnection()
+    pyros.gccui.background(True)
+
     #
     # if pyros.isConnected():
     #     text = normalFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
@@ -628,9 +629,9 @@ while True:
     # screen.blit(text, pygame.Rect(0, 620, 0, 0))
 
     for rect in splitingRects:
-        pygame.draw.rect(screen, (100, 100, 100), rect, 3)
+        pyros.gccui.drawFrame(rect, pyros.gccui.LIGHT_BLUE, None)
 
-    screen.blit(texts["Wheel Calibration"], (4, 74))
+    screen.blit(texts["Wheel Calibration"], (18, 74))
 
     drawButton(screen, buttons["bl select"], selectedWheel == "bl")
     drawButton(screen, buttons["br select"], selectedWheel == "br")
@@ -691,6 +692,7 @@ while True:
                 selectedDeg = "90"
                 pyros.publish("wheel/" + wheel + "/deg", "90")
 
-    drawText(screen, "Degrees:           Speed:", (4, 128), bigFont)
+    drawText(screen, "Degrees:           Speed:", (18, 128), bigFont)
 
+    pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
