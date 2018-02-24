@@ -589,7 +589,6 @@ def onKeyDown(key):
 def onKeyUp(key):
     return
 
-
 wheelsList = ["fr", "fl", "br", "bl"]
 
 pyros.subscribe("storage/values", processStorageResponse)

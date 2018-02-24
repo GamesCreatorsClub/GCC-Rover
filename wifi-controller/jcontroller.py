@@ -181,7 +181,6 @@ def drawRover():
 
     x = 80 - draw.textsize(str(sensorDistance), font)[0]
     draw.text((x, 0), str(sensorDistance), font=font, fill=1)
-
     if doOrbit:
         draw.text((96, 0), str("o"), font=font, fill=1)
     if prepareToOrbit:

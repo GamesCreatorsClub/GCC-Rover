@@ -18,8 +18,14 @@ import pyroslib as pyros
 
 DEBUG_AXES = False
 DEBUG_BUTTONS = False
-DEBUG_JOYSTICK = True
+DEBUG_JOYSTICK = False
 EXPO = 0.5
+
+global dividerR, dividerL, lastDividerR, lastDividerL
+lastDividerL = 1
+lastDividerR = 1
+dividerL = 1
+dividerR = 1
 
 # We'll store the states here.
 axis_states = {}
@@ -104,6 +110,8 @@ axis_map = []
 button_map = []
 
 # Open the joystick device.
+
+lunge_back_time = 0
 
 
 def connectToJoystick(printError):
@@ -248,10 +256,10 @@ axis_states["ry"] = 0
 
 def processButtons():
     global lastX3, lastY3, lastSelect, lastStart
-    global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY
-    global lastLButton, lastRButton
+    global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY, lastDividerL, lastDividerR
+    global lastLButton, lastRButton, dividerL, dividerR
 
-    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick
+    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost
 
     # print("Axis states: " + str(axis_states))
 
@@ -290,6 +298,16 @@ def processButtons():
 
         lbutton = button_states["lbutton"]
         rbutton = button_states["rbutton"]
+        lastDividerR = dividerR
+        if rbutton:
+            dividerR = 4
+        else:
+            dividerR = 1
+        lastDividerL = dividerL
+        if lbutton:
+            dividerL = 4
+        else:
+            dividerL = 1
 
         if y3 != lastY3:
             if y3 < 0:
@@ -332,7 +350,7 @@ def processButtons():
                 pyros.publish("sensor/distance/continuous", "start")
             else:
                 pyros.publish("sensor/distance/continuous", "stop")
-
+        lastBoost = boost
         boost = tr
 
         # kick
@@ -376,10 +394,15 @@ def processButtons():
 
 
 def calcRoverSpeed(speed):
-    if boost:
-        spd = int(speed * topSpeed * 2)
-        if spd > 300:
+    if boost or lunge_back_time > 0:
+        # spd = int(speed * topSpeed * 2)
+        # if spd > 300:
+        if speed > 0:
             spd = 300
+        elif speed < 0:
+            spd = -300
+        else:
+            spd = 0
         return spd
     else:
         return int(speed * topSpeed)
@@ -390,7 +413,6 @@ def calculateExpo(v, expoPercentage):
         return v * v * expoPercentage + v * (1.0 - expoPercentage)
     else:
         return - v * v * expoPercentage + v * (1.0 - expoPercentage)
-
 
 def calcRoverDistance(distance):
     if distance >= 0:
@@ -408,18 +430,37 @@ def calcRoverDistance(distance):
 
 
 def processJoysticks():
-    global kick, lastX1, lastY1, lastX2, lastY2, lastNoChange, lastTopSpeed
+    global kick, lastX1, lastY1, lastX2, lastY2, lastNoChange, lastTopSpeed, dividerR, dividerL, lastDividerR, lastDividerL, boost, lastBoost, lunge_back_time
+
+
 
     lx = float(axis_states["x"])
     ly = float(axis_states["y"])
 
+    tr = button_states["tr1"]
+
     rx = float(axis_states["rx"])
     ry = float(axis_states["ry"])
 
-    if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed and lastNoChange == 0:
+    if ry < 0.1 and ry > -0.1 and rx < 0.1 and rx > -0.1 and ly < 0.1 and ly > -0.1 and lx < 0.1 and lx > -0.1:
+        if boost:
+            lunge_back_time += 1
+            if lunge_back_time > 6:
+                lunge_back_time = 6
+            ry = -1
+        else:
+            if lunge_back_time > 0:
+                lunge_back_time -= 1
+                ry = 1
+    else:
+        if not ry > -0:
+            lunge_back_time = 0
+
+
+    if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed and lastNoChange == 0 and boost == lastBoost:
         pass
     else:
-        if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed:
+        if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed and dividerR == lastDividerR and dividerL == lastDividerL and boost == lastBoost:
             lastNoChange = lastNoChange - 1
         else:
             lastNoChange = 10
@@ -439,7 +480,7 @@ def processJoysticks():
             distance = calculateExpo(distance, EXPO)
 
             roverSpeed = calcRoverSpeed(distance)
-            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed)))
+            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed / dividerR)))
             if DEBUG_JOYSTICK:
                 print("Driving a:" + str(round(ra, 1)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
         elif ld > 0.1 and rd > 0.1:
@@ -452,7 +493,7 @@ def processJoysticks():
 
             roverSpeed = -calcRoverSpeed(ry)
             roverTurningDistance = calcRoverDistance(lx)
-            pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed / 2)))
+            pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed / 2 / dividerR)))
             if DEBUG_JOYSTICK:
                 print("Steering d:" + str(roverTurningDistance) + " s:" + str(roverSpeed) + " ry: " + str(ory) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
         elif ld > 0.1:
@@ -468,7 +509,7 @@ def processJoysticks():
                 olx = lx
                 lx = calculateExpo(lx, EXPO) / 2
                 roverSpeed = calcRoverSpeed(lx)
-                pyros.publish("move/rotate", int(roverSpeed))
+                pyros.publish("move/rotate", int(roverSpeed / dividerL))
                 if DEBUG_JOYSTICK:
                     print("Rotate s:" + str(roverSpeed) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
         elif kick > 0:

@@ -51,7 +51,7 @@ LB: Stick to left wall at current distance
     RS drive forward+back
     OVERRIDES OTHER MOVEMENTS!
 
-RB: Stick to left wall at current distance
+RB: Stick to rights wall at current distance
     RS left and right will adjust distance
     RS drive forward+back
     OVERRIDES OTHER MOVEMENTS!
