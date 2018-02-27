@@ -78,6 +78,7 @@ def log(source, msg):
 def doNothing():
     pass
 
+
 _currentState = doNothing
 _nextState = doNothing
 _timeout = 0
@@ -213,6 +214,7 @@ def setRotationSpeed(speed):
     # wheelSpeed("fr", -speed)
     # wheelSpeed("bl", speed)
     # wheelSpeed("br", -speed)
+
 
 def rotate():
     global gyroReadOut
