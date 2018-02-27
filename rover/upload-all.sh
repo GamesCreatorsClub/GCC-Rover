@@ -69,10 +69,10 @@ pyros $1 restart   camera
 # pyros $1 restart   accelsensor
 
 echo ""
-echo Uploading     9dofsensor
-pyros $1 upload -s 9dofsensor  mpu9250_service.py
-echo Restarting    9dofsensor
-pyros $1 restart   9dofsensor
+echo Uploading     mpu9250
+pyros $1 upload -s mpu9250  mpu9250_service.py
+echo Restarting    mpu9250
+pyros $1 restart   mpu9250
 
 # echo ""
 # echo Uploading     sonarsensor
