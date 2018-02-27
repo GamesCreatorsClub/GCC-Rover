@@ -15,6 +15,8 @@ WHITE = (255, 255, 255)
 LIGHT_BLUE = (160, 255, 255)
 GREEN = (128, 255, 128)
 RED = (255, 128, 128)
+YELLOW = (255, 255, 128)
+BLUE = (128, 128, 255)
 
 smallFont = None
 font = None

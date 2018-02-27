@@ -93,6 +93,7 @@ def addToList(ip, port, name):
             return
 
     rovers.append({"address": ip, "port": port, "name": name, "lastSeen": time.time()})
+    print("Found new rover " + str(name) + " @ " + str(ip) + ":" + str(port))
 
 
 def discover():
@@ -117,6 +118,7 @@ def discover():
                 for i in range(len(rovers) - 1, -1, -1):
                     rover = rovers[i]
                     if rover["lastSeen"] + ROVER_TIMEOUT < time.time():
+                        print("Lost connection to rover " + str(rovers[i]["name"]) + " @ " + str(rovers[i]["ip"]) + ":" + str(rovers[i]["port"]))
                         del rovers[i]
             except:
                 pass
@@ -155,16 +157,16 @@ def discover():
                     addToList(ip, port, name)
                     receivedSomething = True
 
-            print("Got " + p + "  Rovers: " + str(rovers))
+            # print("Got " + p + "  Rovers: " + str(rovers))
         except:
             pass
-
-        addToList("127.0.0,1", 1883, "Local1")
-        addToList("127.0.0,2", 1883, "Local2")
-        addToList("127.0.0,3", 1883, "Local3")
-        addToList("127.0.0,4", 1883, "Local4")
-        addToList("127.0.0,5", 1883, "Local5")
-        addToList("127.0.0,6", 1883, "Local6")
+        #
+        # addToList("127.0.0,1", 1883, "Local1")
+        # addToList("127.0.0,2", 1883, "Local2")
+        # addToList("127.0.0,3", 1883, "Local3")
+        # addToList("127.0.0,4", 1883, "Local4")
+        # addToList("127.0.0,5", 1883, "Local5")
+        # addToList("127.0.0,6", 1883, "Local6")
 
 
 if len(sys.argv) > 1:

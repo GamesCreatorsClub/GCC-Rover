@@ -74,6 +74,8 @@ localFPS = 0
 lastProcessed = time.time()
 renewContinuous = time.time()
 
+result = {}
+
 
 def connected():
     pyros.publish("camera/processed/fetch", "")
@@ -135,6 +137,15 @@ def handleCameraRaw(topic, message, groups):
 
     image = toPyImage(processedPilImage)
 
+    if "red" in result:
+        drawTarget(image, result["red"], pyros.gccui.RED, "red")
+    if "green" in result:
+        drawTarget(image, result["green"], pyros.gccui.GREEN, "green")
+    if "yellow" in result:
+        drawTarget(image, result["yellow"], pyros.gccui.YELLOW, "yellow")
+    if "blue" in result:
+        drawTarget(image, result["blue"], pyros.gccui.BLUE, "blue")
+
     rawImage = pygame.transform.scale(image, (80, 64))
     rawImageBig = pygame.transform.scale(image, (320, 256))
 
@@ -147,6 +158,7 @@ def handleCameraRaw(topic, message, groups):
 
 
 def processImage(image):
+    global result
 
     red_pixels = []
     green_pixels = []
@@ -165,25 +177,31 @@ def processImage(image):
             if isYellow(p):
                 yellow_pixels.append((x, y))
 
+    result = {}
+
     if len(red_pixels) > 20:
         centre = calculateCentre(red_pixels)
+        result["red"] = centre
 
-        drawSpot(image, centre[0], centre[1], (255, 64, 64))
+        drawSpot(image, centre[0], centre[1], (255, 64, 64), "red")
 
-    elif len(green_pixels) > 20:
+    if len(green_pixels) > 20:
         centre = calculateCentre(green_pixels)
+        result["green"] = centre
 
-        drawSpot(image, centre[0], centre[1], (64, 255, 64))
+        drawSpot(image, centre[0], centre[1], (64, 255, 64), "green")
 
-    elif len(blue_pixels) > 20:
+    if len(blue_pixels) > 20:
         centre = calculateCentre(blue_pixels)
+        result["blue"] = centre
 
-        drawSpot(image, centre[0], centre[1], (64, 64, 255))
+        drawSpot(image, centre[0], centre[1], (64, 64, 255), "blue")
 
-    elif len(yellow_pixels) > 20:
+    if len(yellow_pixels) > 20:
         centre = calculateCentre(yellow_pixels)
+        result["yellow"] = centre
 
-        drawSpot(image, centre[0], centre[1], (255, 255, 64))
+        drawSpot(image, centre[0], centre[1], (255, 255, 64), "yellow")
 
     processedImage = image
     return processedImage
@@ -224,21 +242,96 @@ def calculateCentre(pixels):
     return cx, cy
 
 
-def drawSpot(image, cx, cy, color):
-    for x in range(cx - 30, cx + 30):
-        if x >= 0 and x < 320:
-            if cy > 0:
-                image.putpixel((x, cy - 1), (255, 255, 255))
-            image.putpixel((x, cy), color)
-            if cy < 256 - 1:
-                image.putpixel((x, cy + 1), (255, 255, 255))
-    for y in range(cy - 30, cy + 30):
-        if y >= 0 and y < 256:
-            if cx > 0:
-                image.putpixel((cx - 1, y), (255, 255, 255))
-            image.putpixel((cx, y), color)
-            if cx < 320 - 1:
-                image.putpixel((cx + 1, y), (255, 255, 255))
+def drawTarget(image, centre, colour, text):
+    x = centre[0] - 20
+    if x < 0:
+        x = 0
+
+    y = centre[1] - 20
+    if y < 0:
+        y = 0
+
+    w = 80 - 1
+    h = 80 - 1
+
+    tl = 13
+    tl1 = 12
+
+    # pygame.draw.rect(image, pyros.gccui.WHITE, pygame.Rect(x + 2, y + 2, w - 2, h - 2), 1)
+
+    pygame.draw.line(image, pyros.gccui.WHITE, (x, y), (x + tl, y))
+    pygame.draw.line(image, pyros.gccui.WHITE, (x, y), (x, y + tl))
+    pygame.draw.line(image, colour, (x + 1, y + 1), (x + 1, y + tl1))
+    pygame.draw.line(image, colour, (x + 1, y + 1), (x + tl1, y + 1))
+
+    pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x + tl, y + h))
+    pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x, y + h - tl))
+    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + 1, y  + h - tl1))
+    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + tl1, y + h - 1))
+
+    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y), (x + w - tl, y))
+    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y), (x + w, y + tl))
+    pygame.draw.line(image, colour, (x + w - 1, y + 1), (x + w - 1, y + tl1))
+    pygame.draw.line(image, colour, (x + w - 1, y + 1), (x + w - tl1, y + 1))
+
+    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y + h), (x + w - tl, y + h))
+    pygame.draw.line(image, pyros.gccui.WHITE, (x + w , y + h), (x + w, y + h - tl))
+    pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - 1, y + h - tl1))
+    pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - tl1, y + h - 1))
+
+    tdist = 30
+
+    left = False
+    if x > tdist:
+        tx = x - tdist
+        lx = x - 2
+        left = True
+    elif x + w < image.get_width() - tdist:
+        tx = x + w + tdist
+        lx = x + w + 2
+    else:
+        tx = centre[0]
+        lx = centre[0]
+
+    if y > tdist:
+        ty = y - tdist
+        ly = y - 2
+    elif y + h < image.get_height() - tdist:
+        ty = y + h + tdist
+        ly = y + h + 2
+    else:
+        ty = centre[0]
+        ly = centre[0]
+
+    pyros.gccui.font.set_bold(True)
+    tw = pyros.gccui.font.size(text)[1]
+
+    pygame.draw.line(image, pyros.gccui.WHITE, (lx, ly), (tx, ty))
+    if left:
+        pygame.draw.line(image, pyros.gccui.WHITE, (tx - tw - 5, ty), (tx, ty))
+        image.blit(pyros.gccui.font.render(text, 1, colour), (tx - tw, ty - 25))
+    else:
+        pygame.draw.line(image, pyros.gccui.WHITE, (tx + tw + 5, ty), (tx, ty))
+        image.blit(pyros.gccui.font.render(text, 1, colour), (tx, ty - 25))
+    pyros.gccui.font.set_bold(False)
+
+
+def drawSpot(image, cx, cy, colour, text):
+    if False:
+        for x in range(cx - 30, cx + 30):
+            if x >= 0 and x < 320:
+                if cy > 0:
+                    image.putpixel((x, cy - 1), (255, 255, 255))
+                image.putpixel((x, cy), color)
+                if cy < 256 - 1:
+                    image.putpixel((x, cy + 1), (255, 255, 255))
+        for y in range(cy - 30, cy + 30):
+            if y >= 0 and y < 256:
+                if cx > 0:
+                    image.putpixel((cx - 1, y), (255, 255, 255))
+                image.putpixel((cx, y), color)
+                if cx < 320 - 1:
+                    image.putpixel((cx + 1, y), (255, 255, 255))
 
 
 def toggleStart():
