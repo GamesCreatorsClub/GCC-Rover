@@ -10,15 +10,14 @@ import math
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.pygamehelper
 
 SCALE = 10
 WHITE = (255, 255, 255)
 
-pygame.init()
-font = pygame.font.SysFont("arial", 24)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 600))
+screen = pyros.gccui.initAll((600, 600), True)
+font = pyros.gccui.font
 
 received = False
 
@@ -80,8 +79,8 @@ def drawRadar():
 def onKeyDown(key):
     global angle
 
-    if key == pygame.K_ESCAPE:
-        sys.exit()
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
     elif key == pygame.K_s:
         pyros.publish("sensor/distance/scan", "scan")
         print("** asked for distance")
@@ -97,11 +96,13 @@ def onKeyDown(key):
         if angle > 90:
             angle = 90
     else:
-        pyros.gcc.handleConnectKeys(key)
+        pyros.gcc.handleConnectKeyDown(key)
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
+
 
 
 angle = 0
@@ -118,17 +119,9 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
+    pyros.gccui.background(True)
 
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        text = font.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = font.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-
-    screen.blit(text, (0, 0))
-
-    screen.blit(font.render("Angle (o, p): " + str(angle), 1, WHITE), (0, 80))
+    screen.blit(font.render("Angle (o, p): " + str(angle), 1, WHITE), (10, 80))
 
     distanceStr = "---"
     if angle in distances:
@@ -137,5 +130,5 @@ while True:
 
     drawRadar()
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()

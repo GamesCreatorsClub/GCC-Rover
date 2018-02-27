@@ -10,6 +10,7 @@ import time
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
 
@@ -33,10 +34,10 @@ idealDistance = 0
 run = False
 
 driveAngle = 0
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 24)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 600))
+
+screen = pyros.gccui.initAll((600, 600), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
 
 
 def connected():
@@ -101,10 +102,11 @@ def start():
 def onKeyDown(key):
     global run, angle, speed, gain
 
-    if key == pygame.K_ESCAPE:
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
+    elif key == pygame.K_ESCAPE:
         stop()
         pyros.loop(0.7)
-        sys.exit()
     elif key == pygame.K_SPACE:
         stop()
     elif key == pygame.K_RETURN:
@@ -150,12 +152,10 @@ def onKeyDown(key):
             gain = 10
         pyros.publish("maze/gain", int(round(gain, 1)))
 
-    else:
-        pyros.gcc.handleConnectKeys(key)
-
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 pyros.subscribe("maze/data/corridor", handleDataCorridor)
@@ -174,23 +174,17 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
+    pyros.gccui.background(True)
 
-    screen.fill((0, 0, 0))
+    screen.blit(bigFont.render("Stopped: " + str(not run), 1, WHITE), pygame.Rect(10, 80, 0, 0))
 
-    if pyros.isConnected():
-        screen.blit(bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128)), (0, 0))
-    else:
-        screen.blit(bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128)), (0, 0))
-
-    screen.blit(bigFont.render("Stopped: " + str(not run), 1, WHITE), pygame.Rect(0, 80, 0, 0))
-
-    screen.blit(bigFont.render("Angle: " + str(angle), 1, WHITE), pygame.Rect(0, 120, 0, 0))
+    screen.blit(bigFont.render("Angle: " + str(angle), 1, WHITE), pygame.Rect(10, 120, 0, 0))
 
     screen.blit(bigFont.render("Speed: " + str(speed), 1, WHITE), pygame.Rect(300, 120, 0, 0))
 
-    screen.blit(bigFont.render("Dist: " + str(distanceAtAngle), 1, WHITE), pygame.Rect(0, 160, 0, 0))
+    screen.blit(bigFont.render("Dist: " + str(distanceAtAngle), 1, WHITE), pygame.Rect(10, 160, 0, 0))
 
-    screen.blit(bigFont.render("Selected: " + str(driveAngle), 1, WHITE), pygame.Rect(0, 200, 0, 0))
+    screen.blit(bigFont.render("Selected: " + str(driveAngle), 1, WHITE), pygame.Rect(10, 200, 0, 0))
 
     screen.blit(bigFont.render("Gain: " + str(round(gain, 1)), 1, WHITE), pygame.Rect(300, 200, 0, 0))
 
@@ -198,8 +192,8 @@ while True:
 
     screen.blit(bigFont.render("Ideal dist: " + str(round(idealDistance, 1)), 1, WHITE), pygame.Rect(300, 280, 0, 0))
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     if time.time() - pingLastTime > MAX_PING_TIMEOUT:
         pyros.publish("maze/ping", "")

@@ -34,7 +34,7 @@ def _thisPath(filename):
     return os.path.join(os.path.dirname(__file__), filename)
 
 
-def initAll(screenSize, loadBackground = False):
+def initAll(screenSize, loadBackground = False, title = "GCC"):
     global screen, backgroundImage, scaledBackground
     global smallFont, font, bigFont
     global SCREEN_RECT
@@ -47,11 +47,15 @@ def initAll(screenSize, loadBackground = False):
     smallFont = pygame.font.Font(fontFile, 12)
 
     screen = pygame.display.set_mode(screenSize)
+    pygame.display.set_caption(title)
+
     SCREEN_RECT = pygame.Rect(0, 0, screen.get_width(), screen.get_height())
 
     if loadBackground:
         backgroundImage = pygame.image.load(_thisPath("blue-background.png"))
         scaledBackground = pygame.transform.scale(backgroundImage, screen.get_size())
+
+    return screen
 
 
 def screenResized(size):

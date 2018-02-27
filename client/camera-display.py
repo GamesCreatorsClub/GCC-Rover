@@ -11,15 +11,13 @@ import math
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.pygamehelper
 from PIL import Image
 
-
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
-font = pygame.font.SysFont("arial", 24)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((1024, 800))
+screen = pyros.gccui.initAll((1024, 800), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
 
 cameraImage = Image.new("L", [80, 64])
 
@@ -62,7 +60,7 @@ def toPyImage2(pilImage):
     pilRGBImage.paste(pilImage)
     pyImageSmall = pygame.image.fromstring(pilRGBImage.tobytes("raw"), (80, 64), 'RGB')
     pyImageBig = pygame.transform.scale(pyImageSmall, (320, 256))
-    return (pyImageSmall, pyImageBig, pilImage)
+    return pyImageSmall, pyImageBig, pilImage
 
 
 def handleWhiteBalance(topic, message, groups):
@@ -164,7 +162,6 @@ def processImage():
 
     midAngle = (maxAngle + minAngle) / 2
 
-
     r = 30
 
     a = midAngle
@@ -212,7 +209,9 @@ def goForward():
 def onKeyDown(key):
     global continuousMode, lights, forwardSpeed, running
 
-    if key == pygame.K_ESCAPE:
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
+    elif key == pygame.K_ESCAPE:
         sys.exit()
     elif key == pygame.K_w:
         print("  fetching white balance picture...")
@@ -257,12 +256,11 @@ def onKeyDown(key):
     elif key == pygame.K_SPACE:
         pyros.publish("move/stop", "")
         running = False
-    else:
-        pyros.gcc.handleConnectKeys(key)
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 pyros.subscribeBinary("camera/whitebalance", handleWhiteBalance)
@@ -282,14 +280,8 @@ while True:
 
     pyros.loop(0.03)
 
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-
-    screen.blit(text, (0, 0))
+    pyros.loop(0.03)
+    pyros.gccui.background(True)
 
     text = font.render("Continuous : " + str(continuousMode), 1, (255, 255, 255))
     screen.blit(text, (400, 50))
@@ -309,7 +301,6 @@ while True:
     text = font.render("Turn around dist: " + str(round(turnDistance, 2)), 1, (255, 255, 255))
     screen.blit(text, (750, 110))
 
-
     screen.blit(rawImage, (10, 50))
     screen.blit(whiteBalanceImage, (110, 50))
     screen.blit(receivedProcessedImage, (210, 50))
@@ -320,8 +311,8 @@ while True:
 
     screen.blit(processedImageBig, (724, 420))
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     if continuousMode and time.time() - resubscribe > 2:
         resubscribe = time.time()

@@ -23,7 +23,7 @@ pingLastTime = 0
 
 screen_size = (1024, 800)
 
-pyros.gccui.initAll(screen_size, True)
+screen = pyros.gccui.initAll(screen_size, True)
 
 
 cameraImage = Image.new("L", [80, 64])
@@ -482,7 +482,7 @@ while True:
     #     mx = max(historyDistances[1])
     #     pyros.gccui.drawGraph((320, 50), (81, 65), historyDistances[1], mn, mx, 80, stick = 10)
 
-    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear", (8, pyros.gccui.screen.get_height() - pyros.gccui.smallFont.get_height()))
+    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 
     pyros.gccui.drawImage(rawImage, (500, 50), 10)
     pyros.gccui.drawImage(rawImageBig, (688, 50), 10)

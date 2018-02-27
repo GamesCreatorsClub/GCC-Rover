@@ -11,6 +11,7 @@ import math
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
 from PIL import Image
@@ -25,12 +26,10 @@ MAX_PING_TIMEOUT = 1
 MAX_PICTURES = 400
 pingLastTime = 0
 
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
-font = pygame.font.SysFont("arial", 24)
-smallFont = pygame.font.SysFont("arial", 16)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((1024, 800))
+screen = pyros.gccui.initAll((1024, 800), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
+smallFont = pyros.gccui.smallFont
 
 cameraImage = Image.new("L", [80, 64])
 
@@ -222,7 +221,9 @@ def onKeyDown(key):
     global lights, forwardSpeed, running, ptr, imgNo
     global processedImages, processedBigImages
 
-    if key == pygame.K_ESCAPE:
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
+    elif key == pygame.K_ESCAPE:
         sys.exit()
     elif key == pygame.K_w:
         print("  fetching white balance picture...")
@@ -273,12 +274,11 @@ def onKeyDown(key):
         toggleStart()
     elif key == pygame.K_SPACE:
         stop()
-    else:
-        pyros.gcc.handleConnectKeys(key)
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 pyros.subscribeBinary("camera/whitebalance", handleWhiteBalance)
@@ -298,13 +298,7 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
-
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        screen.blit(bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, GREEN), (0, 0))
-    else:
-        screen.blit(bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, RED), (0, 0))
+    pyros.gccui.background(True)
 
     screen.blit(font.render("Selected: " + str(ptr) + " of " + str(len(processedImages)), 1, WHITE), (400, 50))
     screen.blit(font.render("Frame time: " + str(frameTime), 1, WHITE), (400, 80))
@@ -313,8 +307,8 @@ while True:
     screen.blit(font.render("Running: " + str(running), 1, WHITE), (750, 80))
     screen.blit(font.render("Turn dist: " + str(feedback["turnDistance"]), 1, WHITE), (750, 110))
 
-    screen.blit(smallFont.render("[/]-speed, s-fetch and store wb, LEFT/RIGHT-scroll, g-one step, n-prepare", 1, WHITE), (0, 760))
-    screen.blit(smallFont.render("SPACE-stop, RETURN-start, p-processed img, w-whitebalace img, r-raw img, l-lights", 1, WHITE), (0, 780))
+    screen.blit(smallFont.render("[/]-speed, s-fetch and store wb, LEFT/RIGHT-scroll, g-one step, n-prepare", 1, WHITE), (10, 750))
+    screen.blit(smallFont.render("SPACE-stop, RETURN-start, p-processed img, w-whitebalace img, r-raw img, l-lights", 1, WHITE), (10, 770))
 
     screen.blit(rawImage, (10, 50))
     screen.blit(whiteBalanceImage, (110, 50))
@@ -336,8 +330,8 @@ while True:
         x -= 362
         i -= 1
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     now = time.time()
 

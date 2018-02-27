@@ -10,14 +10,13 @@ import time
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.agent as agent
 import pyros.pygamehelper
 
-
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 32)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 600))
+screen = pyros.gccui.initAll((600, 600), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
 
 IDLE = 0
 UP = 1
@@ -27,6 +26,7 @@ RESET = 3
 DIRECTIONS = ["IDLE", "UP", "DOWN", "RESET"]
 
 status = "Idle"
+
 
 def connected():
     pass
@@ -99,7 +99,6 @@ def driveCamera():
                 pyros.publish("servo/11", str(s1_pos))
                 s1_pos = s1_pos - 1
 
-
     elif direction == DOWN:
         status = DIRECTIONS[direction] + " s:" + str(stage) + " p:" + str(s1_pos) + " " + str(s2_pos)
         if stage == 0:
@@ -127,8 +126,8 @@ def driveCamera():
 def onKeyDown(key):
     global direction, stage
 
-    if key == pygame.K_ESCAPE:
-        sys.exit(0)
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
     elif key == pygame.K_UP:
         if direction != RESET:
             direction = UP
@@ -142,13 +141,12 @@ def onKeyDown(key):
     elif key == pygame.K_r:
         reset()
     else:
-        pyros.gcc.handleConnectKeys(key)
+        pyros.gcc.handleConnectKeyDown(key)
 
 
 def onKeyUp(key):
-    global stopped
-
-    pass
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 reset()
@@ -165,23 +163,10 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
-
-    screen.fill((0, 0, 0))
-
-    # for i in range(0, 5):
-    #     driveCamera()
-    #     time.sleep(0.005)
-
-    driveCamera()
-
-    if pyros.isConnected():
-        text = bigFont.render("R: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = bigFont.render("" + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-    screen.blit(text, (0, 0))
+    pyros.gccui.background(True)
 
     text = bigFont.render("Status: " + status, 1, (255, 255, 255))
-    screen.blit(text, (0, 40))
+    screen.blit(text, (20, 40))
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()

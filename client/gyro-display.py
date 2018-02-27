@@ -10,12 +10,12 @@ import time
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.pygamehelper
 
-pygame.init()
-bigFont = pygame.font.SysFont("arial", 18)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 600))
+screen = pyros.gccui.initAll((600, 600), True)
+bigFont = pyros.gccui.bigFont
+
 arrow_image = pygame.image.load("arrow.png")
 
 
@@ -34,14 +34,13 @@ def handleGyroData(topic, message, groups):
 
 
 def onKeyDown(key):
-    if key == pygame.K_ESCAPE:
-        sys.exit()
-    else:
-        pyros.gcc.handleConnectKeys(key)
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 pyros.subscribe("sensor/gyro", handleGyroData)
@@ -60,15 +59,7 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
-
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-
-    screen.blit(text, (0, 0))
+    pyros.gccui.background(True)
 
     loc = arrow_image.get_rect().center
     rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
@@ -76,8 +67,8 @@ while True:
 
     screen.blit(rot_arrow_image, (150, 150))
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     if time.time() - resubscribe > 2:
         resubscribe = time.time()

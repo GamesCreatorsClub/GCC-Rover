@@ -10,6 +10,7 @@ import time
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.pygamehelper
 
 CALIBRATION_TIME = 1
@@ -21,11 +22,10 @@ VEL_ZOOM = 10.0
 
 MAX_DATA_SIZE = 100000
 
-pygame.init()
-font = pygame.font.SysFont("arial", 18)
-bigFont = pygame.font.SysFont("arial", 24)
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((800, 800))
+screen = pyros.gccui.initAll((800, 800), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
+
 arrow_image = pygame.image.load("arrow.png")
 
 calibrationStarted = None
@@ -138,24 +138,25 @@ def startCalibration():
 
 
 def onKeyDown(key):
-    if key == pygame.K_ESCAPE:
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
+    elif key == pygame.K_ESCAPE:
         sys.exit()
     elif key == pygame.K_r:
         resetAll()
     elif key == pygame.K_c:
         startCalibration()
-    else:
-        pyros.gcc.handleConnectKeys(key)
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
 def drawAxle(txt, axle, y, colour):
-    x = 0
+    x = 20
     t = bigFont.render(txt + " vel: ", 1, colour)
-    screen.blit(t, (0, y))
+    screen.blit(t, (x, y))
     x += t.get_width()
 
     t = bigFont.render(str(round(axle["vel"], 2)), 1, colour)
@@ -184,7 +185,7 @@ def drawAxle(txt, axle, y, colour):
         t = bigFont.render("calibrating", 1, colour)
         screen.blit(t, (x, y))
 
-    return y + text.get_height()
+    return y + 30
 
 
 def drawPos(x, y, w):
@@ -215,7 +216,7 @@ def drawGraph(axle, colour, x, y, w, h, velocity):
     y += 2
     w -= 4
     h -= 4
-    if  velocity:
+    if velocity:
         data = axle["datav"]
         dyz = axle["dyzv"]
     else:
@@ -269,20 +270,9 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
+    pyros.gccui.background(True)
 
-    screen.fill((0, 0, 0))
-
-    cy = 0
-
-    if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-    screen.blit(text, (0, 0))
-    cy += text.get_height() + 2
-    pygame.draw.line(screen, (255, 255, 255), (0, cy), (800, cy), 2)
-    cy += 6
-
+    cy = 50
     cy = drawAxle("X", accelX, cy, X_COLOUR)
     cy += 4
 
@@ -309,8 +299,8 @@ while True:
     drawVel(accelY, Y_COLOUR, 290, cy, 60, 200)
     cy = cy + 210
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     if time.time() - resubscribe > 2:
         resubscribe = time.time()

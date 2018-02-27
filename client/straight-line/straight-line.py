@@ -10,6 +10,7 @@ import pygame
 import time
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
 
@@ -24,12 +25,11 @@ P_GAIN = 0.70
 I_GAIN = 0.30
 D_GAIN = 0.00
 
-pygame.init()
-bigFont = pygame.font.SysFont("apple casual", 32)
+screen = pyros.gccui.initAll((600, 600), True)
+font = pyros.gccui.font
+bigFont = pyros.gccui.bigFont
 veryBigFont = pygame.font.SysFont("apple casual", 300)
 
-frameclock = pygame.time.Clock()
-screen = pygame.display.set_mode((600, 600))
 arrow_image = pygame.image.load("arrow.png")
 
 pingLastTime = 0
@@ -65,11 +65,12 @@ def updateGain():
 def onKeyDown(key):
     global shift, steerGain, pGain, iGain, dGain
 
-    if key == pygame.K_ESCAPE:
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
+    elif key == pygame.K_ESCAPE:
         pyros.publish("straight", "stop")
         pyros.loop(0.7)
         print("Leaving")
-        sys.exit(0)
     elif key == pygame.K_RETURN:
         pyros.publish("straight", "forward")
         print("Started")
@@ -115,17 +116,17 @@ def onKeyDown(key):
         updateGain()
 
     else:
-        pyros.gcc.handleConnectKeys(key)
+        pyros.gcc.handleConnectKeyDown(key)
     return
 
 
 def onKeyUp(key):
     global shift
 
-    if key == pygame.KMOD_SHIFT:
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
+    elif key == pygame.KMOD_SHIFT:
         shift = False
-
-    return
 
 
 t = 0
@@ -148,27 +149,19 @@ while True:
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
-
-    screen.fill((0, 0, 0))
-
-    if pyros.isConnected():
-        text = bigFont.render("Connected to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (128, 255, 128))
-    else:
-        text = bigFont.render("Connecting to rover: " + pyros.gcc.getSelectedRoverDetailsText(), 1, (255, 128, 128))
-
-    screen.blit(text, (0, 0))
+    pyros.gccui.background(True)
 
     text = bigFont.render("Steer Gain: " + str(round(steerGain, 1)), 1, (255, 128, 128))
-    screen.blit(text, (0, 20))
+    screen.blit(text, (10, 30))
 
     text = bigFont.render("p: " + str(round(pGain, 1)), 1, (255, 128, 128))
-    screen.blit(text, (200, 20))
+    screen.blit(text, (200, 30))
 
     text = bigFont.render("i: " + str(round(iGain, 1)), 1, (255, 128, 128))
-    screen.blit(text, (300, 20))
+    screen.blit(text, (300, 30))
 
     text = bigFont.render("d: " + str(round(dGain, 1)), 1, (255, 128, 128))
-    screen.blit(text, (400, 20))
+    screen.blit(text, (400, 30))
 
     text = bigFont.render("Esc: exit    Enter: start    Space: stop", 1, (255, 255, 255))
     screen.blit(text, (20, 540))
@@ -179,8 +172,8 @@ while True:
 
     screen.blit(rot_arrow_image, (150, 150))
 
-    pygame.display.flip()
-    frameclock.tick(30)
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
 
     if time.time() - pingLastTime > MAX_PING_TIMEOUT:
         pyros.publish("straight/ping", "")

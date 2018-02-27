@@ -9,6 +9,7 @@ import sys
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.pygamehelper
 
 
@@ -88,8 +89,9 @@ def init():
     global wheelfr, wheelfl, wheelbr, wheelbl
     global frameclock, selected, address
 
-    pygame.init()
-    pygame.font.init()
+    screen = pyros.gccui.initAll((1024, 768), True)
+    font = pyros.gccui.font
+    bigFont = pyros.gccui.bigFont
 
     pygame.display.set_caption("GCC Robot Controller")
 
@@ -98,10 +100,6 @@ def init():
     pyros.init("instrument-display-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
     # last_keys = pygame.key.get_pressed()
-
-    screen = pygame.display.set_mode((1024, 768))
-
-    frameclock = pygame.time.Clock()
 
     pygame.display.set_caption("Robot Gui")
     
@@ -171,7 +169,7 @@ def drawScreen():
     wheel4 = rotate(wheelfl, 90 + float(wheelsMap["bl"]["deg"]))
     screen.blit(wheel4, pos4)
     
-    Text("Radar", 30, (0, 0), "#ffffff")
+    Text("Radar", 30, (0, 30), "#ffffff")
     Text("Radar", 30, (1024 / 2, 0), "#ffffff")
 
     degColour = "#58ccde"
@@ -195,27 +193,22 @@ def drawScreen():
     Text("BL:" + str(speed3), 20, (512, 768 / 2 + 150), speedColour)
     Text("BR:" + str(speed4), 20, (512 + 80, 768 / 2 + 150), speedColour)
 
-    Text("Robot " + pyros.gcc.getSelectedRoverDetailsText(), 50, (1024 / 4 * 2.7, 700), "White")
-    
     pygame.display.flip()
 
 
 def onKeyDown(key):
-    if key == pygame.K_ESCAPE:
-        sys.exit()
-    else:
-        pyros.gcc.handleConnectKeys(key)
+    if pyros.gcc.handleConnectKeyDown(key):
+        pass
 
 
 def onKeyUp(key):
-    return
+    if pyros.gcc.handleConnectKeyUp(key):
+        pass
 
 
-def mainloop():
-    global mousePos, gotoAng, gotoRPM, emStop, frameclock
-    global screen, selected
+init()
 
-    frameclock.tick(30)
+while True:
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -225,17 +218,11 @@ def mainloop():
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
-
-    screen.fill((200, 200, 200))
+    pyros.gccui.background(True)
 
     mousePos = pygame.mouse.get_pos()
-    
+
     drawScreen()
 
-
-init()
-
-while True:
-    mainloop()
-
-# pygame.quit()  # Unreachable
+    pyros.gcc.drawConnection()
+    pyros.gccui.frameEnd()
