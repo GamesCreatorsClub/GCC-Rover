@@ -21,6 +21,38 @@ import pyros
 import pyros.gcc
 import threading
 
+
+rovers = {
+    "2": {
+        "address": "172.24.1.184",
+        "port": 1883
+    },
+    "3": {
+        "address": "172.24.1.185",
+        "port": 1883
+    },
+    "4": {
+        "address": "172.24.1.186",
+        "port": 1883
+    }
+}
+
+selectedRover = "2"
+
+
+def getHost():
+    return rovers[selectedRover]["address"]
+
+
+def getPort():
+    return rovers[selectedRover]["port"]
+
+
+def connect():
+    pyros.connect(rovers[selectedRover]["address"], rovers[selectedRover]["port"], waitToConnect=False)
+
+
+
 javaProcess = None
 textStream = None
 

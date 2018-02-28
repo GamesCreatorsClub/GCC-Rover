@@ -259,13 +259,22 @@ axis_states["y"] = 0
 axis_states["rx"] = 0
 axis_states["ry"] = 0
 
+lastBoost = False
+
+balLocked = False
+
+def moveServo(servoid, angle):
+    # TODO move this out to separate service
+    f = open("/dev/servoblaster", 'w')
+    f.write(str(servoid) + "=" + str(angle) + "\n")
+    f.close()
 
 def processButtons():
     global lastX3, lastY3, lastSelect, lastStart
     global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY, lastDividerL, lastDividerR
     global lastLButton, lastRButton, dividerL, dividerR
 
-    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost
+    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked
 
     # print("Axis states: " + str(axis_states))
 
@@ -289,7 +298,6 @@ def processButtons():
             x3 = -1
         if lright:
             x3 = 1
-
         tl = button_states["tl1"]
         tl2 = button_states["tl2"]
         tr = button_states["tr1"]
@@ -360,17 +368,33 @@ def processButtons():
         boost = tr
 
         # kick
-        # if lastTR2 != tr2:
-        #     if tr2:
-        #         pyros.publish("servo/9", "90")
-        #     else:
-        #         pyros.publish("servo/9", "165")
-        #
-        # if bx and bx != lastBX:
-        #     kick = 1
-        #     # pyros.publish("move/drive", "0 300")
-        #     # pyros.sleep(1)
-        #     # pyros.publish("move/drive", "0 0")
+
+        if lastTR2 != tr2:
+            if tr2:
+                pyros.publish("servo/1", "90")
+            else:
+                pyros.publish("servo/1", "165")
+
+        # golf
+        if bb:
+            balLocked = True
+
+        if balLocked:
+            moveServo(8, 220)
+
+        if tl:
+            moveServo(8, 100    )
+            balLocked = False
+        else:
+            if not balLocked:
+                moveServo(8, 150)
+
+
+        if bx and bx != lastBX:
+            kick = 1
+            # pyros.publish("move/drive", "0 300")
+            # pyros.sleep(1)
+            # pyros.publish("move/drive", "0 0")
 
         lastX3 = x3
         lastY3 = y3
@@ -442,7 +466,6 @@ def processJoysticks():
     lx = float(axis_states["x"])
     ly = float(axis_states["y"])
 
-    tr = button_states["tr1"]
 
     rx = float(axis_states["rx"])
     ry = float(axis_states["ry"])
