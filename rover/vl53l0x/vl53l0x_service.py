@@ -331,12 +331,15 @@ def handleRead(topic, payload, groups):
                     message = message + ","
                 message = message + str(round(angle - 90.0, 1)) + ":" + str(int(distance2))
 
+            message = message + ",timestamp:" + str(time.time())
+
             pyroslib.publish("sensor/distance", message)
 
     else:
         if distance > 0:
             pyroslib.publish("sensor/distance", str(round(angle, 1)) + ":" + str(int(distance)))
-        elsew(DEBUG_LEVEL_INFO, "handleRead", "Failed reading - got " + str(distance))
+        else:
+            log(DEBUG_LEVEL_INFO, "handleRead", "Failed reading - got " + str(distance))
 
 
 def handleScan(topic, payload, groups):
@@ -462,6 +465,8 @@ def loop():
                     if distance1 > 0:
                         message = message + ","
                     message = message + str(round(lastServoAngle - 90.0, 1)) + ":" + str(int(distance2))
+
+                message = message + ",timestamp:" + str(time.time())
 
                 pyroslib.publish("sensor/distance", message)
         else:
