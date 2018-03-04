@@ -37,6 +37,7 @@ selectedSpeed = "0"
 selectedRPM = 240
 
 initialisationDone = False
+stopped = False
 
 
 def connected():
@@ -88,10 +89,11 @@ def initWheel(wheelName, motorServo, steerServo):
             "servo": steerServo,
             "90": "70",
             "0": "160",
-            "-90": "230"
+            "-90": "230",
+            "servo": str(steerServo)
         },
         "speed": {
-            "servo": motorServo,
+            "servo": str(motorServo),
             "-300": "95",
             "-240": "107",
             "-0": "155",
@@ -112,6 +114,7 @@ def initWheel(wheelName, motorServo, steerServo):
 
     if "servo" not in wheelMap[wheelName]["deg"]:
         wheelMap[wheelName]["deg"]["servo"] = defaultWheelCal["deg"]["servo"]
+
     if "90" not in wheelMap[wheelName]["deg"]:
         wheelMap[wheelName]["deg"]["90"] = defaultWheelCal["deg"]["90"]
     if "0" not in wheelMap[wheelName]["deg"]:
@@ -160,7 +163,10 @@ texts = {
     "-": bigFont.render("  -  ", True, (0, 255, 0)),
     ">": bigFont.render("  <  ", True, (0, 255, 0)),
     "<": bigFont.render("  >  ", True, (0, 255, 0)),
-    "SWP": bigFont.render("SWP", True, (0, 255, 0)),
+    "SWP": bigFont.render("swp", True, (0, 255, 0)),
+    "Run": bigFont.render(" Run ", True, (0, 255, 0)),
+    "Stop": bigFont.render(" Stop ", True, (0, 255, 0)),
+    "Fix servos": bigFont.render(" Fix servos ", True, (0, 255, 0)),
 }
 
 
@@ -340,6 +346,20 @@ buttons = {
         "rect": pygame.Rect(308, 608, getTextWidth("-"), getTextHeight("-")),
     },
 
+    "Stop": {
+        "texture": texts["Stop"],
+        "rect": pygame.Rect(410, 20, getTextWidth("Stop"), getTextHeight("Stop")),
+    },
+
+    "Run": {
+        "texture": texts["Run"],
+        "rect": pygame.Rect(350, 20, getTextWidth("Run"), getTextHeight("Run")),
+    },
+
+    "Fix servos": {
+        "texture": texts["Fix servos"],
+        "rect": pygame.Rect(480, 20, getTextWidth("Fix servos"), getTextHeight("Fix servos")),
+    },
 }
 
 
@@ -384,6 +404,41 @@ def drawText(surface, t, position, font):
     surface.blit(font.render(t, True, (0, 255, 0)), position)
 
 
+def doStopStuff():
+    global stopped
+
+    def fixServos(wheelName, motorServo, steerServo):
+        wheelMap[wheelName]["deg"]["servo"] = steerServo
+        wheelMap[wheelName]["speed"]["servo"] = motorServo
+
+        pyros.publish("storage/write/wheels/cal/" + wheelName + "/deg/servo", str(wheelMap[wheelName]["deg"]["servo"]))
+        pyros.publish("storage/write/wheels/cal/" + wheelName + "/speed/servo", str(wheelMap[wheelName]["speed"]["servo"]))
+
+    stopButton = buttons["Stop"]
+    stopDown = buttonPressed(stopButton, mousePos, mouseDown)
+    drawButton(screen, stopButton, stopped)
+
+    runButton = buttons["Run"]
+    runDown = buttonPressed(runButton, mousePos, mouseDown)
+    drawButton(screen, runButton, not stopped)
+
+    if stopDown:
+        stopped = True
+    if runDown:
+        stopped = False
+
+    fixServosButton = buttons["Fix servos"]
+    fixServosDown = buttonPressed(fixServosButton, mousePos, mouseDown)
+    drawButton(screen, fixServosButton, fixServosDown)
+
+    if fixServosDown:
+        fixServos("fr", 0, 1)
+        fixServos("fl", 2, 3)
+        fixServos("br", 4, 5)
+        fixServos("bl", 6, 7)
+
+
+
 def doCalStuff():
     global buttons
     global selectedDeg
@@ -411,6 +466,12 @@ def doCalStuff():
     degSwap = buttons["deg swap"]
     degSwapDown = buttonPressed(degSwap, mousePos, mouseDown)
     drawButton(screen, degSwap, degSwapDown)
+
+    if selectedWheel != "all" and degSwapDown:
+        print("Swap pressed")
+        degTemp = wheelMap[selectedWheel]["deg"]["-90"]
+        wheelMap[selectedWheel]["deg"]["-90"] = wheelMap[selectedWheel]["deg"]["90"]
+        wheelMap[selectedWheel]["deg"]["90"] = degTemp
 
     speedSwap = buttons["speed swap"]
     speedSwapDown = buttonPressed(speedSwap, mousePos, mouseDown)
@@ -598,11 +659,12 @@ pyros.init("drive-controller-#", unique=True, onConnected=connected, host=pyros.
 
 while True:
     lastMouseDown = mouseDown
-    if selectedWheel == "all":
-        for wheel in wheelsList:
-            pyros.publish("wheel/" + wheel + "/speed", selectedSpeed)
-    else:
-        pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
+    if not stopped:
+        if selectedWheel == "all":
+            for wheel in wheelsList:
+                pyros.publish("wheel/" + wheel + "/speed", selectedSpeed)
+        else:
+            pyros.publish("wheel/" + selectedWheel + "/speed", selectedSpeed)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -657,6 +719,7 @@ while True:
         doCalStuff()
     doSpeedStettingstuff()
     doRPMStuff()
+    doStopStuff()
 
     # if mouseDown and not lastMouseDown:
     if mouseDown:
