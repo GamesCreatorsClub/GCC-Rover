@@ -222,7 +222,7 @@ def handleConnectKeyDown(key):
         lshift = True
     elif key == pygame.K_RSHIFT:
         rshift = True
-    elif key == pygame.K_q:
+    elif lmeta and key == pygame.K_q:
         sys.exit(0)
 
     if key == pygame.K_1 and (lmeta or rmeta):
@@ -249,6 +249,8 @@ def handleConnectKeyDown(key):
         showRovers = False
     elif showRovers and key == pygame.K_ESCAPE:
         showRovers = False
+    elif key == pygame.K_F5:
+        connect()
 
     return showRovers
 
