@@ -25,6 +25,7 @@ import storagelib
 DEBUG_SPEED = False
 DEBUG_SPEED_VERBOSE = False
 DEBUG_TURN = False
+DEBUG_SERVO = False
 
 PWM = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -63,6 +64,29 @@ pwmIndex = 0
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
+
+servoBlasterFile = None
+
+
+def moveServo(servoid, angle):
+    global servoBlasterFile
+
+    angle = int(angle)
+
+    # TODO move this out to separate service
+    servoLine = str(servoid) + "=" + str(angle)
+    if DEBUG_SERVO:
+        print("ServoBlaser <- " + servoLine)
+    try:
+        servoBlasterFile.write(servoLine + "\n")
+        servoBlasterFile.flush()
+    except:
+        try:
+            servoBlasterFile.close()
+        except:
+            pass
+
+        servoBlasterFile = open("/dev/servoblaster", 'w')
 
 
 def initWheel(wheelName, motorServo, steerServo):
@@ -115,13 +139,6 @@ def loadStorage():
     print("  Storage details loaded.")
 
 
-def moveServo(servoid, angle):
-    # TODO move this out to separate service
-    f = open("/dev/servoblaster", 'w')
-    f.write(str(servoid) + "=" + str(angle) + "\n")
-    f.close()
-
-
 def handleServo(servoid, angle=0):
     wheelMap["servos"][str(servoid)] = angle
     moveServo(servoid, angle)
@@ -166,12 +183,12 @@ def handleSpeed(wheel, wheelCal, speedStr):
                     if speed <= 240:
                         servoPosition = interpolate(speed / 300, wheelCal["0"], wheelCal["240"])
                     else:
-                        servoPosition = interpolate((speed - 240) / 300, wheelCal["240"], wheelCal["300"])
+                        servoPosition = interpolate((speed - 240) / 60, wheelCal["240"], wheelCal["300"])
                 else:
                     if speed >= -240:
                         servoPosition = interpolate(-speed / 300, wheelCal["-0"], wheelCal["-240"])
                     else:
-                        servoPosition = interpolate((-speed - 240) / 300, wheelCal["-240"], wheelCal["-300"])
+                        servoPosition = interpolate((-speed - 240) / 60, wheelCal["-240"], wheelCal["-300"])
 
         else:
             if speedStr == "-0":
@@ -203,6 +220,9 @@ def handleSpeed(wheel, wheelCal, speedStr):
 
     if speedStr == "0" or speedStr == "-0":
         moveServo(servoNumber, servoPosition)
+        wheel["speedServoPos"] = servoPosition
+    else:
+        wheel["speedServoPos"] = servoPosition
 
 
 def interpolate(value, zerostr, maxstr):
@@ -311,16 +331,19 @@ def wheelsCombined(topic, payload, groups):
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
-
+        print("    initialising wheels...")
         initWheels()
+        print("    opening servo blaster file...")
+        servoBlasterFile = open("/dev/servoblaster", 'w')
 
+        print("    sbscribing to topics...")
         pyroslib.subscribe("servo/+", servoTopic)
         pyroslib.subscribe("wheel/all", wheelsCombined)
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
         pyroslib.init("wheels-service")
 
-        print("  Loading storage details")
+        print("  Loading storage details...")
         loadStorage()
 
         print("Started wheels service.")
