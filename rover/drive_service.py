@@ -12,6 +12,7 @@ import pyroslib
 import math
 
 DEBUG = False
+DEBUG_TIMING = True
 
 WHEEL_CIRCUMFERENCE = 15  # 15mm
 
@@ -546,6 +547,8 @@ def drive():
             angle -= 180
             speed = -speed
 
+        if DEBUG_TIMING:
+            print(str(int(time.time() * 1000) % 10000000) + ": driving  fld:" + str(angle) + " frd:" + str(angle) + " bld:" + str(angle) + " brd:" + str(angle) + " fls:" + str(speed) + " frs:" + str(speed) + " bls:" + str(speed) + " brs:" + str(speed))
         allWheels(angle, angle, angle, angle, speed, speed, speed, speed)
         # wheelDeg("fl", angle)
         # wheelDeg("fr", angle)

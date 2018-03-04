@@ -7,6 +7,7 @@
 #
 
 import traceback
+import time
 import re
 import copy
 import pyroslib
@@ -22,7 +23,8 @@ import storagelib
 #     - storage map
 #
 
-DEBUG_SPEED = False
+DEBUG = False
+DEBUG_SPEED = True
 DEBUG_SPEED_VERBOSE = False
 DEBUG_TURN = False
 DEBUG_SERVO = False
@@ -85,7 +87,8 @@ def moveServo(servoid, angle):
             servoBlasterFile.close()
         except:
             pass
-
+        if DEBUG:
+            print("Lost connection to /dev/servoblaster - reopening")
         servoBlasterFile = open("/dev/servoblaster", 'w')
 
 
@@ -311,6 +314,9 @@ def wheelSpeedTopic(topic, payload, groups):
 
 
 def wheelsCombined(topic, payload, groups):
+    if DEBUG_SPEED:
+        print(str(int(time.time() * 1000) % 10000000) + ": wheels " + payload)
+
     wheelCmds = payload.split(" ")
     for wheelCmd in wheelCmds:
         kv = wheelCmd.split(":")
