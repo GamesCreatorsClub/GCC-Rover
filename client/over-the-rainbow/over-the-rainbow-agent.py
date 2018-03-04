@@ -5,8 +5,8 @@
 # MIT License
 #
 
+import math
 import time
-import threading
 import traceback
 
 import pyroslib
@@ -20,18 +20,27 @@ nextTime = time.time()
 state = False
 
 
-FORWARD_SPEED = 25
+FORWARD_SPEED = 30
+MINIMUM_FORWARD_SPEED = 10
 TURN_SPEED = 50
 ROTATE_SPEED = 50
 
+SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
+SPEEDS_ROVER_4 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
+SPEEDS = [-20, -20, -20, -15, -12, -12, 12, 14, 16, 20, 25, 30, 30]
+SPEEDS_OFFSET = 6
+
 DISTANCE_AVG_TIME = 0.5
 
+distanceTimestamp = 0
 distanceDeg1 = -1
 distanceDeg2 = -1
 distance1 = -1
 distance2 = -1
 avgDistance1 = -1
 avgDistance2 = -1
+deltaDistance1 = -1
+deltaDistance2 = -1
 
 historyDistancesDeg1 = -1
 historyDistancesDeg2 = -1
@@ -47,8 +56,6 @@ readingGyroContinuous = True
 renewContinuous = time.time()
 digestTime = time.time()
 
-algorithm = None
-
 
 def setAlgorithm(alg):
     global algorithm
@@ -61,7 +68,7 @@ def connected():
 
 def handleDistances(topic, message, groups):
     global historyDistancesDeg1, historyDistancesDeg2, historyDistances1, historyDistances2, historyDistanceTimes1, historyDistanceTimes2
-    global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2
+    global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2, distanceTimestamp, deltaDistance1, deltaDistance2
 
     n = time.time()
 
@@ -74,17 +81,20 @@ def handleDistances(topic, message, groups):
     i = 0
     for s in split:
         kv = s.split(":")
-        deg = int(float(kv[0]))
-        val = int(float(kv[1]))
+        if kv[0] == "timestamp":
+            distanceTimestamp = float(kv[1])
+        else:
+            deg = int(float(kv[0]))
+            val = int(float(kv[1]))
 
-        if i == 0:
-            deg1 = deg
-            val1 = val
-        elif i == 1:
-            deg2 = deg
-            val2 = val
+            if i == 0:
+                deg1 = deg
+                val1 = val
+            elif i == 1:
+                deg2 = deg
+                val2 = val
 
-        i += 1
+            i += 1
 
     distanceDeg1 = deg1
     distance1 = val1
@@ -128,12 +138,22 @@ def handleDistances(topic, message, groups):
     if len(historyDistances1) > 0:
         avgDistance1 = sum(historyDistances1) / len(historyDistances1)
     else:
-        avgDistance1 = -1
+        avgDistance1 = 0
 
     if len(historyDistances2) > 0:
         avgDistance2 = sum(historyDistances2) / len(historyDistances2)
     else:
-        avgDistance2 = -1
+        avgDistance2 = 0
+
+    if len(historyDistances1) > 1:
+        deltaDistance1 = distance1 - historyDistances1[len(historyDistances1) - 2]
+    else:
+        deltaDistance1 = 0
+
+    if len(historyDistances2) > 1:
+        deltaDistance2 = distance2 - historyDistances2[len(historyDistances2) - 2]
+    else:
+        deltaDistance2 = 0
 
 
 def handleGyroData(topic, message, groups):
@@ -177,16 +197,16 @@ def handleOverTheRainbow(topic, message, groups):
         setAlgorithm(algorithm10Start)
 
 
-def drive(angle=0):
-    pyroslib.publish("move/drive", str(angle) + " " + str(FORWARD_SPEED))
+def drive(angle=0, speed=FORWARD_SPEED):
+    pyroslib.publish("move/drive", str(angle) + " " + str(speed))
 
 
-def driveForward():
-    pyroslib.publish("move/drive", "0 " + str(FORWARD_SPEED))
+def driveForward(speed=FORWARD_SPEED):
+    pyroslib.publish("move/drive", "0 " + str(speed))
 
 
-def driveBack():
-    pyroslib.publish("move/drive", "0 " + str(-FORWARD_SPEED))
+def driveBack(speed=FORWARD_SPEED):
+    pyroslib.publish("move/drive", "0 " + str(-speed))
 
 
 def rotateLeft():
@@ -213,39 +233,76 @@ def stop():
     print("Stopped!")
 
 
+countDown = 0
+drive_speed = 0
+
+
+def log(msg):
+    tnow = time.time()
+    deltaTime = str((tnow - distanceTimestamp) * 1000) + "ms"
+    print(str(str(int(tnow * 1000) % 10000000)) + ": D:" + deltaTime + " 1:" + str(distance1) + " 2:" + str(distance2) + " d1:" + str(deltaDistance1) + " d2:" + str(deltaDistance2) + " " + msg)
+
+
 def algorithm1Start():
-    print("started algorithm 1...")
+    global drive_speed
+    log("started algorithm 1...")
+    drive_speed = FORWARD_SPEED
     setAlgorithm(algorithm1Loop)
 
 
-lastDrive = ""
-
 def algorithm1Loop():
-    global lastDrive
+    global countDown, drive_speed
     # go to the corner
-    stopAt = 120
-    if avgDistance1 < stopAt and avgDistance2 < stopAt:
-        stopDriving()
-        setAlgorithm(stop)
-        return
-    elif abs(distance1 - distance2) > 30:
-        if lastDrive != "30" and distance1 > distance2:
-            drive(30)
-            lastDrive = "30"
-        elif lastDrive != "-30" and distance2 > distance1:
-            drive(-30)
-            drive(30)
-            lastDrive = "-30"
+    stopAt = 130
+    slowAt = 180
+    if avgDistance1 + deltaDistance1 * 4 < slowAt or avgDistance2 + deltaDistance2 * 4 < slowAt:
+        drive_speed = MINIMUM_FORWARD_SPEED
+        log("Slowing down")
     else:
-        if lastDrive != "0":
-            driveForward()
-            lastDrive = "0"
-    pass
+        drive_speed = FORWARD_SPEED
+        log("Speeding up")
+
+    if distance1 + deltaDistance1 * 4 < stopAt and distance2 + deltaDistance2 * 4 < stopAt:
+        log("Need to brake")
+        countDown = 15
+        setAlgorithm(brake)
+        return
+    elif abs(distance1 - distance2) > 10:
+        if distance1 > distance2:
+            log("Left")
+            drive(30, drive_speed)
+        else:
+            log("Right")
+            drive(-30, drive_speed)
+        # if lastDrive != "30" and distance1 > distance2:
+        #     drive(30)
+        #     lastDrive = "30"
+        # elif lastDrive != "-30" and distance2 > distance1:
+        #     drive(-30)
+        #     lastDrive = "-30"
+    else:
+        log("Forward")
+        driveForward(drive_speed)
+
+
+def brake():
+    global countDown
+
+    countDown -= 1
+
+    if countDown < -50:
+        setAlgorithm(stop)
+    elif countDown < 0:
+        stopDriving()
+        log("Stopped for " + str(countDown))
+    else:
+        log("Breaking for " + str(countDown))
+        driveBack(50)
 
 
 def algorithm2Start():
     print("started algorithm 2...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm2Loop)
 
 
 def algorithm2Loop():
@@ -254,7 +311,7 @@ def algorithm2Loop():
 
 def algorithm3Start():
     print("started algorithm 3...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm3Loop)
 
 
 def algorithm3Loop():
@@ -263,7 +320,7 @@ def algorithm3Loop():
 
 def algorithm4Start():
     print("started algorithm 4...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm4Loop)
 
 
 def algorithm4Loop():
@@ -272,7 +329,7 @@ def algorithm4Loop():
 
 def algorithm5Start():
     print("started algorithm 5...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm5Loop)
 
 
 def algorithm5Loop():
@@ -281,7 +338,7 @@ def algorithm5Loop():
 
 def algorithm6Start():
     print("started algorithm 6...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm6Loop)
 
 
 def algorithm6Loop():
@@ -290,7 +347,7 @@ def algorithm6Loop():
 
 def algorithm7Start():
     print("started algorithm 7...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm7Loop)
 
 
 def algorithm7Loop():
@@ -299,29 +356,87 @@ def algorithm7Loop():
 
 def algorithm8Start():
     print("started algorithm 8...")
-    setAlgorithm(algorithm1Loop)
+    setAlgorithm(algorithm8Loop)
 
 
 def algorithm8Loop():
     pass
 
 
+KP = 0.8
+KI = 0.0
+KD = 0.2
+KC = 2
+KA = 20
+STOP_DISTANCE = 120
+
+previous_error = 0
+integral = 0
+
+
 def algorithm9Start():
+    global drive_speed
+
     print("started algorithm 9...")
-    setAlgorithm(algorithm1Loop)
+    pyroslib.publish("sensor/distance/deg", "45")
+    drive_speed = FORWARD_SPEED
+    setAlgorithm(algorithm9Loop)
 
 
 def algorithm9Loop():
-    pass
+    global countDown, drive_speed
+
+    distanceControl = STOP_DISTANCE * KC
+
+    def sign(x):
+        if x > 0:
+            return 1
+        elif x < 0:
+            return -1
+        else:
+            return 0
+
+    if distance1 + distance2 < STOP_DISTANCE * 2:
+        stop()
+        setAlgorithm(stop)
+    else:
+
+        if abs(distance1 - distance2) > 1 and distance1 < 380 and distance2 < 380:
+            angle = int(math.log10(abs(distance1 - distance2)) * KA) * sign(distance1 - distance2)
+        else:
+            angle = 0
+
+        if distance1 > distance2:
+            output = distance1 * KP + deltaDistance1 * KD
+        else:
+            output = distance2 * KP + deltaDistance2 * KD
+
+        if output > distanceControl:
+            output = distanceControl
+        if output < -distanceControl:
+            output = -distanceControl
+
+        output = output / distanceControl
+
+        speedIndex = int(output * SPEEDS_OFFSET * 2)
+        speed = SPEEDS[speedIndex]
+        log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
+        drive(angle, speed)
 
 
 def algorithm10Start():
+    global countDown
     print("started algorithm 10...")
-    setAlgorithm(algorithm1Loop)
+    countDown = 50
+    driveBack(FORWARD_SPEED)
+    setAlgorithm(algorithm10Loop)
 
 
 def algorithm10Loop():
-    pass
+    global countDown
+    countDown -= 1
+    if countDown <= 0:
+        setAlgorithm(stop)
 
 
 def mainLoop():
@@ -337,7 +452,7 @@ def mainLoop():
     if algorithm is not None:
         algorithm()
 
-    if False and time.time() > digestTime:
+    if time.time() > digestTime:
         pyroslib.publish("overtherainbow/distances", str(distanceDeg1) + ":" + str(distance1) + ";" + str(avgDistance1) + "," + str(distanceDeg2) + ":" + str(distance2) + ";" + str(avgDistance2))
         pyroslib.publish("overtherainbow/gyro", str(gyroAngle))
 
