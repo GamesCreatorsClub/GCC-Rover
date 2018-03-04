@@ -376,8 +376,9 @@ def processButtons():
                 pyros.publish("servo/1", "165")
 
         # golf
-        if bb:
-            balLocked = True
+        if bb and not lastB:
+
+            balLocked = not balLocked
 
         if balLocked:
             moveServo(8, 220)

@@ -8,6 +8,7 @@
 import time
 import threading
 import traceback
+
 import pyroslib
 from RPi import GPIO
 
@@ -19,7 +20,7 @@ nextTime = time.time()
 state = False
 
 
-FORWARD_SPEED = 50
+FORWARD_SPEED = 25
 TURN_SPEED = 50
 ROTATE_SPEED = 50
 
@@ -176,6 +177,10 @@ def handleOverTheRainbow(topic, message, groups):
         setAlgorithm(algorithm10Start)
 
 
+def drive(angle=0):
+    pyroslib.publish("move/drive", str(angle) + " " + str(FORWARD_SPEED))
+
+
 def driveForward():
     pyroslib.publish("move/drive", "0 " + str(FORWARD_SPEED))
 
@@ -192,11 +197,17 @@ def rotateRight():
     pyroslib.publish("move/rotate", str(ROTATE_SPEED))
 
 
+def stopDriving():
+    pyroslib.publish("move", "0 0")
+    pyroslib.publish("move/stop", "")
+
+
 def doNothing():
     pass
 
 
 def stop():
+    stopDriving()
     print("Stopping all...")
     setAlgorithm(doNothing)
     print("Stopped!")
@@ -207,7 +218,28 @@ def algorithm1Start():
     setAlgorithm(algorithm1Loop)
 
 
+lastDrive = ""
+
 def algorithm1Loop():
+    global lastDrive
+    # go to the corner
+    stopAt = 120
+    if avgDistance1 < stopAt and avgDistance2 < stopAt:
+        stopDriving()
+        setAlgorithm(stop)
+        return
+    elif abs(distance1 - distance2) > 30:
+        if lastDrive != "30" and distance1 > distance2:
+            drive(30)
+            lastDrive = "30"
+        elif lastDrive != "-30" and distance2 > distance1:
+            drive(-30)
+            drive(30)
+            lastDrive = "-30"
+    else:
+        if lastDrive != "0":
+            driveForward()
+            lastDrive = "0"
     pass
 
 
@@ -305,7 +337,7 @@ def mainLoop():
     if algorithm is not None:
         algorithm()
 
-    if time.time() > digestTime:
+    if False and time.time() > digestTime:
         pyroslib.publish("overtherainbow/distances", str(distanceDeg1) + ":" + str(distance1) + ";" + str(avgDistance1) + "," + str(distanceDeg2) + ":" + str(distance2) + ";" + str(avgDistance2))
         pyroslib.publish("overtherainbow/gyro", str(gyroAngle))
 
