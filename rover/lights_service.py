@@ -17,26 +17,30 @@ import RPi.GPIO as GPIO
 #
 
 DEBUG = False
-CAMERA_LIGHT_GPIO = 16
+CAMERA_LIGHT_GPIO = 16 # this is AMP shutdown on Voice HAT
+BUTTON_LIGHT_GPIO = 25 # LED on Voice HAT button
 
-lightsState = False
+lightsState = {CAMERA_LIGHT_GPIO:False, BUTTON_LIGHT_GPIO:False}
 
 
-def setLights(state):
+def setLights(gpio, state):
     global lightsState
 
-    lightsState = state
-    GPIO.output(CAMERA_LIGHT_GPIO, state)
+    lightsState[gpio] = state
+    GPIO.output(gpio, state)
 
 
 def handleLights(topic, payload, groups):
-    if "on" == payload or "ON" == payload or "1" == payload:
-        print("Lights on.")
-        setLights(True)
-    else:
-        print("Lights off.")
-        setLights(False)
+    gpio = CAMERA_LIGHT_GPIO
+    if topic == "lights/button":
+        gpio = BUTTON_LIGHT_GPIO
 
+    if "on" == payload or "ON" == payload or "1" == payload:
+        print("Lights on. {0}".format(gpio))
+        setLights(gpio, True)
+    else:
+        print("Lights off. {0}".format(gpio))
+        setLights(gpio, False)
 
 if __name__ == "__main__":
     try:
@@ -44,8 +48,10 @@ if __name__ == "__main__":
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
+        GPIO.setup(BUTTON_LIGHT_GPIO, GPIO.OUT)
 
         pyroslib.subscribe("lights/camera", handleLights)
+        pyroslib.subscribe("lights/button", handleLights)
         pyroslib.init("light-service")
 
         print("Started lights service.")

@@ -20,7 +20,9 @@ import RPi.GPIO as GPIO
 
 DEBUG = False
 
-SWITCH_GPIO = 21
+#SWITCH_GPIO = 21
+SWITCH_GPIO = 23 # GPIO 23 is the button on Voice HAT
+
 
 lightsState = False
 
@@ -29,9 +31,9 @@ def setLights(state):
     global lightsState
 
     if state:
-        pyroslib.publish("lights/camera", "on")
+        pyroslib.publish("lights/button", "on")
     else:
-        pyroslib.publish("lights/camera", "off")
+        pyroslib.publish("lights/button", "off")
         pyroslib.loop(0.005)
 
 
