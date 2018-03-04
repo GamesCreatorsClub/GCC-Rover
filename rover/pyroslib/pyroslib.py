@@ -35,6 +35,7 @@ _regexBinaryToLambda = {}
 _collectStats = False
 
 _stats = [[0, 0, 0]]
+_received = False
 
 
 def _addSendMessage():
@@ -116,6 +117,10 @@ def _onConnect(mqttClient, data, flags, rc):
 
 
 def _onMessage(mqttClient, data, msg):
+    global _received
+
+    _received = True
+
     topic = msg.topic
 
     if _collectStats:
@@ -218,14 +223,21 @@ def sleep(deltaTime):
 
 
 def loop(deltaTime, inner=None):
+    global _received
+
     currentTime = time.time()
     until = currentTime + deltaTime
     while currentTime < until:
-        time.sleep(0.0015)
         if client is None:
-            time.sleep(0.0005)
+            time.sleep(0.002)
         else:
+            _received = False
             client.loop(0.0005)
+            i = 3
+            while i > 0 and _received == True:
+                _received = False
+                client.loop(0.0005)
+                i -= 1
 
         if inner is not None:
             inner()
