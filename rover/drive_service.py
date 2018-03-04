@@ -11,7 +11,7 @@ import traceback
 import pyroslib
 import math
 
-DEBUG = True
+DEBUG = False
 
 WHEEL_CIRCUMFERENCE = 15  # 15mm
 
@@ -581,7 +581,8 @@ def alignAllWheels():
 
 commands = {
     "stop": {
-        "start": stopAllWheels
+        "start": stopAllWheels,
+        "do": doNothing
     },
     "rotate": {
         "start": rotate,
