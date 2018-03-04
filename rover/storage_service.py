@@ -7,7 +7,7 @@
 #
 
 import os
-import pickle
+import time
 import traceback
 import pyroslib
 
@@ -18,24 +18,52 @@ import pyroslib
 # Also, responds to requests for it to be read out completely or particular keys separately
 #
 
-DEBUG = True
+DEBUG = False
 
 STORAGE_MAP_FILE = os.path.expanduser('~') + "/rover-storage.config"
 
 storageMap = {}
 
 
+def addPaths(p1, p2):
+    if "" == p1:
+        return p2
+    return p1 + "/" + p2
+
+
+def writeLocalStorage(m):
+    def writeLayer(f, mm, path):
+        for k in mm:
+            p = addPaths(path, k)
+            v = mm[k]
+            if isinstance(v, dict):
+                writeLayer(f, v, p)
+            else:
+                f.write(p + "=" + str(v) + "\n")
+
+    with open(STORAGE_MAP_FILE, 'wt') as file:
+        file.write("; storage written at " + time.ctime(time.time()) + "\n")
+        writeLayer(file, m, "")
+
+
 def loadStorageMap():
+    global storageMap
+
+    storageMap = {}
+
     if os.path.exists(STORAGE_MAP_FILE):
-        file = open(STORAGE_MAP_FILE, "rb")
-        loaded = pickle.load(file)
-        file.close()
+        lines = []
+        with open(STORAGE_MAP_FILE, "rt") as file:
+            lines = file.readlines()
 
-        if DEBUG:
-            print("  Loaded " + str(loaded))
-
-        for key in loaded:
-            storageMap[key] = loaded[key]
+        for line in lines:
+            line = line.strip()
+            if not line.startswith(";"):
+                i = line.find("=")
+                if i > 0:
+                    k = line[0:i]
+                    v = line[i + 1:]
+                    writeStorage(k.split("/"), v)
 
         print("  Storage map is " + str(storageMap))
     else:
@@ -64,14 +92,14 @@ def writeStorage(splitPath, value):
 
     m = storageMap
     for i in range(0, len(splitPath) - 1):
-        key = splitPath[i]
+        key = str(splitPath[i])
         if key not in m:
             if value == "":
                 return  # empty string means no data. No data - no change.
             m[key] = {}
             change = True
         m = m[key]
-    key = splitPath[len(splitPath) - 1]
+    key = str(splitPath[len(splitPath) - 1])
 
     if (key not in m and value != "") or (key in m and m[key] != value):
         change = True
@@ -81,33 +109,30 @@ def writeStorage(splitPath, value):
         if DEBUG:
             print("Storing to storage " + str(splitPath) + " = " + value)
 
-        file = open(STORAGE_MAP_FILE, 'wb')
-
-        pickle.dump(storageMap, file, 0)
-
-        file.close()
+        writeLocalStorage(storageMap)
 
 
 def readStorage(splitPath):
     m = storageMap
     for i in range(0, len(splitPath) - 1):
-        key = splitPath[i]
-        if key not in m:
+        key = str(splitPath[i])
+        if key not in m or not isinstance(m, dict):
             if DEBUG:
                 print("Reading - not found key for " + "/".join(splitPath))
             pyroslib.publish("storage/write/" + "/".join(splitPath), "")
             return
         m = m[key]
-    key = splitPath[len(splitPath) - 1]
+    key = str(splitPath[len(splitPath) - 1])
 
     if key not in m:
         if DEBUG:
             print("Reading - not found key for " + "/".join(splitPath))
         pyroslib.publish("storage/write/" + "/".join(splitPath), "")
     else:
+        value = str(m[key])
         if DEBUG:
-            print("Reading - found key for " + "/".join(splitPath) + " = " + str(m[key]))
-        pyroslib.publish("storage/write/" + "/".join(splitPath), m[key])
+            print("Reading - found key for " + "/".join(splitPath) + " = " + value)
+        pyroslib.publish("storage/write/" + "/".join(splitPath), value)
 
 
 def storageWriteTopic(topic, payload, groups):
@@ -130,6 +155,7 @@ def handleEcho(topic, payload, groups):
         pyroslib.publish("echo/out", groups[0] + ":" + payload)
     else:
         pyroslib.publish("echo/out", "default:" + payload)
+
 
 if __name__ == "__main__":
     try:
