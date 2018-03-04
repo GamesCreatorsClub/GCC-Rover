@@ -463,7 +463,7 @@ def processJoysticks():
 
             roverSpeed = -calcRoverSpeed(ry)
             roverTurningDistance = calcRoverDistance(lx)
-            pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed / 2)))
+            pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed)))
             if DEBUG_JOYSTICK:
                 print("Steering d:" + str(roverTurningDistance) + " s:" + str(roverSpeed) + " ry: " + str(ory) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
         elif ld > 0.1:
@@ -477,7 +477,7 @@ def processJoysticks():
                     print("Orbit sen:" + str(int(sensorDistance + 70)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
             else:
                 olx = lx
-                lx = calculateExpo(lx, EXPO) / 2
+                lx = calculateExpo(lx, EXPO)
                 roverSpeed = calcRoverSpeed(lx)
                 pyros.publish("move/rotate", int(roverSpeed))
                 if DEBUG_JOYSTICK:
