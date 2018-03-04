@@ -20,8 +20,8 @@ DEBUG_AXES = False
 DEBUG_BUTTONS = False
 DEBUG_JOYSTICK = False
 EXPO = 0.5
+MAX_STOPPING = 10
 
-global dividerR, dividerL, lastDividerR, lastDividerL
 lastDividerL = 1
 lastDividerR = 1
 dividerL = 1
@@ -30,6 +30,7 @@ dividerR = 1
 # We'll store the states here.
 axis_states = {}
 button_states = {}
+haveJoystickEvent = False
 
 # These constants were borrowed from linux/input.h
 axis_names = {
@@ -175,6 +176,8 @@ def connectToJoystick(printError):
 
 
 def readEvents():
+    global haveJoystickEvent
+
     reconnect = True
     noError = True
 
@@ -197,12 +200,15 @@ def readEvents():
                         button = button_map[number]
                         if button:
                             button_states[button] = value
+                            haveJoystickEvent = True
 
                     if event_type & 0x02:
                         selected_axis = axis_map[number]
                         if selected_axis:
                             fvalue = value / 32767.0
                             axis_states[selected_axis] = fvalue
+                            haveJoystickEvent = True
+
             except BaseException as e:
                 print("Failed to read joystick " + str(e))
                 reconnect = True
@@ -220,7 +226,7 @@ startReadEventsLoopThread()
 topSpeed = 50
 sensorDistance = 200
 
-lastNoChange = 0
+alreadyStopped = 0
 lastX1 = 0
 lastY1 = 0
 lastX2 = 0
@@ -354,17 +360,17 @@ def processButtons():
         boost = tr
 
         # kick
-        if lastTR2 != tr2:
-            if tr2:
-                pyros.publish("servo/9", "90")
-            else:
-                pyros.publish("servo/9", "165")
-
-        if bx and bx != lastBX:
-            kick = 1
-            # pyros.publish("move/drive", "0 300")
-            # pyros.sleep(1)
-            # pyros.publish("move/drive", "0 0")
+        # if lastTR2 != tr2:
+        #     if tr2:
+        #         pyros.publish("servo/9", "90")
+        #     else:
+        #         pyros.publish("servo/9", "165")
+        #
+        # if bx and bx != lastBX:
+        #     kick = 1
+        #     # pyros.publish("move/drive", "0 300")
+        #     # pyros.sleep(1)
+        #     # pyros.publish("move/drive", "0 0")
 
         lastX3 = x3
         lastY3 = y3
@@ -414,6 +420,7 @@ def calculateExpo(v, expoPercentage):
     else:
         return - v * v * expoPercentage + v * (1.0 - expoPercentage)
 
+
 def calcRoverDistance(distance):
     if distance >= 0:
         distance = abs(distance)
@@ -430,9 +437,7 @@ def calcRoverDistance(distance):
 
 
 def processJoysticks():
-    global kick, lastX1, lastY1, lastX2, lastY2, lastNoChange, lastTopSpeed, dividerR, dividerL, lastDividerR, lastDividerL, boost, lastBoost, lunge_back_time
-
-
+    global kick, dividerR, dividerL, lastDividerR, lastDividerL, boost, lunge_back_time, alreadyStopped
 
     lx = float(axis_states["x"])
     ly = float(axis_states["y"])
@@ -452,79 +457,74 @@ def processJoysticks():
             if lunge_back_time > 0:
                 lunge_back_time -= 1
                 ry = 1
+
     else:
         if not ry > -0:
             lunge_back_time = 0
 
+    ld = math.sqrt(lx * lx + ly * ly)
+    rd = math.sqrt(rx * rx + ry * ry)
+    ra = math.atan2(rx, -ry) * 180 / math.pi
 
-    if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed and lastNoChange == 0 and boost == lastBoost:
-        pass
-    else:
-        if lx == lastX1 and ly == lastY1 and rx == lastX2 and ry == lastY2 and topSpeed == lastTopSpeed and dividerR == lastDividerR and dividerL == lastDividerL and boost == lastBoost:
-            lastNoChange = lastNoChange - 1
-        else:
-            lastNoChange = 10
+    if ld < 0.1 and rd > 0.1:
+        distance = rd
+        distance = calculateExpo(distance, EXPO)
 
-        lastX1 = lx
-        lastY1 = ly
-        lastX2 = rx
-        lastY2 = ry
-        lastTopSpeed = topSpeed
+        roverSpeed = calcRoverSpeed(distance)
+        pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed / dividerR)))
+        if DEBUG_JOYSTICK:
+            print("Driving a:" + str(round(ra, 1)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
 
-        ld = math.sqrt(lx * lx + ly * ly)
-        rd = math.sqrt(rx * rx + ry * ry)
-        ra = math.atan2(rx, -ry) * 180 / math.pi
+        alreadyStopped = 0
+    elif ld > 0.1 and rd > 0.1:
 
-        if ld < 0.1 and rd > 0.1:
-            distance = rd
-            distance = calculateExpo(distance, EXPO)
+        ory = ry
+        olx = lx
+        ry = calculateExpo(ry, EXPO)
 
-            roverSpeed = calcRoverSpeed(distance)
-            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed / dividerR)))
+        lx = calculateExpo(lx, EXPO)
+
+        roverSpeed = -calcRoverSpeed(ry) * 1.3
+        roverTurningDistance = calcRoverDistance(lx)
+        pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed / dividerR)))
+        if DEBUG_JOYSTICK:
+            print("Steering d:" + str(roverTurningDistance) + " s:" + str(roverSpeed) + " ry: " + str(ory) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
+
+        alreadyStopped = 0
+    elif ld > 0.1:
+        if doOrbit and not prepareToOrbit:
+            distance = sensorDistance
+            if distance > 1000:
+                distance = 1000
+            roverSpeed = calcRoverSpeed(lx) / 2.5
+            pyros.publish("move/orbit", str(int(sensorDistance + 70)) + " " + str(roverSpeed))
             if DEBUG_JOYSTICK:
-                print("Driving a:" + str(round(ra, 1)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
-        elif ld > 0.1 and rd > 0.1:
-
-            ory = ry
+                print("Orbit sen:" + str(int(sensorDistance + 70)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
+        else:
             olx = lx
-            ry = calculateExpo(ry, EXPO)
-
-            lx = calculateExpo(lx, EXPO)
-
-            roverSpeed = -calcRoverSpeed(ry)
-            roverTurningDistance = calcRoverDistance(lx)
-            pyros.publish("move/steer", str(roverTurningDistance) + " " + str(int(roverSpeed / 2 / dividerR)))
+            lx = calculateExpo(lx, EXPO) / 2
+            roverSpeed = calcRoverSpeed(lx)
+            pyros.publish("move/rotate", int(roverSpeed / dividerL))
             if DEBUG_JOYSTICK:
-                print("Steering d:" + str(roverTurningDistance) + " s:" + str(roverSpeed) + " ry: " + str(ory) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
-        elif ld > 0.1:
-            if doOrbit and not prepareToOrbit:
-                distance = sensorDistance
-                if distance > 1000:
-                    distance = 1000
-                roverSpeed = calcRoverSpeed(lx) / 2.5
-                pyros.publish("move/orbit", str(int(sensorDistance + 70)) + " " + str(roverSpeed))
-                if DEBUG_JOYSTICK:
-                    print("Orbit sen:" + str(int(sensorDistance + 70)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
-            else:
-                olx = lx
-                lx = calculateExpo(lx, EXPO) / 2
-                roverSpeed = calcRoverSpeed(lx)
-                pyros.publish("move/rotate", int(roverSpeed / dividerL))
-                if DEBUG_JOYSTICK:
-                    print("Rotate s:" + str(roverSpeed) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
-        elif kick > 0:
-            if DEBUG_JOYSTICK:
-                print("Kick stop:  ld:" + str(ld) + " rd:" + str(rd))
-            pass
-        else:
-            # pyros.publish("move/drive", str(ra) + " 0")
-            # if ra != 0:
-            #     print("-> move/drive " + str(ra))
-            roverSpeed = 0
+                print("Rotate s:" + str(roverSpeed) + " lx:" + str(olx) + " ld:" + str(ld) + " rd:" + str(rd))
+        alreadyStopped = 0
+    # elif kick > 0:
+    #     if DEBUG_JOYSTICK:
+    #         print("Kick stop:  ld:" + str(ld) + " rd:" + str(rd))
+    #     pass
+    #
+    #     alreadyStopped = 0
+    else:
+        # pyros.publish("move/drive", str(ra) + " 0")
+        # if ra != 0:
+        #     print("-> move/drive " + str(ra))
+        roverSpeed = 0
+        if alreadyStopped < MAX_STOPPING:
             pyros.publish("move/stop", "0")
+            alreadyStopped += 1
 
-            if DEBUG_JOYSTICK:
-                print("Rotate stop:  ld:" + str(ld) + " rd:" + str(rd))
+        if DEBUG_JOYSTICK:
+            print("Rotate stop:  ld:" + str(ld) + " rd:" + str(rd))
 
 
 def handleDistance(topic, message, groups):
@@ -546,7 +546,8 @@ def handleDistance(topic, message, groups):
 # Main event loop
 def loop():
     processButtons()
-    processJoysticks()
+    if haveJoystickEvent:
+        processJoysticks()
 
 
 if __name__ == "__main__":
