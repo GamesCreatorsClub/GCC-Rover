@@ -54,8 +54,10 @@ PROTOTYPE_WHEEL_CALIBRATION = {
         "servo": "",
         "-300": "95",
         "-240": "115",
+        "-30": "135",
         "-0": "149",
         "0": "155",
+        "30": "165",
         "240": "195",
         "300": "215"
     }
@@ -169,18 +171,35 @@ def handleSpeed(wheel, wheelCal, speedStr):
             print("    got speed 0 @ " + str(servoPosition) + " for " + str(servoNumber))
         speed = 0
     else:
-        if "240" in wheelCal and "-240" in wheelCal:
-            if speedStr == "-0":
-                servoPosition = interpolate(0, wheelCal["-0"], wheelCal["-240"])
-                if DEBUG_SPEED_VERBOSE:
-                    print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
-                speed = 0
-            elif speedStr == "+0":
-                servoPosition = interpolate(0, wheelCal["0"], wheelCal["240"])
-                if DEBUG_SPEED_VERBOSE:
-                    print("    got speed +0 @ " + str(servoPosition) + " for " + str(servoNumber))
-                speed = 0
-            else:
+        if speedStr == "-0":
+            servoPosition = float(wheelCal["-0"])
+            if DEBUG_SPEED_VERBOSE:
+                print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
+            speed = 0
+        elif speedStr == "+0":
+            servoPosition = float(wheelCal["0"])
+            if DEBUG_SPEED_VERBOSE:
+                print("    got speed +0 @ " + str(servoPosition) + " for " + str(servoNumber))
+            speed = 0
+        else:
+            if "240" in wheelCal and "-240" in wheelCal and "30" in wheelCal and "-30" in wheelCal:
+                speed = float(speedStr)
+                if speed >= 0:
+                    if speed <= 30:
+                        servoPosition = interpolate(speed / 30, wheelCal["0"], wheelCal["30"])
+                    elif speed <= 240:
+                        servoPosition = interpolate((speed - 30) / 210, wheelCal["30"], wheelCal["240"])
+                    else:
+                        servoPosition = interpolate((speed - 240) / 60, wheelCal["240"], wheelCal["300"])
+                else:
+                    if speed >= -30:
+                        servoPosition = interpolate(-speed / 30, wheelCal["-0"], wheelCal["-30"])
+                    elif speed >= -240:
+                        servoPosition = interpolate((-speed - 30) / 210, wheelCal["-30"], wheelCal["-240"])
+                    else:
+                        servoPosition = interpolate((-speed - 240) / 60, wheelCal["-240"], wheelCal["-300"])
+
+            elif "240" in wheelCal and "-240" in wheelCal:
                 speed = float(speedStr)
                 if speed >= 0:
                     if speed <= 240:
@@ -193,17 +212,6 @@ def handleSpeed(wheel, wheelCal, speedStr):
                     else:
                         servoPosition = interpolate((-speed - 240) / 60, wheelCal["-240"], wheelCal["-300"])
 
-        else:
-            if speedStr == "-0":
-                servoPosition = interpolate(0, wheelCal["-0"], wheelCal["-300"])
-                if DEBUG_SPEED_VERBOSE:
-                    print("    got speed -0 @ " + str(servoPosition) + " for " + str(servoNumber))
-                speed = 0
-            elif speedStr == "+0":
-                servoPosition = interpolate(0, wheelCal["0"], wheelCal["300"])
-                if DEBUG_SPEED_VERBOSE:
-                    print("    got speed +0 @ " + str(servoPosition) + " for " + str(servoNumber))
-                speed = 0
             else:
                 speed = float(speedStr)
                 if speed >= 0:

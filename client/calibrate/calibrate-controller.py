@@ -96,8 +96,10 @@ def initWheel(wheelName, motorServo, steerServo):
             "servo": str(motorServo),
             "-300": "95",
             "-240": "107",
+            "-30": "120",
             "-0": "155",
             "0": "155",
+            "30": "180",
             "240": "203",
             "300": "215"
         }
@@ -127,14 +129,20 @@ def initWheel(wheelName, motorServo, steerServo):
     if "-300" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["-300"] = defaultWheelCal["speed"]["-300"]
     if "-240" not in wheelMap[wheelName]["speed"]:
-        wheelMap[wheelName]["speed"]["-240"] = {}
+        # wheelMap[wheelName]["speed"]["-240"] =
         wheelMap[wheelName]["speed"]["-240"] = defaultWheelCal["speed"]["-240"]
+    if "-30" not in wheelMap[wheelName]["speed"]:
+        # wheelMap[wheelName]["speed"]["-30"] = {}
+        wheelMap[wheelName]["speed"]["-30"] = defaultWheelCal["speed"]["-30"]
     if "-0" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["-0"] = defaultWheelCal["speed"]["-0"]
     if "0" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["0"] = defaultWheelCal["speed"]["0"]
+    if "30" not in wheelMap[wheelName]["speed"]:
+        # wheelMap[wheelName]["speed"]["30"] = {}
+        wheelMap[wheelName]["speed"]["30"] = defaultWheelCal["speed"]["30"]
     if "240" not in wheelMap[wheelName]["speed"]:
-        wheelMap[wheelName]["speed"]["240"] = {}
+        # wheelMap[wheelName]["speed"]["240"] = {}
         wheelMap[wheelName]["speed"]["240"] = defaultWheelCal["speed"]["240"]
     if "300" not in wheelMap[wheelName]["speed"]:
         wheelMap[wheelName]["speed"]["300"] = defaultWheelCal["speed"]["300"]
@@ -281,11 +289,20 @@ buttons = {
 
     "speed -240 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(510, 349, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 334, getTextWidth("+"), getTextHeight("+")),
     },
     "speed -240 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(390, 349, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 334, getTextWidth("-"), getTextHeight("-")),
+    },
+
+    "speed -30 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(510, 364, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed -30 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(390, 364, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed -0 add": {
@@ -306,13 +323,22 @@ buttons = {
         "rect": pygame.Rect(390, 454, getTextWidth("-"), getTextHeight("-")),
     },
 
+    "speed 30 add": {
+        "texture": texts["+"],
+        "rect": pygame.Rect(510, 484, getTextWidth("+"), getTextHeight("+")),
+    },
+    "speed 30 minus": {
+        "texture": texts["-"],
+        "rect": pygame.Rect(390, 484, getTextWidth("-"), getTextHeight("-")),
+    },
+
     "speed 240 add": {
         "texture": texts["+"],
-        "rect": pygame.Rect(510, 495, getTextWidth("+"), getTextHeight("+")),
+        "rect": pygame.Rect(510, 514, getTextWidth("+"), getTextHeight("+")),
     },
     "speed 240 minus": {
         "texture": texts["-"],
-        "rect": pygame.Rect(390, 495, getTextWidth("-"), getTextHeight("-")),
+        "rect": pygame.Rect(390, 514, getTextWidth("-"), getTextHeight("-")),
     },
 
     "speed 300 add": {
@@ -494,7 +520,7 @@ def doCalStuff():
         speedLimitsChanged = True
 
     # calibrationPoints = ["-300", "-0", "0", "300"]
-    calibrationPoints = ["-300", "-240", "-0", "0", "240", "300"]
+    calibrationPoints = ["-300", "-240", "-30", "-0", "0", "30", "240", "300"]
 
     for calSpeed in calibrationPoints:
         speedLimitsChanged = False
@@ -711,8 +737,10 @@ while True:
 
     drawText(screen, "-300", (328, buttons["speed -300 minus"]["rect"].y), bigFont)
     drawText(screen, "-240", (328, buttons["speed -240 minus"]["rect"].y), bigFont)
+    drawText(screen, "-30", (328, buttons["speed -30 minus"]["rect"].y), bigFont)
     drawText(screen, "-0", (328, buttons["speed -0 minus"]["rect"].y), bigFont)
     drawText(screen, "0", (328, buttons["speed 0 minus"]["rect"].y), bigFont)
+    drawText(screen, "30", (328, buttons["speed 30 minus"]["rect"].y), bigFont)
     drawText(screen, "240", (328, buttons["speed 240 minus"]["rect"].y), bigFont)
     drawText(screen, "300", (328, buttons["speed 300 minus"]["rect"].y), bigFont)
     if not selectedWheel == "all":
