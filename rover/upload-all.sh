@@ -1,4 +1,8 @@
 #!/bin/bash
+if [ -z "$1" ]
+  then
+    echo "Argument missing: Please supply rover IP or alias"
+else
 
 echo ""
 echo Uploading     pyroslib
@@ -50,11 +54,11 @@ pyros $1 upload -s lights       lights_service.py
 echo Restarting    lights
 pyros $1 restart   lights
 
-echo ""
-echo Uploading     camera
-pyros $1 upload -s camera       camera_service.py
-echo Restarting    camera
-pyros $1 restart   camera
+# echo ""
+# echo Uploading     camera
+# pyros $1 upload -s camera       camera_service.py
+# echo Restarting    camera
+# pyros $1 restart   camera
 
 # echo ""
 # echo Uploading     gyrosensor
@@ -68,11 +72,11 @@ pyros $1 restart   camera
 # echo Restarting    accelsensor
 # pyros $1 restart   accelsensor
 
-echo ""
-echo Uploading     9dofsensor
-pyros $1 upload -s 9dofsensor  mpu9250_service.py
-echo Restarting    9dofsensor
-pyros $1 restart   9dofsensor
+# echo ""
+# echo Uploading     9dofsensor
+# pyros $1 upload -s 9dofsensor  mpu9250_service.py
+# echo Restarting    9dofsensor
+# pyros $1 restart   9dofsensor
 
 # echo ""
 # echo Uploading     sonarsensor
@@ -80,12 +84,20 @@ pyros $1 restart   9dofsensor
 # echo Restarting    sonarsensor
 # pyros $1 restart   sonarsensor
 
+# echo ""
+# echo Uploading     vl53l0x
+# pyros $1 upload -s vl53l0x vl53l0x/vl53l0x_service.py -e vl53l0x/vl53l0xWrapper.py vl53l0x/vl53l0x_python.so vl53l0x/vl53l0xPython.py
+# echo Restarting    vl53l0x
+# pyros $1 restart   vl53l0x
+
 echo ""
-echo Uploading     vl53l0x
-pyros $1 upload -s vl53l0x vl53l0x/vl53l0x_service.py -e vl53l0x/vl53l0xWrapper.py vl53l0x/vl53l0x_python.so vl53l0x/vl53l0xPython.py
-echo Restarting    vl53l0x
-pyros $1 restart   vl53l0x
+echo Uploading     discovery
+pyros $1 upload -s discovery      discovery_service.py
+echo Restarting    discovery
+pyros $1 restart   discovery
 
 echo ""
 echo "Currently running processes:"
 pyros $1 ps
+
+fi

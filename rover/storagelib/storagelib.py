@@ -25,12 +25,12 @@ def read(path):
     for i in range(0, len(splitPath) - 1):
         key = splitPath[i]
         if key not in m:
-            return None
+            return "None"
         m = m[key]
     key = splitPath[len(splitPath) - 1]
 
     if key not in m:
-        return None
+        return "None"
 
     return m[key]
 

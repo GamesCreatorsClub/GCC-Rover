@@ -11,14 +11,21 @@ import traceback
 import threading
 import pyroslib
 import RPi.GPIO as GPIO
+import smbus # for i2c comms
 
 DEBUG = False
+ARDUINO = False
+# the arduino version requires the code uploading to the arduino and this connecting
+# to the i2c pins of the RPi.
 
 TRIG = 11  # Originally was 23
 ECHO = 8   # Originally was 24
 
 SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 3  # 0.14 seconds per 60º (expecting servo to be twice as slow as per specs
+
+i2c_bus = smbus.SMBus(1)
+i2c_address = 0x04
 
 lastServoAngle = 0
 
@@ -29,6 +36,12 @@ edge = False
 
 
 def moveServo(angle):
+    if ARDUINO:
+        moveServoArduino(angle)
+    else:
+        moveServoRpi(angle)
+
+def moveServoRpi(angle):
     global lastServoAngle
     # angle is between -90 and 90
     angle += 150
@@ -49,6 +62,30 @@ def moveServo(angle):
 
     lastServoAngle = angle
 
+def moveServoArduino(angle):
+    global lastServoAngle
+    # angle is between -90 and 90
+    angle += 150
+    angle = int(angle)
+
+    try:
+        # send as a list containing 1 item
+        i2c_bus.write_i2c_block_data(i2c_address, 0, [angle])
+
+        angleDistance = abs(lastServoAngle - angle)
+        sleepAmount = SERVO_SPEED * angleDistance / 60.0
+
+        if DEBUG:
+            print("Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
+
+        # wait for servo to reach the destination
+        time.sleep(sleepAmount)
+
+        lastServoAngle = angle
+
+    except IOError as e:
+        print("Failed to move servo on arduino")
+
 
 def edgeDetect(pin):
     global pulse_start, pulse_end, edge
@@ -66,7 +103,14 @@ def edgeDetect(pin):
         # print("  > edge up received")
 
 
+# replacing the old function
 def readDistance():
+    if ARDUINO:
+        return readDistancesArduino()[0]
+    else:
+        return readDistanceRpi()
+
+def readDistanceRpi():
     global semaphore, edge, pulse_start
 
     edge = False
@@ -86,6 +130,20 @@ def readDistance():
     distance = round(distance, 2)
 
     return distance
+
+# returns 2 distances in a tuple
+def readDistancesArduino():
+
+    # read from device 'address', offset 1 byte, 4 bytes
+    try:
+        values = i2c_bus.read_i2c_block_data(i2c_address, 1, 4)
+    except IOError as e:
+        print(e)
+
+    # unpack the two bytes into a short
+    distances = (values[0]+values[1]*0x100, values[2]+values[3]*0x100)
+
+    return distances
 
 
 def handleRead(topic, payload, groups):
