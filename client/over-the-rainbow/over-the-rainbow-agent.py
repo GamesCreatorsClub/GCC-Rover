@@ -20,14 +20,14 @@ nextTime = time.time()
 state = False
 
 
-FORWARD_SPEED = 30
-MINIMUM_FORWARD_SPEED = 10
+FORWARD_SPEED = 150
+MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
 ROTATE_SPEED = 50
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
-SPEEDS = [-20, -20, -20, -15, -12, -12, 12, 14, 16, 20, 25, 30, 30]
+SPEEDS = SPEEDS_ROVER_2
 SPEEDS_OFFSET = 6
 
 DISTANCE_AVG_TIME = 0.5
@@ -197,6 +197,28 @@ def handleOverTheRainbow(topic, message, groups):
         setAlgorithm(algorithm10Start)
 
 
+def normalise(value, max):
+    if value > max:
+        value = max
+    if value < -max:
+        value = -max
+
+    return value / max
+
+
+def sign(x):
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    else:
+        return 0
+
+
+def steer(distance=0, speed=FORWARD_SPEED):
+    pyroslib.publish("move/steer", str(distance) + " " + str(speed))
+
+
 def drive(angle=0, speed=FORWARD_SPEED):
     pyroslib.publish("move/drive", str(angle) + " " + str(speed))
 
@@ -215,6 +237,10 @@ def rotateLeft():
 
 def rotateRight():
     pyroslib.publish("move/rotate", str(ROTATE_SPEED))
+
+
+def requestDistanceAtAngle(angle):
+    pyroslib.publish("sensor/distance/deg", str(angle))
 
 
 def stopDriving():
@@ -300,31 +326,95 @@ def brake():
         driveBack(50)
 
 
+def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction):
+    distanceControl = STOP_DISTANCE * 4
+
+    if forwardDistance < STOP_DISTANCE:
+        stop()
+        setAlgorithm(stop)
+    else:
+        outputForward = (forwardDistance - STOP_DISTANCE) * KP + forwardDelta * KD
+
+        outputForward = normalise(outputForward, distanceControl)
+
+        speedIndex = int(outputForward * SPEEDS_OFFSET + SPEEDS_OFFSET)
+        speed = SPEEDS[speedIndex]
+
+        if abs(sideDelta) < 7:
+            outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
+            outputSide = -normalise(outputSide, SIDE_DISTANCE)
+
+            angle = outputSide * 20 * direction
+
+            log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
+            drive(angle, speed)
+        else:
+            distance = -direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
+
+            log("TURN d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(distance))
+            steer(distance, speed)
+
+
 def algorithm2Start():
     print("started algorithm 2...")
+    requestDistanceAtAngle("0")
     setAlgorithm(algorithm2Loop)
 
 
 def algorithm2Loop():
-    pass
+    distanceControl = STOP_DISTANCE * KC
+
+    followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1)
+    #
+    # if distance1 < STOP_DISTANCE:
+    #     stop()
+    #     setAlgorithm(stop)
+    # else:
+    #     outputForward = (distance1 - STOP_DISTANCE) * KP + deltaDistance1 * KD
+    #
+    #     outputForward = normalise(outputForward, distanceControl)
+    #
+    #     speedIndex = int(outputForward * SPEEDS_OFFSET + SPEEDS_OFFSET)
+    #     speed = SPEEDS[speedIndex]
+    #
+    #     if deltaDistance2 < 10:
+    #         outputSide = (distance2 - SIDE_DISTANCE) * KP + deltaDistance2 * KD
+    #         outputSide = -normalise(outputSide, SIDE_DISTANCE)
+    #
+    #         angle = outputSide * 20
+    #
+    #         log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
+    #         drive(angle, speed)
+    #     else:
+    #         distance = -int(math.log10(abs(deltaDistance2)) * 400) * sign(deltaDistance2)
+    #
+    #         log("TURN d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(distance))
+    #         steer(distance, speed)
 
 
 def algorithm3Start():
     print("started algorithm 3...")
+    requestDistanceAtAngle("90")
     setAlgorithm(algorithm3Loop)
 
 
 def algorithm3Loop():
-    pass
+    distanceControl = STOP_DISTANCE * KC
+
+    followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1)
 
 
 def algorithm4Start():
     print("started algorithm 4...")
+    driveForward()
     setAlgorithm(algorithm4Loop)
 
 
 def algorithm4Loop():
-    pass
+    if distance1 < STOP_DISTANCE + FORWARD_SPEED * 2:
+        countDown = 60
+        brake()
+        setAlgorithm(brake)
 
 
 def algorithm5Start():
@@ -369,6 +459,8 @@ KD = 0.2
 KC = 2
 KA = 20
 STOP_DISTANCE = 120
+SIDE_DISTANCE = 120
+STEERING_DISTANCE = 400
 
 previous_error = 0
 integral = 0
@@ -378,7 +470,7 @@ def algorithm9Start():
     global drive_speed
 
     print("started algorithm 9...")
-    pyroslib.publish("sensor/distance/deg", "45")
+    requestDistanceAtAngle("45")
     drive_speed = FORWARD_SPEED
     setAlgorithm(algorithm9Loop)
 
@@ -387,14 +479,6 @@ def algorithm9Loop():
     global countDown, drive_speed
 
     distanceControl = STOP_DISTANCE * KC
-
-    def sign(x):
-        if x > 0:
-            return 1
-        elif x < 0:
-            return -1
-        else:
-            return 0
 
     if distance1 + distance2 < STOP_DISTANCE * 2:
         stop()
@@ -406,19 +490,11 @@ def algorithm9Loop():
         else:
             angle = 0
 
-        if distance1 > distance2:
-            output = distance1 * KP + deltaDistance1 * KD
-        else:
-            output = distance2 * KP + deltaDistance2 * KD
+        output = (distance1 + distance2 - STOP_DISTANCE * 2) * KP + (deltaDistance1 + deltaDistance2) * KD
 
-        if output > distanceControl:
-            output = distanceControl
-        if output < -distanceControl:
-            output = -distanceControl
+        output = normalise(output, distanceControl)
 
-        output = output / distanceControl
-
-        speedIndex = int(output * SPEEDS_OFFSET * 2)
+        speedIndex = int(output * SPEEDS_OFFSET + SPEEDS_OFFSET)
         speed = SPEEDS[speedIndex]
         log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
         drive(angle, speed)
