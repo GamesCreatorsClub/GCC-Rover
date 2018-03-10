@@ -398,6 +398,7 @@ def algorithm2Loop():
 def algorithm3Start():
     print("started algorithm 3...")
     requestDistanceAtAngle("90")
+    driveForward(FORWARD_SPEED)
     setAlgorithm(algorithm3Loop)
 
 
@@ -408,16 +409,26 @@ def algorithm3Loop():
 
 
 def algorithm4Start():
+    driveForward(FORWARD_SPEED)
     print("started algorithm 4...")
     driveForward()
     setAlgorithm(algorithm4Loop)
 
 
 def algorithm4Loop():
-    if distance1 < STOP_DISTANCE + FORWARD_SPEED * 2:
-        countDown = 60
-        brake()
-        setAlgorithm(brake)
+    if distance1 - deltaDistance1 < STOP_DISTANCE:
+        stopDriving()
+        setAlgorithm(stop)
+    else:
+        output = (distance1 - STOP_DISTANCE) / STOP_DISTANCE * 0.7 - deltaDistance1 * 0.3;
+        if output > 1:
+            output = 1
+
+        speedIndex = int(output * SPEEDS_OFFSET * 2)
+        speed = SPEEDS[speedIndex]
+        log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed))
+        drive(0, speed)
+
 
 
 start_angle = 0
@@ -436,6 +447,7 @@ def algorithm5Loop():
     else:
         stop()
         setAlgorithm(stop)
+
 
 
 def algorithm6Start():
