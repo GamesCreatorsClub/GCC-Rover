@@ -485,6 +485,7 @@ if __name__ == "__main__":
     try:
         print("Starting vl53l0x sensor service...")
 
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(SENSORS_SWITCH_GPIO, GPIO.OUT)
 

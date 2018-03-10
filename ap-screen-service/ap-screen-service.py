@@ -23,7 +23,7 @@ GPIO_BACKSPACE = 5  # Backspace
 
 GPIO_BACKLIGHT = 9  # Backlight
 
-# GPIO.setwarnings(False)
+GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(GPIO_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(GPIO_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)

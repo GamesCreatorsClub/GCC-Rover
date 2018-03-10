@@ -14,6 +14,10 @@ FALLING = None
 RISING = None
 BOTH = None
 
+def setwarnings(b):
+    raise NotImplemented()
+
+
 def setmode(mode):
     raise NotImplemented()
 

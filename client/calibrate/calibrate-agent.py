@@ -63,6 +63,7 @@ if __name__ == "__main__":
     try:
         print("Starting calibrate agent...")
 
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(STROBO_LIGHT_GPIO, GPIO.OUT)
 

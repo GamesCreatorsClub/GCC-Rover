@@ -42,6 +42,7 @@ if __name__ == "__main__":
     try:
         print("Starting lights service...")
 
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(CAMERA_LIGHT_GPIO, GPIO.OUT)
 

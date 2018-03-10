@@ -13,7 +13,6 @@ import pyroslib
 from RPi import GPIO
 
 DEBUG = True
-STROBO_LIGHT_GPIO = 4
 
 stroboTime = -1
 nextTime = time.time()
@@ -539,9 +538,6 @@ algorithm = doNothing
 if __name__ == "__main__":
     try:
         print("Starting over-the-rainbow agent...")
-
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(STROBO_LIGHT_GPIO, GPIO.OUT)
 
         pyroslib.subscribe("sensor/distance", handleDistances)
         pyroslib.subscribe("sensor/gyro", handleGyroData)

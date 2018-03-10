@@ -56,6 +56,7 @@ def connect():
 javaProcess = None
 textStream = None
 
+GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 
 GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)

@@ -81,6 +81,7 @@ if __name__ == "__main__":
     try:
         print("Starting shutdown service...")
 
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(SWITCH_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 

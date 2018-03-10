@@ -12,7 +12,7 @@ import random
 import sys
 import paho.mqtt.client as mqtt
 
-
+GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 
 TRIG = 11  # 23

@@ -136,6 +136,7 @@ def handleScan(topic, payload, groups):
 if __name__ == "__main__":
     try:
         print("Starting sonar sensor service...")
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
 
         GPIO.setup(TRIG, GPIO.OUT)
