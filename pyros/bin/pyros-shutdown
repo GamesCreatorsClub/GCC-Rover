@@ -6,10 +6,7 @@
 # MIT License
 #
 
-import socket
 import sys
-import threading
-import time
 
 import pyroscommon as pc
 
@@ -18,7 +15,7 @@ timeout = 5  # Default timeout 5 seconds
 
 
 def processArguments(arguments):
-    global hasHelpSwitch, timeout, command
+    global hasHelpSwitch, timeout
 
     while len(arguments) > 0:
         if arguments[0] == "-h":

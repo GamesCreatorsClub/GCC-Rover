@@ -19,7 +19,7 @@ timeout = 5  # Default timeout 5 seconds
 
 
 def processSwitches(arguments):
-    global hasHelpSwitch, timeout
+    global hasHelpSwitch, timeout, verboseFlag
 
     while len(arguments) > 0 and arguments[0].startswith("-"):
         if arguments[0] == "-h":
@@ -52,6 +52,7 @@ def displayHelp(rc):
     print("    -t <timeout>          timeout in seconds. Default 5.")
     print("")
     sys.exit(rc)
+
 
 if hasHelpSwitch:
     displayHelp(0)

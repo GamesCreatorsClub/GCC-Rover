@@ -31,6 +31,7 @@ def printHelp(rc):
     print("(*) not yet implemented.")
     sys.exit(rc)
 
+
 if len(args) < 1:
     printHelp(1)
 
@@ -81,5 +82,6 @@ def processStatus(line, pid):
         print(line)
         return False
     return True
+
 
 pc.processCommand(processId, executeCommand, processOut, processStatus)

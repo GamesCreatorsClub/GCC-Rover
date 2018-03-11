@@ -26,6 +26,7 @@ def printHelp(rc):
     print("It cannot be used in conjunction with -a option.")
     sys.exit(rc)
 
+
 if len(args) < 1:
     printHelp(1)
 
