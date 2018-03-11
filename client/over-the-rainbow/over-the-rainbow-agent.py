@@ -19,14 +19,14 @@ nextTime = time.time()
 state = False
 
 
-FORWARD_SPEED = 150
+FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
 ROTATE_SPEED = 50
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
-SPEEDS_ROVER_4 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
-SPEEDS = SPEEDS_ROVER_2
+SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 14, 20, 25, 30, 35, 40, 40]
+SPEEDS = SPEEDS_ROVER_4
 SPEEDS_OFFSET = 6
 
 DISTANCE_AVG_TIME = 0.5
@@ -343,10 +343,14 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
             outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
             outputSide = -normalise(outputSide, SIDE_DISTANCE)
 
-            angle = outputSide * 20 * direction
+            angle = outputSide * 80 * direction
 
-            log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
-            drive(angle, speed)
+            if angle > 20:
+                log("TURN d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(angle * 50))
+                steer(angle * 50, speed)
+            else:
+                log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
+                drive(angle, speed)
         else:
             distance = -direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
 
