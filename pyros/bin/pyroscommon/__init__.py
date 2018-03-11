@@ -308,7 +308,12 @@ def processGlobalCommand(topic, executeCommand, processOut, processStatus):
         global connected
 
         if rc == 0:
-            c.subscribe(topic + "/out", 0)
+            if topic.endswith("#"):
+                c.subscribe(topic, 0)
+            elif topic.endswith("!"):
+                c.subscribe(topic[0:len(topic) - 2], 0)
+            else:
+                c.subscribe(topic + "/out", 0)
         else:
             print("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
@@ -330,7 +335,7 @@ def processGlobalCommand(topic, executeCommand, processOut, processStatus):
                     pid = topic[5:len(topic)-7]
                     connected = processStatus(payload, pid)
             else:
-                connected = processOut(payload, -1)
+                connected = processOut(payload, topic)
 
             countdown = getTimeout()
         else:
