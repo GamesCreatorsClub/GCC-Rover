@@ -364,25 +364,27 @@ def stopProcess(processId):
                 process.kill()
                 output(processId, "PyROS: killed " + getProcessTypeName(processId))
             else:
-                output(processId, "PyROS INFO: already finished " + getProcessTypeName(processId))
-
-            time.sleep(0.01)
-            # Just in case - we really need that process killed!!!
-            subprocess.call(["/usr/bin/pkill", "-9", "python3 -u " + processId + ".py"])
+                output(processId, "PyROS INFO: already finished " + getProcessTypeName(processId) + " return code " + str(process.returncode))
         else:
             output(processId, "PyROS INFO: process " + processId + " is not running.")
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
 
+    time.sleep(0.01)
+    # Just in case - we really need that process killed!!!
+    cmdAndArgs = ["/usr/bin/pkill -9 -f 'python3 -u " + processId + ".py " + processId + "'"]
+    res = subprocess.call(cmdAndArgs, shell=True)
+    if res != -9 and res != 0:
+        info("Tried to kill " + processId + " but got result " + str(res) + "; command: " + str(cmdAndArgs))
+
 
 def restartProcess(processId):
     if processId in processes:
         stopProcess(processId)
+        startProcess(processId)
         if isService(processId):
-            startProcess(processId)
             output(processId, "PyROS: Restarted service " + processId)
         else:
-            startProcess(processId)
             output(processId, "PyROS: Restarted process " + processId)
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
