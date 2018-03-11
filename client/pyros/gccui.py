@@ -6,7 +6,7 @@
 
 import pygame
 import os
-import inspect
+import time
 
 BLACK = (0, 0, 0)
 DARK_GREY = (80, 80, 80)
@@ -26,6 +26,9 @@ frameclock = pygame.time.Clock()
 screen = None
 backgroundImage = None
 scaledBackground = None
+gccFullImage = None
+gccGreenImage = None
+gccColouredImage = None
 
 SCREEN_RECT = None
 
@@ -34,10 +37,11 @@ def _thisPath(filename):
     return os.path.join(os.path.dirname(__file__), filename)
 
 
-def initAll(screenSize, loadBackground = False, title = "GCC"):
+def initAll(screenSize, loadBackground=False, title="GCC"):
     global screen, backgroundImage, scaledBackground
     global smallFont, font, bigFont
     global SCREEN_RECT
+    global gccFullImage, gccGreenImage, gccColouredImage
 
     pygame.init()
 
@@ -55,6 +59,10 @@ def initAll(screenSize, loadBackground = False, title = "GCC"):
         backgroundImage = pygame.image.load(_thisPath("blue-background.png"))
         scaledBackground = pygame.transform.scale(backgroundImage, screen.get_size())
 
+    gccFullImage = pygame.image.load(_thisPath("GCC_full.png"))
+    gccGreenImage = pygame.image.load(_thisPath("GCC_green_small.png"))
+    gccColouredImage = pygame.image.load(_thisPath("GCC_coloured_small.png"))
+
     return screen
 
 
@@ -64,7 +72,7 @@ def screenResized(size):
     scaledBackground = pygame.transform.scale(backgroundImage, size)
 
 
-def background(topFrame = False):
+def background(topFrame=False):
     if scaledBackground is not None:
         screen.blit(scaledBackground, (0, 0))
     else:
@@ -79,25 +87,25 @@ def frameEnd():
     frameclock.tick(30)
 
 
-def drawKeyValue(key, value, x, y, colour = WHITE):
+def drawKeyValue(key, value, x, y, colour=WHITE):
     screen.blit(font.render(key + ":", 1, colour), (x, y))
     screen.blit(font.render(value, 1, colour), (x + 100, y))
     return y + 20  # font.get_height()
 
 
-def drawBigText(text, pos, colour = WHITE):
+def drawBigText(text, pos, colour=WHITE):
     screen.blit(bigFont.render(text, 1, colour), pos)
 
 
-def drawText(text, pos, colour = WHITE):
+def drawText(text, pos, colour=WHITE):
     screen.blit(font.render(text, 1, colour), pos)
 
 
-def drawSmallText(text, pos, colour = WHITE):
+def drawSmallText(text, pos, colour=WHITE):
     screen.blit(smallFont.render(text, 1, colour), pos)
 
 
-def drawRect(pos, size, colour = LIGHT_BLUE, stick = 0, outside = 1):
+def drawRect(pos, size, colour=LIGHT_BLUE, stick=0, outside=1):
 
     pygame.draw.line(screen, colour, (pos[0] - stick, pos[1] - outside), (pos[0] + size[0] + stick, pos[1] - outside))
     pygame.draw.line(screen, colour, (pos[0] - stick, pos[1] + size[1] + outside), (pos[0] + size[0] + stick, pos[1] + size[1] + outside))
@@ -106,7 +114,7 @@ def drawRect(pos, size, colour = LIGHT_BLUE, stick = 0, outside = 1):
     pygame.draw.line(screen, colour, (pos[0] + size[0] + outside, pos[1] - stick), (pos[0] + size[0] + outside, pos[1] + size[1] + stick))
 
 
-def drawFrame(rect, colour = LIGHT_BLUE, backgroundColour = BLACK):
+def drawFrame(rect, colour = LIGHT_BLUE, backgroundColour=BLACK):
     if backgroundColour is not None:
         pygame.draw.rect(screen, backgroundColour, rect, 0)
     pygame.draw.rect(screen, colour, (rect[0] + 4, rect[1] + 4, rect[2] - 8, rect[3] - 8), 1)
@@ -114,27 +122,44 @@ def drawFrame(rect, colour = LIGHT_BLUE, backgroundColour = BLACK):
         pygame.draw.line(screen, colour, (rect[0] + rect[2] - i, rect[1] + rect[3] - 6), (rect[0] + rect[2] - 6, rect[1] + rect[3] - i), 1)
 
 
-def drawTopFrame(colour = LIGHT_BLUE):
-    rect = SCREEN_RECT
+def drawTopFrame(colour=LIGHT_BLUE):
+    screenRect = SCREEN_RECT
 
-    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 4), (rect[0] + 330, rect[1] + 4))
-    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 4), (rect[0] + 4, rect[1] + 30))
-    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + 30), (rect[0] + 300, rect[1] + 30))
-    pygame.draw.line(screen, colour, (rect[0] + 300, rect[1] + 30), (rect[0] + 330, rect[1] + 4))
-    pygame.draw.line(screen, colour, (rect[0] + 330, rect[1] + 4), (rect[0] + rect[2] - 4, rect[1] + 4))
-    pygame.draw.line(screen, colour, (rect[0] + rect[2] - 4, rect[1] + 4), (rect[0] + rect[2] - 4, rect[1] + rect[3] - 4))
-    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + rect[3] - 4), (rect[0] + rect[2] - 4, rect[1] + rect[3] - 4))
-    pygame.draw.line(screen, colour, (rect[0] + 4, rect[1] + rect[3] - 4), (rect[0] + 4, rect[1] + 30))
+    if int(time.time()) % 20 < 10:
+        screen.blit(gccGreenImage, (screenRect[0] + screenRect[2] - 8 - gccGreenImage.get_width(), screenRect[1] + 8))
+    else:
+        screen.blit(gccColouredImage, (screenRect[0] + screenRect[2] - 8 - gccGreenImage.get_width(), screenRect[1] + 8))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + 4, screenRect[1] + 4), (screenRect[0] + 330, screenRect[1] + 4))
+    pygame.draw.line(screen, colour, (screenRect[0] + 4, screenRect[1] + 4), (screenRect[0] + 4, screenRect[1] + 30))
+    pygame.draw.line(screen, colour, (screenRect[0] + 4, screenRect[1] + 30), (screenRect[0] + 300, screenRect[1] + 30))
+    pygame.draw.line(screen, colour, (screenRect[0] + 300, screenRect[1] + 30), (screenRect[0] + 330, screenRect[1] + 4))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + 330, screenRect[1] + 4), (screenRect[0] + screenRect[2] - 12, screenRect[1] + 4))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + screenRect[2] - 12, screenRect[1] + 4), (screenRect[0] + screenRect[2] - 4, screenRect[1] + 12))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + screenRect[2] - 4, screenRect[1] + 12), (screenRect[0] + screenRect[2] - 4, screenRect[1] + screenRect[3] - 4))
+    pygame.draw.line(screen, colour, (screenRect[0] + 4, screenRect[1] + screenRect[3] - 4), (screenRect[0] + screenRect[2] - 4, screenRect[1] + screenRect[3] - 4))
+    pygame.draw.line(screen, colour, (screenRect[0] + 4, screenRect[1] + screenRect[3] - 4), (screenRect[0] + 4, screenRect[1] + 30))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + screenRect[2] - gccGreenImage.get_width() - 4, screenRect[1] + gccGreenImage.get_height() + 12),
+                     (screenRect[0] + screenRect[2] - 4, screenRect[1] + gccGreenImage.get_height() + 12))
+    pygame.draw.line(screen, colour, (screenRect[0] + screenRect[2] - gccGreenImage.get_width() - 4, screenRect[1] + gccGreenImage.get_height() + 12),
+                     (screenRect[0] + screenRect[2] - gccGreenImage.get_width() - 12, screenRect[1] + gccGreenImage.get_height() + 4))
+
+    pygame.draw.line(screen, colour, (screenRect[0] + screenRect[2] - gccGreenImage.get_width() - 12, screenRect[1] + 4),
+                     (screenRect[0] + screenRect[2] - gccGreenImage.get_width() - 12, screenRect[1] + gccGreenImage.get_height() + 4))
 
 
-def drawFilledRect(pos, size, colour = LIGHT_BLUE):
+def drawFilledRect(pos, size, colour=LIGHT_BLUE):
     pygame.draw.rect(screen, colour, pygame.Rect(pos, size))
 
 
-def drawImage(image, pos, stick = 6):
+def drawImage(image, pos, stick=6):
     screen.blit(image, pos)
 
-    drawRect(pos, image.get_size(), stick = stick, outside = 1)
+    drawRect(pos, image.get_size(), stick=stick, outside=1)
 
 
 def drawUpArrow(x1, y1, x2, y2, colour):
@@ -149,7 +174,7 @@ def drawDownArrow(x1, y1, x2, y2, colour):
     pygame.draw.line(screen, colour, (x1, y1), (x2, y1))
 
 
-def drawGraph(pos, size, data, minData, maxData, maxPoints, axisColour = LIGHT_BLUE, dataColour = GREEN, stick = 0):
+def drawGraph(pos, size, data, minData, maxData, maxPoints, axisColour=LIGHT_BLUE, dataColour=GREEN, stick=0):
 
     def calcPoint(d, mn, mx, x, y, h):
         r = mx - mn - 1
