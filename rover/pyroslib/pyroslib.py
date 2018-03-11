@@ -226,23 +226,22 @@ def loop(deltaTime, inner=None):
     global _received
 
     currentTime = time.time()
+
+    _received = False
+    client.loop(0.0005)  # wait for 0.5 ms
+
     until = currentTime + deltaTime
     while currentTime < until:
-        if client is None:
-            time.sleep(0.002)
-        else:
+        if _received:
             _received = False
-            client.loop(0.0005)
-            i = 3
-            while i > 0 and _received == True:
-                _received = False
-                client.loop(0.0005)
-                i -= 1
-
-        if inner is not None:
-            inner()
-
-        currentTime = time.time()
+            client.loop(0.0005)  # wait for 0.1 ms
+            currentTime = time.time()
+        else:
+            time.sleep(0.002)  # wait for 2 ms
+            currentTime = time.time()
+            if currentTime + 0.0005 < until:
+                client.loop(0.0005)  # wait for 0.1 ms
+                currentTime = time.time()
 
 
 def forever(deltaTime, outer=None, inner=None):
