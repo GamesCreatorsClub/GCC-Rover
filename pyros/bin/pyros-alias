@@ -22,7 +22,7 @@ def processSwitches(arguments):
         if arguments[0] == "-d":
             delete = True
         elif arguments[0] == "-h":
-            helpSwitch = True
+            hasHelpSwitch = True
         del arguments[0]
 
     return arguments
@@ -45,10 +45,13 @@ def displayHelp(rc):
     print("If both <alias> and <host-address> are supplied then alias is set.")
     sys.exit(rc)
 
+
 if hasHelpSwitch:
     displayHelp(0)
 
 elif len(args) == 0:
+    if not pc.aliases:
+        print("No aliases set. -h for help")
     for alias in pc.aliases:
         print(alias + " = " + pc.aliases[alias])
 

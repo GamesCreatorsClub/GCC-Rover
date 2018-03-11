@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
         print("Started servo service.")
 
-        pyroslib.forever(0.02
+        pyroslib.forever(0.02)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

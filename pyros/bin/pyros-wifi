@@ -24,7 +24,7 @@ def processArguments(arguments):
 
     while len(arguments) > 0:
         if arguments[0] == "-h":
-            helpSwitch = True
+            hasHelpSwitch = True
         elif arguments[0] == "read":
             if len(arguments) > 1:
                 print("ERROR: Read has no arguments")
