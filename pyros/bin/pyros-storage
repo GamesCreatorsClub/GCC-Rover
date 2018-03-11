@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+#
+# Copyright 2016-2018 Games Creators Club
+#
+# MIT License
+#
+
+import socket
+import sys
+import threading
+import time
+
+import pyroscommon as pc
+
+hasHelpSwitch = False
+timeout = 5  # Default timeout 5 seconds
+
+command = "read"
+
+path = ""
+value = ""
+
+
+def processArguments(arguments):
+    global hasHelpSwitch, timeout, command, path, value
+
+    while len(arguments) > 0:
+        if arguments[0] == "-h":
+            hasHelpSwitch = True
+        elif arguments[0] == "read":
+            if len(arguments) > 2:
+                print("ERROR: " +  arguments[0] + " requires only one argument.")
+                sys.exit(1)
+            elif len(arguments) < 1:
+                print("ERROR: " + arguments[0] + " requires one argument.")
+                sys.exit(1)
+            else:
+                command = "read"
+                path = arguments[1]
+                del arguments[0]
+        elif arguments[0] == "delete" or arguments[0] == "del":
+            if len(arguments) > 2:
+                print("ERROR: " +  arguments[0] + " requires only one argument.")
+                sys.exit(1)
+            elif len(arguments) < 1:
+                print("ERROR: " + arguments[0] + " requires one argument.")
+                sys.exit(1)
+            else:
+                command = "delete"
+                path = arguments[1]
+                del arguments[0]
+        elif arguments[0] == "write":
+            if len(arguments) > 3:
+                print("ERROR: " +  arguments[0] + " requires only one argument.")
+                sys.exit(1)
+            elif len(arguments) < 2:
+                print("ERROR: " + arguments[0] + " requires exactly two arguments.")
+                sys.exit(1)
+            else:
+                command = "write"
+                path = arguments[1]
+                value = arguments[2]
+                del arguments[0]
+                del arguments[0]
+        del arguments[0]
+
+
+args = pc.processCommonHostSwitches(pc.args)
+
+processArguments(args)
+
+
+def displayHelp(rc):
+    print("usage: pyros storage (read <path>|write <path> <value>|(delete|del) <path>)")
+    print("")
+    print("    -h                    help message")
+    print("")
+    print("  Commands:")
+    print("")
+    print("    read <path>           - reads storage from given path")
+    print("    write <path> <value>  - writes to storage on given path")
+    print("    (delete|del) <path>   - deletes entry at given path")
+    print("")
+    print("    If command is omitted then 'read' is implied.")
+    sys.exit(rc)
+
+
+if hasHelpSwitch:
+    displayHelp(0)
+
+
+def executeCommand(client):
+    if command == "read":
+        if path == "/":
+            client.publish("storage/read", command)
+        else:
+            client.publish("storage/read/" + path, command)
+    elif command == "delete":
+        client.publish("storage/write/" + path, "")
+        print("Deleting on path: '" + path + "'")
+    elif command == "write":
+        client.publish("storage/write/" + path, value)
+    return True
+
+
+def processLine(line, path):
+    print(path + " = " + line)
+
+
+def processStatus(line, pid):
+    print(line)
+
+
+pc.processGlobalCommand("storage/write/#", executeCommand, processLine, processStatus)

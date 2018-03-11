@@ -129,10 +129,26 @@ def readStorage(splitPath):
             print("Reading - not found key for " + "/".join(splitPath))
         pyroslib.publish("storage/write/" + "/".join(splitPath), "")
     else:
-        value = str(m[key])
-        if DEBUG:
-            print("Reading - found key for " + "/".join(splitPath) + " = " + value)
-        pyroslib.publish("storage/write/" + "/".join(splitPath), value)
+        if type(m[key]) is dict:
+            if DEBUG:
+                print("Reading - found map at " + "/".join(splitPath))
+            _readRecursively("/".join(splitPath), m[key])
+        else:
+            value = str(m[key])
+            if DEBUG:
+                print("Reading - found key for " + "/".join(splitPath) + " = " + value)
+            pyroslib.publish("storage/write/" + "/".join(splitPath), value)
+
+
+def _readRecursively(path, m):
+    for key in m:
+        if type(m[key]) is dict:
+            _readRecursively(path + "/" + key, m[key])
+        else:
+            value = str(m[key])
+            if DEBUG:
+                print("Reading - found key for " + path + " = " + value)
+            pyroslib.publish("storage/write/" + path + "/" + key, value)
 
 
 def storageWriteTopic(topic, payload, groups):
@@ -147,14 +163,6 @@ def storageReadAllTopic(topic, payload, groups):
 
 def storageReadSpecificTopic(topic, payload, groups):
     readStorage(groups[0].split("/"))
-
-
-def handleEcho(topic, payload, groups):
-    print("Got echo in " + payload)
-    if len(groups) > 0:
-        pyroslib.publish("echo/out", groups[0] + ":" + payload)
-    else:
-        pyroslib.publish("echo/out", "default:" + payload)
 
 
 if __name__ == "__main__":

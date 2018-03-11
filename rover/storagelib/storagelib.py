@@ -144,20 +144,3 @@ def waitForData():
 if __name__ == "__main__":
 
     pyroslib.init("storagelib")
-
-    subscribeToPath("x/y/z")
-    subscribeToPath("x/y/w")
-    subscribeToPath("x/y/q")
-    subscribeToPath("x/o")
-
-    print("Subscribed - now waiting...")
-    started = time.time()
-    waitForData()
-    now = time.time()
-    print("Got all back in " + str(now - started) + "s")
-
-    print("Read 1: " + read("x/o"))
-
-    write("x/o", "new value")
-
-    print("Read 2: " + read("x/o"))
