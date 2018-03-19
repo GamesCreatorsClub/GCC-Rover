@@ -10,3 +10,4 @@ t
 **/__pycache__/**
 **/.idea/**
 **/*.pyc
+pyros/.discovery
