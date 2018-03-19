@@ -19,6 +19,7 @@ doDiscovery = True
 showRovers = False
 selectedRover = 0
 connectedRover = 0
+selectedRoverMap = {}
 
 # {
 #     "rover2": {
@@ -85,22 +86,27 @@ def getBroadcasts():
     return broadcasts
 
 
-def addToList(ip, port, name):
+def addToList(roverMap):
+    roverMap["lastSeen"] = time.time()
+
     for rover in rovers:
-        if rover["address"] == ip and rover["port"] == port:
-            rover["name"] = name
-            rover["lastSeen"] = time.time()
+        if rover["IP"] == roverMap["IP"] and rover["PORT"] == roverMap["PORT"]:
+            for key in roverMap:
+                if key == "PORT":
+                    rover[key] = int(roverMap[key])
+                else:
+                    rover[key] = roverMap[key]
             return
 
-    rovers.append({"address": ip, "port": port, "name": name, "lastSeen": time.time()})
-    print("Found new rover " + str(name) + " @ " + str(ip) + ":" + str(port))
+    rovers.append(roverMap)
+    print("Found new rover " + str(roverMap["NAME"]) + " @ " + str(roverMap["IP"]) + ":" + str(roverMap["PORT"]))
 
 
 def discover():
     global doDiscovery
     packet = "Q#IP=255.255.255.255;PORT=" + str(THIS_PORT)
 
-    lastBroadcastTime = time.time();
+    lastBroadcastTime = time.time()
 
     while True:
         if doDiscovery or time.time() - lastBroadcastTime > BROADCAST_TIMEOUT:
@@ -136,9 +142,12 @@ def discover():
                 port = None
                 deviceType = None
 
+                roverMap = {}
+
                 for keyValue in kvs:
                     kvp = keyValue.split("=")
                     if len(kvp) == 2:
+                        roverMap[kvp[0]] = kvp[1]
                         if kvp[0] == "IP":
                             ip = kvp[1]
                         elif kvp[0] == "PORT":
@@ -154,7 +163,7 @@ def discover():
                 if name is None:
                     name = ip
                 if (port is not None) and (ip is not None) and deviceType == "ROVER":
-                    addToList(ip, port, name)
+                    addToList(roverMap)
                     receivedSomething = True
 
             # print("Got " + p + "  Rovers: " + str(rovers))
@@ -170,10 +179,19 @@ def discover():
 
 
 if len(sys.argv) > 1:
+    roverMap = {}
+
     kv = sys.argv[1].split(":")
     if len(kv) == 1:
         kv.append("1883")
-    addToList(kv[0], int(kv[1]), "Rover")
+
+    roverMap["IP"] = kv[0]
+    roverMap["PORT"] = int(kv[1])
+    roverMap["NAME"] = "Rover(args)"
+    roverMap["TYPE"] = "ROVER"
+    roverMap["JOY_PORT"] = "1880"
+
+    addToList(roverMap)
 
 else:
     thread = threading.Thread(target=discover, args=())
@@ -185,13 +203,13 @@ def getHost():
     if len(rovers) == 0:
         return None
     print("Selected rover " + str(rovers[selectedRover]))
-    return rovers[selectedRover]["address"]
+    return rovers[selectedRover]["IP"]
 
 
 def getPort():
     if len(rovers) == 0:
         return None
-    return rovers[selectedRover]["port"]
+    return int(rovers[selectedRover]["PORT"])
 
 
 def connect():
@@ -201,7 +219,7 @@ def connect():
 
     if len(rovers) == 0:
         return None
-    pyros.connect(rovers[selectedRover]["address"], rovers[selectedRover]["port"], waitToConnect=False)
+    pyros.connect(rovers[selectedRover]["IP"], rovers[selectedRover]["PORT"], waitToConnect=False)
 
 
 lmeta = False
@@ -289,7 +307,7 @@ def getSelectedRoverIP(i):
     if selectedRover >= len(rovers):
         return ""
 
-    return str(rovers[i]["address"]) + ":" + str(rovers[i]["port"])
+    return str(rovers[i]["IP"]) + ":" + str(rovers[i]["PORT"])
 
 
 _connectionCounter = 1

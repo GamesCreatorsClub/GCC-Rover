@@ -43,6 +43,11 @@ def getHostname():
         if hostname.endswith('\n'):
             hostname = hostname[0:len(hostname) - 1]
 
+        if hostname.startswith("gcc-"):
+            hostname = hostname[4].upper() + hostname[5:]
+
+        hostname = hostname.replace("-", "")
+
         return hostname
     else:
         return "UNKNOWN"
@@ -54,6 +59,37 @@ def getIpAddress():
             return getIpAddressFromInterface(interface)
         except:
             pass
+
+
+def getType():
+    return "ROVER"
+
+
+def createResponseFromMap(map):
+    response = ""
+    for key in map:
+        if len(response) > 0:
+            response = response + ";"
+        response = response + key + "=" + str(map[key])
+
+    return response
+
+
+def prepareResponse():
+    map = {}
+    map["IP"] = getIpAddress()
+    map["PORT"] = "1883"
+    map["NAME"] = getHostname()
+    map["TYPE"] = getType()
+
+    try:
+        from jcontroller import JCONTROLLER_UDP_PORT
+        map["JOY_PORT"] = str(JCONTROLLER_UDP_PORT)
+    except BaseException as e:
+        print("    does not have joystick controller; " + str(e))
+        pass
+
+    return "A#" + createResponseFromMap(map)
 
 
 if __name__ == "__main__":
@@ -94,12 +130,9 @@ if __name__ == "__main__":
                                     except:
                                         pass
 
-                        myip = getIpAddress()
-                        myport = "1883"
-                        myname = getHostname()
-                        mytype = "ROVER"
+                        response = prepareResponse()
 
-                        send(returnip, returnport, "A#IP=" + myip + ";PORT=" + str(myport) + ";NAME=" + myname + ";TYPE=" + mytype)
+                        send(returnip, returnport, response)
                 except:
                     pass
 

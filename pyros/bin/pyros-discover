@@ -15,7 +15,6 @@ import pyroscommon as pc
 
 hasHelpSwitch = False
 verboseFlag = True
-timeout = 5  # Default timeout 5 seconds
 
 
 def processSwitches(arguments):
@@ -54,87 +53,42 @@ def displayHelp(rc):
     sys.exit(rc)
 
 
+def processResponse(resp):
+    err = 1
+    details = {}
+    for entry in resp.split(";"):
+        split = entry.split("=")
+        if len(split) == 2:
+            details[split[0]] = split[1]
+        else:
+            details["ERROR" + str(err)] = entry
+
+    errors = []
+    for key in details:
+        if key != "IP" and key != "NAME" and key != "TYPE" and key != "PORT":
+            if key.startswith("ERROR"):
+                errors.append(details[key])
+            else:
+                errors.append(key + "=" + details[key])
+
+    print("{0!s:<20} {1:<20} {2:<20} {3}".format(details["IP"] + ":" + details["PORT"], details["NAME"], details["TYPE"], ";".join(errors)))
+
+
+def receiveDiscovery():
+    print("{0!s:<20} {1:<20} {2:<20} {3}".format("ip", "name", "type", "other"))
+    pc.receiveDiscoveryPackets(processResponse)
+    sys.exit(0)
+
+
 if hasHelpSwitch:
     displayHelp(0)
 
 else:
 
-    sockets = []
-    ips = []
+    pc.setupListening()
 
-    listeningSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    listeningSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listeningSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    listeningSocket.setblocking(0)
-    listeningSocket.settimeout(timeout)
-
-    listeningSocket.bind(('', 0))
-    # sockets.append(listeningSocket)
-    # ips.append('255.255.255.255')
-
-    for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
-        sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sck.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sck.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sck.setblocking(0)
-        sck.settimeout(timeout)
-
-        # sck.bind((ip, 0))
-        sockets.append(sck)
-        ips.append(ip)
-
-    def processResponse(resp):
-        err = 1
-        details = {}
-        for entry in resp.split(";"):
-            split = entry.split("=")
-            if len(split) == 2:
-                details[split[0]] = split[1]
-            else:
-                details["ERROR" + str(err)] = entry
-
-        errors = []
-        for key in details:
-            if key != "IP" and key != "NAME" and key != "TYPE":
-                if key.startswith("ERROR"):
-                    errors.append(details[key])
-                else:
-                    errors.append(key + "=" + details[key])
-
-        print("{0!s:<20} {1:<20} {2:<20} {3}".format(details["IP"], details["NAME"], details["TYPE"], ";".join(errors)))
-
-
-    def receive():
-        print("{0!s:<20} {1:<20} {2:<20} {3}".format("ip", "name", "type", "other"))
-
-        startTime = time.time()
-        while time.time() - startTime < timeout:
-            try:
-                data, addr = listeningSocket.recvfrom(1024)
-                p = str(data, 'utf-8')
-                if p.startswith("A#"):
-                    processResponse(p[2:])
-                # elif p.startswith("Q#"):
-                #     print("Received self query:" + p)
-            except:
-                pass
-        sys.exit(0)
-
-
-    def send(packet):
-        for i in range(0, len(sockets)):
-            s = sockets[i]
-            sendIp = ips[i]
-            ipSplit = sendIp.split(".")
-            ipSplit[3] = "255"
-            sendIp = ".".join(ipSplit)
-            updated_packet = packet + "IP=" + ips[i] + ";PORT=" + str(listeningSocket.getsockname()[1])
-            s.sendto(bytes(updated_packet, 'utf-8'), (sendIp, 0xd15c))
-            # print("Sent packet " + updated_packet + " to  " + sendIp)
-
-
-    thread = threading.Thread(target=receive, args=())
+    thread = threading.Thread(target=receiveDiscovery, args=())
     thread.daemon = False
     thread.start()
 
-    send("Q#")
+    pc.sendDiscoveryPacket("Q#")

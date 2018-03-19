@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import paho.mqtt.client as mqtt
+import socket
 
 DEFAULT_TIMEOUT = 10
 
@@ -30,6 +31,7 @@ aliases = {}
 
 hasHelpSwitch = False
 timeout = None
+DISCOVERY_TIMEOUT = None
 connected = False
 host = None
 port = 1883
@@ -92,6 +94,62 @@ def _processTOption(i):
     except:
         print("ERROR: -t option must be followed with a number. '" + args[i] + "' is not a number.")
         sys.exit(1)
+
+
+DISCOVERY_TIMEOUT = 5  # Default timeout 5 seconds
+discoverySockets = []
+discoveryIPs = []
+
+
+def setupListening():
+    global listeningSocket
+
+    listeningSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listeningSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listeningSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    listeningSocket.setblocking(0)
+    listeningSocket.settimeout(DISCOVERY_TIMEOUT)
+
+    listeningSocket.bind(('', 0))
+    # sockets.append(listeningSocket)
+    # ips.append('255.255.255.255')
+
+    for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+        sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sck.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sck.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sck.setblocking(0)
+        sck.settimeout(DISCOVERY_TIMEOUT)
+
+        # sck.bind((ip, 0))
+        discoverySockets.append(sck)
+        discoveryIPs.append(ip)
+
+
+def sendDiscoveryPacket(packet):
+    for i in range(0, len(discoverySockets)):
+        s = discoverySockets[i]
+        sendIp = discoveryIPs[i]
+        ipSplit = sendIp.split(".")
+        ipSplit[3] = "255"
+        sendIp = ".".join(ipSplit)
+        updated_packet = packet + "IP=" + discoveryIPs[i] + ";PORT=" + str(listeningSocket.getsockname()[1])
+        s.sendto(bytes(updated_packet, 'utf-8'), (sendIp, 0xd15c))
+        # print("Sent packet " + updated_packet + " to  " + sendIp)
+
+
+def receiveDiscoveryPackets(processResponseCallback):
+    startTime = time.time()
+    while time.time() - startTime < DISCOVERY_TIMEOUT:
+        try:
+            data, addr = listeningSocket.recvfrom(1024)
+            p = str(data, 'utf-8')
+            if p.startswith("A#"):
+                processResponseCallback(p[2:])
+            # elif p.startswith("Q#"):
+            #     print("Received self query:" + p)
+        except:
+            pass
 
 
 def processCommonHostSwitches(arguments):
@@ -324,18 +382,18 @@ def processGlobalCommand(topic, executeCommand, processOut, processStatus):
         global connected, countdown
 
         payload = str(msg.payload, 'utf-8')
-        topic = msg.topic
+        currentTopic = msg.topic
 
         if afterCommand:
-            if topic.startswith("exec/"):
-                if topic.endswith("/out"):
-                    pid = topic[5:len(topic)-4]
+            if currentTopic.startswith("exec/"):
+                if currentTopic.endswith("/out"):
+                    pid = currentTopic[5:len(currentTopic)-4]
                     connected = processOut(payload, pid)
-                elif topic.endswith("/status"):
-                    pid = topic[5:len(topic)-7]
+                elif currentTopic.endswith("/status"):
+                    pid = currentTopic[5:len(currentTopic)-7]
                     connected = processStatus(payload, pid)
             else:
-                connected = processOut(payload, topic)
+                connected = processOut(payload, currentTopic)
 
             countdown = getTimeout()
         else:

@@ -9,6 +9,8 @@
 import os
 import sys
 import pyroscommon as pc
+import time
+import threading
 
 
 if len(pc.args) == 0:
@@ -24,6 +26,9 @@ host = None
 
 pc.loadAliases()
 
+discoveryFile = pc.installDir + "/.discovery"
+DISCOVERY_TIMEOUT = 60  # one minute
+
 
 def commandExists(cmd):
     if os.path.exists(pc.binDir + "/pyros-" + cmd):
@@ -33,6 +38,65 @@ def commandExists(cmd):
         if os.path.exists(pc.binDir + "/pyros-" + cmd):
             return cmd
     return None
+
+
+def readDiscovery():
+    res = {}
+    try:
+        with open(discoveryFile, "rt") as file:
+            lines = file.readlines()
+
+            for line in lines:
+                split = line.split("=")
+                if len(split) == 2:
+                    key = split[0]
+                    value = split[1]
+                    res[key] = value
+    except BaseException as e:
+        print(e)
+        pass
+
+    return res
+
+
+def runDiscovery():
+    global done
+    rovers = {}
+    done = False
+
+    def processResponse(resp):
+        err = 1
+        details = {}
+        for entry in resp.split(";"):
+            split = entry.split("=")
+            if len(split) == 2:
+                details[split[0]] = split[1]
+            else:
+                details["ERROR" + str(err)] = entry
+
+        rovers[details["NAME"]] = details["IP"] + ":" + details["PORT"]
+
+    def receiveDiscovery():
+        global done
+
+        pc.receiveDiscoveryPackets(processResponse)
+        done = True
+
+    pc.setupListening()
+
+    thread = threading.Thread(target=receiveDiscovery, args=())
+    thread.daemon = False
+    thread.start()
+
+    pc.sendDiscoveryPacket("Q#")
+
+    while not done:
+        time.sleep(0.1)
+
+    with open(discoveryFile, "wt") as file:
+        for roverName in rovers:
+            file.write(roverName + "=" + rovers[roverName] + "\n")
+
 
 args = pc.args
 
@@ -76,10 +140,18 @@ if command is not None:
             if pc.defaultAlias is not None:
                 host = pc.defaultAlias
             else:
-                print("No default alias is set. Use pyros <host[:port]> <command> <args> format or set default alias with:")
-                print("")
-                print("    pyros alias default <host>")
-                sys.exit(1)
+                if not os.path.exists(discoveryFile) or os.path.getmtime(discoveryFile) + DISCOVERY_TIMEOUT < time.time():
+                    runDiscovery()
+
+                discoveredRovers = readDiscovery()
+                if len(discoveredRovers) == 1:
+                    host = discoveredRovers[list(discoveredRovers.keys())[0]]
+                elif len(discoveredRovers) == 0:
+                    print("No rovers were discovered. Please check if discovery service is running or supply IP:PORT")
+                    sys.exit(1)
+                else:
+                    print("More than one rover is discovered. Please select one by its name.")
+
         args.insert(0, host)
 
     fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
