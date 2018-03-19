@@ -25,7 +25,7 @@ TURN_SPEED = 50
 ROTATE_SPEED = 50
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
-SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 14, 20, 25, 30, 35, 40, 40]
+SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
 SPEEDS = SPEEDS_ROVER_4
 SPEEDS_OFFSET = 6
 
@@ -339,7 +339,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         speedIndex = int(outputForward * SPEEDS_OFFSET + SPEEDS_OFFSET)
         speed = SPEEDS[speedIndex]
 
-        if abs(sideDelta) < 7:
+        if sideDistance > 90 or abs(sideDelta) < 2:
             outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
             outputSide = -normalise(outputSide, SIDE_DISTANCE)
 
@@ -420,13 +420,21 @@ def algorithm4Loop():
         setAlgorithm(brake)
 
 
+start_angle = 0
+
+
 def algorithm5Start():
     print("started algorithm 5...")
     setAlgorithm(algorithm5Loop)
+    start_angle = gyroAngle
 
 
 def algorithm5Loop():
-    pass
+    if gyroAngle < start_angle + 180:
+        rotateRight ()
+    else:
+        stop()
+        setAlgorithm(stop)
 
 
 def algorithm6Start():
