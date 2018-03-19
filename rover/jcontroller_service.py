@@ -8,6 +8,7 @@
 
 import array
 import math
+import socket
 import struct
 import threading
 import time
@@ -21,6 +22,8 @@ DEBUG_BUTTONS = False
 DEBUG_JOYSTICK = False
 EXPO = 0.5
 MAX_STOPPING = 10
+
+JCONTROLLER_UDP_PORT = 1880
 
 lastDividerL = 1
 lastDividerR = 1
@@ -215,13 +218,53 @@ def readEvents():
                 time.sleep(0.2)
 
 
+def readUDPEvents():
+    global haveJoystickEvent
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(('', JCONTROLLER_UDP_PORT))
+
+    s.settimeout(10)
+    print("    Started receive thread...")
+    while True:
+        try:
+            data, addr = s.recvfrom(1024)
+            p = str(data, 'utf-8')
+
+            if p.startswith("J#"):
+                kvps = p[2:].split(";")
+                for kvp in kvps:
+                    kv = kvp.split("=")
+                    if len(kvp) == 2:
+                        key = kvp[0]
+                        value = kvp[1]
+
+                        if key in axis_states:
+                            axis_states[key] = float(value)
+                            haveJoystickEvent = True
+                        elif key in button_states:
+                            button_states[key] = int(value)
+                            haveJoystickEvent = True
+
+        except:
+            pass
+
+
 def startReadEventsLoopThread():
     thread = threading.Thread(target=readEvents, args=())
     thread.daemon = True
     thread.start()
 
 
+def startReadUDPEventsLoopThread():
+    thread = threading.Thread(target=readUDPEvents, args=())
+    thread.daemon = True
+    thread.start()
+
+
 startReadEventsLoopThread()
+startReadUDPEventsLoopThread()
 
 topSpeed = 50
 sensorDistance = 200
@@ -263,11 +306,13 @@ lastBoost = False
 
 balLocked = False
 
+
 def moveServo(servoid, angle):
     # TODO move this out to separate service
     f = open("/dev/servoblaster", 'w')
     f.write(str(servoid) + "=" + str(angle) + "\n")
     f.close()
+
 
 def processButtons():
     global lastX3, lastY3, lastSelect, lastStart
@@ -384,12 +429,11 @@ def processButtons():
             moveServo(8, 220)
 
         if tl:
-            moveServo(8, 100    )
+            moveServo(8, 100)
             balLocked = False
         else:
             if not balLocked:
                 moveServo(8, 150)
-
 
         if bx and bx != lastBX:
             kick = 1
@@ -466,7 +510,6 @@ def processJoysticks():
 
     lx = float(axis_states["x"])
     ly = float(axis_states["y"])
-
 
     rx = float(axis_states["rx"])
     ry = float(axis_states["ry"])
