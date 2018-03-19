@@ -617,6 +617,29 @@ def getMeasurementTimingBudget(address):
     return budget_us
 
 
+# def setMaxDistance(address, RangeMilliMeter, SignalRateRtnMegaCps):
+#
+# 	# Check if one of input parameter is zero, in that case the
+# 	# value are get from NVM
+#
+# 	if RangeMilliMeter == 0 or SignalRateRtnMegaCps == 0:
+# 		# NVM parameters
+# 		# Run VL53L0X_get_info_from_device wit option 4 to get
+# 		# signal rate at 400 mm if the value have been already
+# 		# get this function will return with no access to device
+#
+# 		VL53L0X_get_info_from_device(Dev, 4)
+#
+# 		SignalRateRtnMegaCpsTemp = VL53L0X_GETDEVICESPECIFICPARAMETER(Dev, SignalRateMeasFixed400mm)
+#
+# 		PALDevDataSet(Dev, DmaxCalRangeMilliMeter, 400)
+# 		PALDevDataSet(Dev, DmaxCalSignalRateRtnMegaCps, SignalRateRtnMegaCpsTemp)
+#     else:
+# 		# User parameters
+# 		PALDevDataSet(Dev, DmaxCalRangeMilliMeter, RangeMilliMeter)
+# 		PALDevDataSet(Dev, DmaxCalSignalRateRtnMegaCps, SignalRateRtnMegaCps)
+
+
 def _performSingleRefCalibration(address, vhv_init_byte):
     i2cBus.write_byte_data(address, VL53L0X_REG_SYSRANGE_START, 0x01 | vhv_init_byte)  # VL53L0X_REG_SYSRANGE_MODE_START_STOP
 
