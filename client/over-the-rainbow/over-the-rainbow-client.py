@@ -460,6 +460,9 @@ while True:
 
     pyros.gccui.background(True)
 
+    avgDistance1String = str(format(avgDistance1, '.2f'))
+    avgDistance2String = str(format(avgDistance2, '.2f'))
+
     hpos = 40
     hpos = pyros.gccui.drawKeyValue("Local FPS", str(localFPS), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Recording", str(record), 8, hpos)
@@ -468,8 +471,8 @@ while True:
     hpos = pyros.gccui.drawKeyValue("Selected", str(ptr) + " of " + str(len(processedImages)), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Running", str(running), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Turn dist", str(feedback["turnDistance"]), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg1), str(distance1) + ", avg: " + str(avgDistance1), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg2), str(distance2) + ", avg: " + str(avgDistance2), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg1), str(distance1) + ", avg: " + avgDistance1String, 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg2), str(distance2) + ", avg: " + avgDistance2String, 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Gyro", str(round(gyroAngle, 1)), 8, hpos)
 
     # if len(historyDistances[0]):
