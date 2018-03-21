@@ -19,7 +19,7 @@ import pyros.agent
 import pyros.pygamehelper
 
 
-DEBUG_AXES = False
+DEBUG_AXES = True
 DEBUG_BUTTONS = False
 DEBUG_JOYSTICK = True
 MAX_PING_TIMEOUT = 1
@@ -264,7 +264,7 @@ def processButtons():
 
     global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick
 
-    # print("Axis states: " + str(axis_states))
+    print("Axis states: " + str(axis_states))
 
     # 4 ly up: "TopBtn2", lx r 5: "PinkieBtn", ly down 6: "BaseBtn", lx left 7:"BaseBtn2"
     # x3 = int(axis_states["hat0x"])
@@ -383,7 +383,7 @@ def processButtons():
         if DEBUG_BUTTONS:
             print("ERR Button states: " + str(button_states) + str(e))
         if DEBUG_AXES:
-            print("ERR Axis states: " + str(axis_states) + str(e))
+            print("ERR Axis states  : " + str(axis_states) + str(e))
 
 
 def calcRoverSpeed(speed):

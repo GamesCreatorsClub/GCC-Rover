@@ -397,15 +397,18 @@ def processButtons():
                 elif topSpeed > 50:
                     topSpeed = 50
 
-        if tl and tl != lastTL:
+        if tl2 and tl2 != lastTL2:
+            print("prepared to do orbit")
             prepareToOrbit = True
             pyros.publish("sensor/distance/read", "0")
 
-        doOrbit = tl
+        doOrbit = tl2
+
+        # print("tl2: " + str(tl2) + " lastTL2: " + str(lastTL2))
 
         continueToReadDistance = tl2
         if tl2 != lastTL2:
-            if tl:
+            if tl2:
                 pyros.publish("sensor/distance/continuous", "start")
             else:
                 pyros.publish("sensor/distance/continuous", "stop")
@@ -559,8 +562,10 @@ def processJoysticks():
 
         alreadyStopped = 0
     elif ld > 0.1:
-        if doOrbit and not prepareToOrbit:
-            distance = sensorDistance
+        if doOrbit :
+            print("orbiting")
+            # distance = sensorDistance
+            distance = 10
             if distance > 1000:
                 distance = 1000
             roverSpeed = calcRoverSpeed(lx) / 2.5
@@ -603,6 +608,7 @@ def handleDistance(topic, message, groups):
     else:
         split = message.split(":")
         d = float(split[1])
+        print("d: " + str(d))
         if d >= 0:
             sensorDistance = d
 
