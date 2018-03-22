@@ -346,19 +346,19 @@ buttons = {
         "rect": pygame.Rect(308, 608, getTextWidth("-"), getTextHeight("-")),
     },
 
-    "Stop": {
-        "texture": texts["Stop"],
-        "rect": pygame.Rect(410, 20, getTextWidth("Stop"), getTextHeight("Stop")),
-    },
-
     "Run": {
         "texture": texts["Run"],
-        "rect": pygame.Rect(350, 20, getTextWidth("Run"), getTextHeight("Run")),
+        "rect": pygame.Rect(290, 34, getTextWidth("Run"), getTextHeight("Run")),
+    },
+
+    "Stop": {
+        "texture": texts["Stop"],
+        "rect": pygame.Rect(350, 34, getTextWidth("Stop"), getTextHeight("Stop")),
     },
 
     "Fix servos": {
         "texture": texts["Fix servos"],
-        "rect": pygame.Rect(480, 20, getTextWidth("Fix servos"), getTextHeight("Fix servos")),
+        "rect": pygame.Rect(420, 34, getTextWidth("Fix servos"), getTextHeight("Fix servos")),
     },
 }
 
