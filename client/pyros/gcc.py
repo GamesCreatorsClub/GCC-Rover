@@ -88,14 +88,13 @@ def getBroadcasts():
 
 def addToList(roverMap):
     roverMap["lastSeen"] = time.time()
+    if "PORT" in roverMap:
+        roverMap["PORT"] = int(roverMap["PORT"])
 
     for rover in rovers:
         if rover["IP"] == roverMap["IP"] and rover["PORT"] == roverMap["PORT"]:
             for key in roverMap:
-                if key == "PORT":
-                    rover[key] = int(roverMap[key])
-                else:
-                    rover[key] = roverMap[key]
+                rover[key] = roverMap[key]
             return
 
     rovers.append(roverMap)
@@ -178,7 +177,7 @@ def discover():
         # addToList("127.0.0,6", 1883, "Local6")
 
 
-if len(sys.argv) > 1:
+def addSuppliedRover():
     roverMap = {}
 
     kv = sys.argv[1].split(":")
@@ -192,6 +191,10 @@ if len(sys.argv) > 1:
     roverMap["JOY_PORT"] = "1880"
 
     addToList(roverMap)
+
+
+if len(sys.argv) > 1:
+    addSuppliedRover()
 
 else:
     thread = threading.Thread(target=discover, args=())
@@ -294,8 +297,8 @@ def getSelectedRoverDetailsText(i):
 
     name = "Unknown Rover"
 
-    if "name" in rovers[i]:
-        name = rovers[i]["name"]
+    if "NAME" in rovers[i]:
+        name = rovers[i]["NAME"]
 
     if name.startswith("gcc-rover-"):
         name = "GCC Rover " + name[10:]
