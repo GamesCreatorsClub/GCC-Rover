@@ -7,10 +7,10 @@
 
 import sys
 import time
-import math
 import pygame
 import pyros
 import pyros.gcc
+import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
 from PIL import Image
@@ -67,8 +67,6 @@ continuous = False
 localFPS = 0
 lastProcessed = time.time()
 renewContinuous = time.time()
-
-result = {}
 
 distanceDeg1 = -1
 distanceDeg2 = -1
@@ -138,20 +136,23 @@ def handleImageDetails(topic, message, groups):
     for line in message.split("\n"):
         split = line.split(",")
         if len(split) == 3:
-            result = int(split[0]), int(split[1]), split[2].lower()
+            result = int(split[0]), int(split[1]), split[2].lower(), 10
+            results.append(result)
+        elif len(split) >= 4:
+            result = int(split[0]), int(split[1]), split[2].lower(), int(split[3])
             results.append(result)
 
-    print("Got details " + str(results))
+    print("Got details " + str(results) + " from: \n" + message)
 
     for result in results:
         if "red" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.RED, "red")
+            drawTarget(lastImage, result, pyros.gccui.RED, "red", result[3])
         if "green" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.GREEN, "green")
+            drawTarget(lastImage, result, pyros.gccui.GREEN, "green", result[3])
         if "yellow" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.YELLOW, "yellow")
+            drawTarget(lastImage, result, pyros.gccui.YELLOW, "yellow", result[3])
         if "blue" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.BLUE, "blue")
+            drawTarget(lastImage, result, pyros.gccui.BLUE, "blue", result[3])
 
     if lastImage is not None:
         rawImage = pygame.transform.scale(lastImage, (80, 64))
@@ -166,9 +167,9 @@ def handleImageDetails(topic, message, groups):
 def handleCameraRaw(topic, message, groups):
     global rawImage, rawImageBig, lastProcessed, localFPS, lastImage
 
-    now = time.time()
-    delta = now - lastProcessed
-    lastProcessed = now
+    n = time.time()
+    delta = n - lastProcessed
+    lastProcessed = n
 
     if delta < 5:
         localFPS = "%.2f" % round(1 / delta, 2)
@@ -203,7 +204,6 @@ def handleCameraRaw(topic, message, groups):
 
 
 def processImage(image):
-    global result
 
     red_pixels = []
     green_pixels = []
@@ -287,17 +287,20 @@ def calculateCentre(pixels):
     return cx, cy
 
 
-def drawTarget(image, centre, colour, text):
-    x = centre[0] - 20
+def drawTarget(image, centre, colour, text, radius=20):
+    if radius < 16:
+        radius = 16
+
+    x = centre[0] - radius / 4
     if x < 0:
         x = 0
 
-    y = centre[1] - 20
+    y = centre[1] - radius / 4
     if y < 0:
         y = 0
 
-    w = 80 - 1
-    h = 80 - 1
+    w = radius - 1
+    h = radius - 1
 
     tl = 13
     tl1 = 12
@@ -311,7 +314,7 @@ def drawTarget(image, centre, colour, text):
 
     pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x + tl, y + h))
     pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x, y + h - tl))
-    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + 1, y  + h - tl1))
+    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + 1, y + h - tl1))
     pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + tl1, y + h - 1))
 
     pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y), (x + w - tl, y))
@@ -320,7 +323,7 @@ def drawTarget(image, centre, colour, text):
     pygame.draw.line(image, colour, (x + w - 1, y + 1), (x + w - tl1, y + 1))
 
     pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y + h), (x + w - tl, y + h))
-    pygame.draw.line(image, pyros.gccui.WHITE, (x + w , y + h), (x + w, y + h - tl))
+    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y + h), (x + w, y + h - tl))
     pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - 1, y + h - tl1))
     pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - tl1, y + h - 1))
 
@@ -497,6 +500,7 @@ while True:
     avgDistance1String = str(format(avgDistance1, '.2f'))
     avgDistance2String = str(format(avgDistance2, '.2f'))
 
+    # noinspection PyRedeclaration
     hpos = 40
     hpos = pyros.gccui.drawKeyValue("Local FPS", str(localFPS), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Recording", str(record), 8, hpos)
@@ -531,14 +535,13 @@ while True:
     else:
         i = len(processedImages) - 1
 
-    x = 1024 - 320 - 16
-    while i >= 0 and x >= 0:
-        pyros.gccui.drawImage(processedBigImages[i], (x, 420))
-        x -= 336
+    imgX = 1024 - 320 - 16
+    while i >= 0 and imgX >= 0:
+        pyros.gccui.drawImage(processedBigImages[i], (imgX, 420))
+        imgX -= 336
         i -= 1
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
 
     now = time.time()
-

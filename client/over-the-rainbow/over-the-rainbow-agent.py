@@ -9,11 +9,14 @@ import math
 import time
 import traceback
 
+import numpy
+
 import pyroslib
-from RPi import GPIO
-
-from PIL import Image
-
+import cv2
+import PIL
+import PIL.Image
+# import scipy
+# import scipy.spatial
 
 DEBUG = True
 
@@ -61,6 +64,7 @@ digestTime = time.time()
 size = (320, 256)
 
 lastProcessed = time.time()
+
 
 def setAlgorithm(alg):
     global algorithm
@@ -205,13 +209,13 @@ def handleOverTheRainbow(topic, message, groups):
         setAlgorithm(algorithm10Start)
 
 
-def normalise(value, max):
-    if value > max:
-        value = max
-    if value < -max:
-        value = -max
+def normalise(value, maxValue):
+    if value > maxValue:
+        value = maxValue
+    if value < -maxValue:
+        value = -maxValue
 
-    return value / max
+    return value / maxValue
 
 
 def sign(x):
@@ -223,8 +227,8 @@ def sign(x):
         return 0
 
 
-def steer(distance=0, speed=FORWARD_SPEED):
-    pyroslib.publish("move/steer", str(distance) + " " + str(speed))
+def steer(steerDistance=0, speed=FORWARD_SPEED):
+    pyroslib.publish("move/steer", str(steerDistance) + " " + str(speed))
 
 
 def drive(angle=0, speed=FORWARD_SPEED):
@@ -361,10 +365,10 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                 log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
                 drive(angle, speed)
         else:
-            distance = -direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
+            steerDistance = -direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
 
-            log("TURN2 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(distance))
-            steer(distance, speed)
+            log("TURN2 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(steerDistance))
+            steer(steerDistance, speed)
 
 
 def algorithm2Start():
@@ -429,7 +433,7 @@ def algorithm4Loop():
         stopDriving()
         setAlgorithm(stop)
     else:
-        output = (distance1 - STOP_DISTANCE) / STOP_DISTANCE * 0.7 - deltaDistance1 * 0.3;
+        output = (distance1 - STOP_DISTANCE) / STOP_DISTANCE * 0.7 - deltaDistance1 * 0.3
         if output > 1:
             output = 1
 
@@ -437,7 +441,6 @@ def algorithm4Loop():
         speed = SPEEDS[speedIndex]
         log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed))
         drive(0, speed)
-
 
 
 start_angle = 0
@@ -554,7 +557,7 @@ def algorithm10Loop():
 
 
 def handleCameraRaw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS
+    global lastProcessed, localFPS
 
     now = time.time()
     delta = now - lastProcessed
@@ -566,19 +569,17 @@ def handleCameraRaw(topic, message, groups):
         localFPS = "-"
 
     pilImage = toPILImage(message)
+    openCVImage = numpy.array(pilImage)
+    # result = processImage(pilImage)
 
-    result = processImage(pilImage)
-
+    results = processImageCV(openCVImage)
     message = ""
 
-    if "red" in result:
-        message = message + str(result["red"][0]) + "," + str(result["red"][1]) + ",red\n"
-    if "green" in result:
-        message = message + str(result["green"][0]) + "," + str(result["green"][1]) + ",green\n"
-    if "yellow" in result:
-        message = message + str(result["yellow"][0]) + "," + str(result["yellow"][1]) + ",yellow\n"
-    if "blue" in result:
-        message = message + str(result["blue"][0]) + "," + str(result["blue"][1]) + ",blue\n"
+    for result in results:
+        message = message + str(int(result[0])) + "," + str(int(result[1])) + "," + str(result[2]) + "," + str(int(result[3]))
+        if len(result) > 4:
+            message = message + "," + str(result[4])
+        message = message + "\n"
 
     if len(message) > 0:
         message = message[:-1]
@@ -592,8 +593,92 @@ def handleCameraRaw(topic, message, groups):
 
 
 def toPILImage(imageBytes):
-    pilImage = Image.frombytes("RGB", size, imageBytes)
+    pilImage = PIL.Image.frombytes("RGB", size, imageBytes)
     return pilImage
+
+
+colorNames = ["red", "green", "blue", "yellow"]
+labColours = numpy.zeros((4, 1, 3), dtype="uint8")
+labColours[0] = (255, 0, 0)
+labColours[1] = (0, 255, 0)
+labColours[2] = (0, 0, 255)
+labColours[3] = (255, 255, 0)
+labColours = cv2.cvtColor(labColours, cv2.COLOR_RGB2LAB)
+
+print("Lab colours")
+for labColour in labColours:
+    print(str(labColour))
+
+
+def processImageCV(image):
+
+    def eucleadianDistance(v1, v2):
+        res = 0
+        for index in range(0, len(v1)):
+            d = v1[index] - v2[index]
+            res = res + (d * d)
+
+        try:
+            return math.sqrt(res)
+        except BaseException as e:
+            print("Error : " + str(res) + " " + str(e))
+
+    # ratio = image.shape[0] / float(resized.shape[0])
+
+    # blur the resized image slightly, then convert it to both
+    # grayscale and the L*a*b* color spaces
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+    lab = cv2.cvtColor(blurred, cv2.COLOR_BGR2LAB)
+    thresh = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY)[1]
+
+    # find contours in the thresholded image
+    cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cnts[1]
+
+    results = []
+
+    for c in cnts:
+        # initialize the shape detector and color labeler
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        if len(approx) > 5:
+            # circle
+
+            center, radius = cv2.minEnclosingCircle(c)
+
+            # M = cv2.moments(c)
+            # cX = int(M["m10"] / M["m00"])
+            # cY = int(M["m01"] / M["m00"])
+
+            # construct a mask for the contour, then compute the
+            # average L*a*b* value for the masked region
+            mask = numpy.zeros(image.shape[:2], dtype="uint8")
+            cv2.drawContours(mask, [c], -1, 255, -1)
+            mask = cv2.erode(mask, None, iterations=2)
+            mean = cv2.mean(image, mask=mask)[:3]
+
+            # initialize the minimum distance found thus far
+            minDist = (numpy.inf, None)
+
+            # loop over the known L*a*b* color values
+            for (i, row) in enumerate(labColours):
+                # compute the distance between the current L*a*b*
+                # color value and the mean of the image
+                # d = scipy.spatial.distance.euclidean(row[0], mean)
+                d = eucleadianDistance(row[0], mean)
+
+                # if the distance is smaller than the current distance,
+                # then update the bookkeeping variable
+                if d < minDist[0]:
+                    minDist = (d, i)
+
+            # return the name of the color with the smallest distance
+            colourName = colorNames[minDist[1]]
+
+            results.append((center[0], center[1], colourName, radius, str(mean)))
+
+    return results
 
 
 def processImage(image):
@@ -615,33 +700,33 @@ def processImage(image):
             if isYellow(p):
                 yellow_pixels.append((x, y))
 
-    result = {}
+    results = []
 
     if len(red_pixels) > 20:
         centre = calculateCentre(red_pixels)
-        result["red"] = centre
+        results.append((centre[0], centre[1], "red", 5))
 
         drawSpot(image, centre[0], centre[1], (255, 64, 64), "red")
 
     if len(green_pixels) > 20:
         centre = calculateCentre(green_pixels)
-        result["green"] = centre
+        results.append((centre[0], centre[1], "green", 5))
 
         drawSpot(image, centre[0], centre[1], (64, 255, 64), "green")
 
     if len(blue_pixels) > 20:
         centre = calculateCentre(blue_pixels)
-        result["blue"] = centre
+        results.append((centre[0], centre[1], "blue", 5))
 
         drawSpot(image, centre[0], centre[1], (64, 64, 255), "blue")
 
     if len(yellow_pixels) > 20:
         centre = calculateCentre(yellow_pixels)
-        result["yellow"] = centre
+        results.append((centre[0], centre[1], "yellow", 5))
 
         drawSpot(image, centre[0], centre[1], (255, 255, 64), "yellow")
 
-    return result
+    return results
 
 
 def isRed(p):
