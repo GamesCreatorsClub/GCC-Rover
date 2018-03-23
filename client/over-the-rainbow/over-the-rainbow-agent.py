@@ -12,6 +12,9 @@ import traceback
 import pyroslib
 from RPi import GPIO
 
+from PIL import Image
+
+
 DEBUG = True
 
 stroboTime = -1
@@ -55,6 +58,9 @@ readingGyroContinuous = True
 renewContinuous = time.time()
 digestTime = time.time()
 
+size = (320, 256)
+
+lastProcessed = time.time()
 
 def setAlgorithm(alg):
     global algorithm
@@ -63,6 +69,9 @@ def setAlgorithm(alg):
 
 def connected():
     pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
+
+    pyroslib.publish("camera/processed/fetch", "")
+    pyroslib.publish("camera/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
 
 
 def handleDistances(topic, message, groups):
@@ -449,7 +458,6 @@ def algorithm5Loop():
         setAlgorithm(stop)
 
 
-
 def algorithm6Start():
     global start_angle
     print("started algorithm 6...")
@@ -545,6 +553,150 @@ def algorithm10Loop():
         setAlgorithm(stop)
 
 
+def handleCameraRaw(topic, message, groups):
+    global rawImage, rawImageBig, lastProcessed, localFPS
+
+    now = time.time()
+    delta = now - lastProcessed
+    lastProcessed = now
+
+    if delta < 5:
+        localFPS = "%.2f" % round(1 / delta, 2)
+    else:
+        localFPS = "-"
+
+    pilImage = toPILImage(message)
+
+    result = processImage(pilImage)
+
+    message = ""
+
+    if "red" in result:
+        message = message + str(result["red"][0]) + "," + str(result["red"][1]) + ",red\n"
+    if "green" in result:
+        message = message + str(result["green"][0]) + "," + str(result["green"][1]) + ",green\n"
+    if "yellow" in result:
+        message = message + str(result["yellow"][0]) + "," + str(result["yellow"][1]) + ",yellow\n"
+    if "blue" in result:
+        message = message + str(result["blue"][0]) + "," + str(result["blue"][1]) + ",blue\n"
+
+    if len(message) > 0:
+        message = message[:-1]
+
+    print(message)
+
+    pyroslib.publish("overtherainbow/imagedetails", message)
+
+    # if sequence and not continuous:
+    #     pyroslib.publish("camera/raw/fetch", "")
+
+
+def toPILImage(imageBytes):
+    pilImage = Image.frombytes("RGB", size, imageBytes)
+    return pilImage
+
+
+def processImage(image):
+
+    red_pixels = []
+    green_pixels = []
+    blue_pixels = []
+    yellow_pixels = []
+
+    for y in range(0, 256):
+        for x in range(0, 320):
+            p = image.getpixel((x, y))
+            if isRed(p):
+                red_pixels.append((x, y))
+            if isGreen(p):
+                green_pixels.append((x, y))
+            if isBlue(p):
+                blue_pixels.append((x, y))
+            if isYellow(p):
+                yellow_pixels.append((x, y))
+
+    result = {}
+
+    if len(red_pixels) > 20:
+        centre = calculateCentre(red_pixels)
+        result["red"] = centre
+
+        drawSpot(image, centre[0], centre[1], (255, 64, 64), "red")
+
+    if len(green_pixels) > 20:
+        centre = calculateCentre(green_pixels)
+        result["green"] = centre
+
+        drawSpot(image, centre[0], centre[1], (64, 255, 64), "green")
+
+    if len(blue_pixels) > 20:
+        centre = calculateCentre(blue_pixels)
+        result["blue"] = centre
+
+        drawSpot(image, centre[0], centre[1], (64, 64, 255), "blue")
+
+    if len(yellow_pixels) > 20:
+        centre = calculateCentre(yellow_pixels)
+        result["yellow"] = centre
+
+        drawSpot(image, centre[0], centre[1], (255, 255, 64), "yellow")
+
+    return result
+
+
+def isRed(p):
+    return p[0] > 64 and distance(p[0], p[1]) > 1.2 and distance(p[0], p[1]) > 1.2 and 0.8 < distance(p[1], p[2]) < 1.2
+
+
+def isGreen(p):
+    return p[1] > 64 and distance(p[1], p[0]) > 1.2 and distance(p[1], p[2]) > 1.2 and 0.8 < distance(p[0], p[2]) < 1.2
+
+
+def isBlue(p):
+    return p[2] > 64 and distance(p[2], p[0]) > 1.2 and distance(p[2], p[1]) > 1.2 and 0.8 < distance(p[0], p[1]) < 1.2
+
+
+def isYellow(p):
+    return p[0] > 64 and p[1] > 128 and 0.8 < distance(p[0], p[1]) < 1.2 and distance(p[0], p[2]) > 1.2 and distance(p[1], p[2]) > 1.2
+
+
+def distance(x, y):
+    if y != 0:
+        return x / y
+    else:
+        return x / 256
+
+
+def calculateCentre(pixels):
+    cx = 0
+    cy = 0
+    for p in pixels:
+        cx = cx + p[0]
+        cy = cy + p[1]
+
+    cx = int(cx / len(pixels))
+    cy = int(cy / len(pixels))
+    return cx, cy
+
+
+def drawSpot(image, cx, cy, colour, text):
+    if False:
+        for x in range(cx - 30, cx + 30):
+            if x >= 0 and x < 320:
+                if cy > 0:
+                    image.putpixel((x, cy - 1), (255, 255, 255))
+                image.putpixel((x, cy), colour)
+                if cy < 256 - 1:
+                    image.putpixel((x, cy + 1), (255, 255, 255))
+        for y in range(cy - 30, cy + 30):
+            if y >= 0 and y < 256:
+                if cx > 0:
+                    image.putpixel((cx - 1, y), (255, 255, 255))
+                image.putpixel((cx, y), colour)
+                if cx < 320 - 1:
+                    image.putpixel((cx + 1, y), (255, 255, 255))
+
+
 def mainLoop():
     global renewContinuous, digestTime
 
@@ -573,6 +725,7 @@ if __name__ == "__main__":
         pyroslib.subscribe("sensor/distance", handleDistances)
         pyroslib.subscribe("sensor/gyro", handleGyroData)
         pyroslib.subscribe("overtherainbow/command", handleOverTheRainbow)
+        pyroslib.subscribeBinary("camera/raw", handleCameraRaw)
 
         pyroslib.init("over-the-rainbow-agent", unique=True, onConnected=connected)
 

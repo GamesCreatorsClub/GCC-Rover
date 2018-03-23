@@ -29,9 +29,8 @@ screen = pyros.gccui.initAll(screen_size, True)
 cameraImage = Image.new("L", [80, 64])
 
 rawImage = pygame.Surface((80, 64), 24)
-
 rawImageBig = pygame.Surface((320, 256), 24)
-
+lastImage = None
 
 processedImages = []
 processedBigImages = []
@@ -131,8 +130,41 @@ def handleGyro(topic, message, groups):
     gyroAngle = float(message)
 
 
+def handleImageDetails(topic, message, groups):
+    global rawImage, rawImageBig, lastImage
+
+    results = []
+
+    for line in message.split("\n"):
+        split = line.split(",")
+        if len(split) == 3:
+            result = int(split[0]), int(split[1]), split[2].lower()
+            results.append(result)
+
+    print("Got details " + str(results))
+
+    for result in results:
+        if "red" == result[2]:
+            drawTarget(lastImage, result, pyros.gccui.RED, "red")
+        if "green" == result[2]:
+            drawTarget(lastImage, result, pyros.gccui.GREEN, "green")
+        if "yellow" == result[2]:
+            drawTarget(lastImage, result, pyros.gccui.YELLOW, "yellow")
+        if "blue" == result[2]:
+            drawTarget(lastImage, result, pyros.gccui.BLUE, "blue")
+
+    if lastImage is not None:
+        rawImage = pygame.transform.scale(lastImage, (80, 64))
+        rawImageBig = pygame.transform.scale(lastImage, (320, 256))
+
+        if record:
+            if len(processedImages) > 0:
+                processedImages[len(processedImages) - 1] = rawImage
+                processedBigImages[len(processedImages) - 1] = rawImageBig
+
+
 def handleCameraRaw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS
+    global rawImage, rawImageBig, lastProcessed, localFPS, lastImage
 
     now = time.time()
     delta = now - lastProcessed
@@ -148,25 +180,26 @@ def handleCameraRaw(topic, message, groups):
     processedPilImage = processImage(pilImage)
 
     image = toPyImage(processedPilImage)
+    lastImage = image
 
-    if "red" in result:
-        drawTarget(image, result["red"], pyros.gccui.RED, "red")
-    if "green" in result:
-        drawTarget(image, result["green"], pyros.gccui.GREEN, "green")
-    if "yellow" in result:
-        drawTarget(image, result["yellow"], pyros.gccui.YELLOW, "yellow")
-    if "blue" in result:
-        drawTarget(image, result["blue"], pyros.gccui.BLUE, "blue")
-
-    rawImage = pygame.transform.scale(image, (80, 64))
-    rawImageBig = pygame.transform.scale(image, (320, 256))
+    # if "red" in result:
+    #     drawTarget(image, result["red"], pyros.gccui.RED, "red")
+    # if "green" in result:
+    #     drawTarget(image, result["green"], pyros.gccui.GREEN, "green")
+    # if "yellow" in result:
+    #     drawTarget(image, result["yellow"], pyros.gccui.YELLOW, "yellow")
+    # if "blue" in result:
+    #     drawTarget(image, result["blue"], pyros.gccui.BLUE, "blue")
+    #
+    rawImage = pygame.transform.scale(lastImage, (80, 64))
+    rawImageBig = pygame.transform.scale(lastImage, (320, 256))
 
     if record:
         processedImages.append(rawImage)
         processedBigImages.append(rawImageBig)
-
-    if sequence and not continuous:
-        pyros.publish("camera/raw/fetch", "")
+    #
+    # if sequence and not continuous:
+    #     pyros.publish("camera/raw/fetch", "")
 
 
 def processImage(image):
@@ -441,6 +474,7 @@ def swap(array):
 pyros.subscribeBinary("camera/raw", handleCameraRaw)
 pyros.subscribe("overtherainbow/distances", handleDistances)
 pyros.subscribe("overtherainbow/gyro", handleGyro)
+pyros.subscribe("overtherainbow/imagedetails", handleImageDetails)
 
 pyros.init("over-the-rainbow-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
