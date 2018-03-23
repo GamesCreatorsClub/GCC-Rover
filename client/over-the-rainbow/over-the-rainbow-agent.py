@@ -691,10 +691,10 @@ def processImageCV(image):
 
             # construct a mask for the contour, then compute the
             # average L*a*b* value for the masked region
-            mask = numpy.zeros(image.shape[:2], dtype="uint8")
+            mask = numpy.zeros(lab.shape[:2], dtype="uint8")
             cv2.drawContours(mask, [c], -1, 255, -1)
             mask = cv2.erode(mask, None, iterations=2)
-            mean = cv2.mean(image, mask=mask)[:3]
+            mean = cv2.mean(lab, mask=mask)[:3]
 
             # initialize the minimum distance found thus far
             minDist = (numpy.inf, None)
