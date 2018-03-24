@@ -569,6 +569,9 @@ def onKeyDown(key):
     elif key == pygame.K_g:
         useGyro = not useGyro
 
+    elif key == pygame.K_c:
+        pyros.publish("sensor/gyro/continuous", "calibrate,50")
+
 
 def onKeyUp(key):
 

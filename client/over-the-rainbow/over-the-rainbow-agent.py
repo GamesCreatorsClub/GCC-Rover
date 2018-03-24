@@ -28,7 +28,7 @@ state = False
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
-ROTATE_SPEED = 30
+ROTATE_SPEED = 20
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
@@ -515,21 +515,33 @@ def algorithm6Loop():
 
 
 def algorithm7Start():
+    global start_angle
     print("started algorithm 7...")
     setAlgorithm(algorithm7Loop)
+    start_angle = gyroAngle
 
 
 def algorithm7Loop():
-    pass
+    if gyroAngle > start_angle - 90:
+        rotateLeft()
+    else:
+        stop()
+        setAlgorithm(stop)
 
 
 def algorithm8Start():
+    global start_angle
     print("started algorithm 8...")
     setAlgorithm(algorithm8Loop)
+    start_angle = gyroAngle
 
 
 def algorithm8Loop():
-    pass
+    if gyroAngle < start_angle + 90:
+        rotateRight()
+    else:
+        stop()
+        setAlgorithm(stop)
 
 
 KP = 0.8
@@ -750,7 +762,7 @@ def processImageCV(image):
     print("Published saturation channel image")
 
     gray = sChannel.copy()
-    cv2.addWeighted(sChannel, 0.5, vChannel, 0.5, 0, gray)
+    cv2.addWeighted(sChannel, 0.2, vChannel, 0.8, 0, gray)
 
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published gray image")
@@ -762,13 +774,13 @@ def processImageCV(image):
     cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[1]
 
-    MIN_RADUIS = 15
+    MIN_RADUIS = 10
     MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
 
     for i in range(len(cnts) - 1, -1, -1):
         center, radius = cv2.minEnclosingCircle(cnts[i])
         area = cv2.contourArea(cnts[i])
-        if radius < MIN_RADUIS or area < MIN_AREA:
+        if radius < MIN_RADUIS or area < MIN_AREA or center[1] >= 128:
             print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
             del cnts[i]
         else:
