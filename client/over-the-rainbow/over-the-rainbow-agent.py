@@ -55,6 +55,8 @@ historyDistances2 = []
 historyDistanceTimes2 = []
 
 gyroAngle = 0
+gyroDeltaAngle = 0
+EPSILON_ANGLE = 2
 
 readingDistanceContinuous = True
 readingGyroContinuous = True
@@ -169,11 +171,13 @@ def handleDistances(topic, message, groups):
 
 
 def handleGyroData(topic, message, groups):
-    global gyroAngle
+    global gyroAngle, gyroDeltaAngle
 
     data = message.split(",")
 
     gyroChange = float(data[2])
+
+    gyroDeltaAngle = gyroChange
 
     gyroAngle += gyroChange
 
@@ -227,8 +231,13 @@ def sign(x):
         return 0
 
 
-def steer(steerDistance=0, speed=FORWARD_SPEED):
-    pyroslib.publish("move/steer", str(steerDistance) + " " + str(speed))
+def calculateSpeed(speed):
+    speedIndex = int(speed * SPEEDS_OFFSET + SPEEDS_OFFSET)
+    speed = SPEEDS[speedIndex]
+    return speed
+
+def steer(distance=0, speed=FORWARD_SPEED):
+    pyroslib.publish("move/steer", str(distance) + " " + str(speed))
 
 
 def drive(angle=0, speed=FORWARD_SPEED):
@@ -243,12 +252,12 @@ def driveBack(speed=FORWARD_SPEED):
     pyroslib.publish("move/drive", "0 " + str(-speed))
 
 
-def rotateLeft():
-    pyroslib.publish("move/rotate", str(-ROTATE_SPEED))
+def rotateLeft(speed):
+    pyroslib.publish("move/rotate", str(-speed))
 
 
-def rotateRight():
-    pyroslib.publish("move/rotate", str(ROTATE_SPEED))
+def rotateRight(speed):
+    pyroslib.publish("move/rotate", str(speed))
 
 
 def requestDistanceAtAngle(angle):
@@ -349,15 +358,14 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
         outputForward = normalise(outputForward, distanceControl)
 
-        speedIndex = int(outputForward * SPEEDS_OFFSET + SPEEDS_OFFSET)
-        speed = SPEEDS[speedIndex]
+        speed = calculateSpeed(outputForward)
+        speedIndex = 0
 
         if sideDistance > 90 or abs(sideDelta) < 2:
             outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
             outputSide = -normalise(outputSide, SIDE_DISTANCE)
 
             angle = outputSide * 80 * direction
-
             if abs(angle) > 50:
                 log("TURN1 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(angle))
                 steer(angle * 10, speed)
@@ -444,18 +452,36 @@ def algorithm4Loop():
 
 
 start_angle = 0
+previous_error = 0
 
+AKP = 0.7
+AKD = 0.3
 
 def algorithm5Start():
-    global start_angle
+    global start_angle, previous_error
+    previous_error = 0
+
     print("started algorithm 5...")
     setAlgorithm(algorithm5Loop)
     start_angle = gyroAngle
 
 
 def algorithm5Loop():
-    if gyroAngle > start_angle - 90:
-        rotateLeft()
+    global previous_error
+    if gyroAngle > start_angle - (90 - EPSILON_ANGLE):
+
+        error = gyroAngle - (start_angle - 90)
+        deltaError = error - previous_error
+        previous_error = error
+
+        # deltaError = gyroDeltaAngle
+        control = error * AKP + deltaError * AKD
+
+        control = normalise(control, 90)
+
+        speed = calculateSpeed(control)
+
+        rotateLeft(speed)
     else:
         stop()
         setAlgorithm(stop)
@@ -469,8 +495,20 @@ def algorithm6Start():
 
 
 def algorithm6Loop():
-    if gyroAngle < start_angle + 90:
-        rotateRight()
+    global previous_error
+    a = 135
+    if gyroAngle < start_angle + (a - EPSILON_ANGLE):
+        error = gyroAngle - (start_angle + a)
+        deltaError = error - previous_error
+        previous_error = error
+
+        # deltaError = gyroDeltaAngle
+        control = error * AKP + deltaError * AKD
+
+        control = normalise(control, a)
+
+        speed = calculateSpeed(-control)
+        rotateRight(speed)
     else:
         stop()
         setAlgorithm(stop)
