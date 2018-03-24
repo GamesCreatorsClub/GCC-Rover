@@ -30,6 +30,7 @@ cameraImage = Image.new("L", [80, 64])
 
 rawImage = pygame.Surface((80, 64), 24)
 rawImageBig = pygame.Surface((320, 256), 24)
+completeRawImage = None
 lastImage = None
 
 processedImages = []
@@ -129,7 +130,7 @@ def handleGyro(topic, message, groups):
 
 
 def handleImageDetails(topic, message, groups):
-    global rawImage, rawImageBig, lastImage
+    global rawImage, rawImageBig, lastcompleteRawImageImage
 
     results = []
 
@@ -146,17 +147,17 @@ def handleImageDetails(topic, message, groups):
 
     for result in results:
         if "red" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.RED, "red", result[3])
+            drawTarget(completeRawImage, result, pyros.gccui.RED, "red", result[3])
         if "green" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.GREEN, "green", result[3])
+            drawTarget(completeRawImage, result, pyros.gccui.GREEN, "green", result[3])
         if "yellow" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.YELLOW, "yellow", result[3])
+            drawTarget(completeRawImage, result, pyros.gccui.YELLOW, "yellow", result[3])
         if "blue" == result[2]:
-            drawTarget(lastImage, result, pyros.gccui.BLUE, "blue", result[3])
+            drawTarget(completeRawImage, result, pyros.gccui.BLUE, "blue", result[3])
 
-    if lastImage is not None:
-        rawImage = pygame.transform.scale(lastImage, (80, 64))
-        rawImageBig = pygame.transform.scale(lastImage, (320, 256))
+    if completeRawImage is not None:
+        rawImage = pygame.transform.scale(completeRawImage, (80, 64))
+        rawImageBig = pygame.transform.scale(completeRawImage, (320, 256))
 
         if record:
             if len(processedImages) > 0:
@@ -165,6 +166,13 @@ def handleImageDetails(topic, message, groups):
 
 
 def handleCameraRaw(topic, message, groups):
+    global rawImage, rawImageBig, lastProcessed, localFPS, completeRawImage
+
+    handleCameraProcessed(topic, message, groups)
+    completeRawImage = lastImage
+
+
+def handleCameraProcessed(topic, message, groups):
     global rawImage, rawImageBig, lastProcessed, localFPS, lastImage
 
     n = time.time()
@@ -478,6 +486,7 @@ pyros.subscribeBinary("camera/raw", handleCameraRaw)
 pyros.subscribe("overtherainbow/distances", handleDistances)
 pyros.subscribe("overtherainbow/gyro", handleGyro)
 pyros.subscribe("overtherainbow/imagedetails", handleImageDetails)
+pyros.subscribeBinary("overtherainbow/processed", handleCameraProcessed)
 
 pyros.init("over-the-rainbow-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 

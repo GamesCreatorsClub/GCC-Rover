@@ -661,60 +661,145 @@ def processImageCV(image):
         except BaseException as e:
             print("Error : " + str(res) + " " + str(e))
 
+    def findColourNameLAB(lab, c):
+        # construct a mask for the contour, then compute the
+        # average L*a*b* value for the masked region
+        mask = numpy.zeros(lab.shape[:2], dtype="uint8")
+        cv2.drawContours(mask, [c], -1, 255, -1)
+        mask = cv2.erode(mask, None, iterations=2)
+        mean = cv2.mean(lab, mask=mask)[:3]
+
+        # initialize the minimum distance found thus far
+        minDist = (numpy.inf, None)
+
+        # loop over the known L*a*b* color values
+        for (i, row) in enumerate(labColours):
+            # compute the distance between the current L*a*b*
+            # color value and the mean of the image
+            # d = scipy.spatial.distance.euclidean(row[0], mean)
+            d = eucleadianDistance(row[0], mean)
+
+            # if the distance is smaller than the current distance,
+            # then update the bookkeeping variable
+            if d < minDist[0]:
+                minDist = (d, i)
+
+        # return the name of the color with the smallest distance
+        return colorNames[minDist[1]], mean
+
+    def findColourNameHSV(hChannel, c):
+        # construct a mask for the contour, then compute the
+        # average L*a*b* value for the masked region
+        # mask = hChannel.copy()
+        mask = numpy.zeros(hChannel.shape[:2], dtype="uint8")
+        cv2.drawContours(mask, [c], -1, 255, -1)
+        mask = cv2.erode(mask, None, iterations=2)
+        mean = cv2.mean(hChannel, mask=mask)
+
+        maskAnd = hChannel.copy()
+        cv2.bitwise_and(hChannel, mask, maskAnd)
+
+        pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(maskAnd, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+        print("Published mask ")
+
+        mean = mean[0]
+
+        hist = cv2.calcHist([hChannel], [0], mask, [255], [0, 255], False)
+
+        histMaxIndex = numpy.argmax(hist)
+        # histMax = hist[histMaxIndex]
+
+        print("Got mean as " + str(mean) + " max hist " + str(histMaxIndex))
+
+        value = histMaxIndex
+
+        # initialize the minimum distance found thus far
+        # red < 36 > 330 - 18/165
+        # yellow >= 45 <= 70 - 22/35
+        # green >= 86 <= 155 - 43/176
+        # blue >= 180 <= 276 - 90/138
+        if value < 22 or value > 145:
+            return "red", value
+        elif 22 <= value <= 35:
+            return "yellow", value
+        elif 43 <= value <= 76:
+            return "green", value
+        elif 90 <= value <= 138:
+            return "blue", value
+        else:
+            return "", value
+
     # ratio = image.shape[0] / float(resized.shape[0])
 
     # blur the resized image slightly, then convert it to both
     # grayscale and the L*a*b* color spaces
     blurred = cv2.GaussianBlur(image, (5, 5), 0)
-    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-    lab = cv2.cvtColor(blurred, cv2.COLOR_BGR2LAB)
-    thresh = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY)[1]
+    # gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+    lab = cv2.cvtColor(blurred, cv2.COLOR_RGB2LAB)
+
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_RGB2HSV)
+    hChannel, sChannel, vChannel = cv2.split(hsv)
+
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(hChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    print("Published hue channel image")
+
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(vChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    print("Published value channel image")
+
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(sChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    print("Published saturation channel image")
+
+    gray = sChannel.copy()
+    cv2.addWeighted(sChannel, 0.5, vChannel, 0.5, 0, gray)
+
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    print("Published gray image")
+
+    thresh = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
 
     # find contours in the thresholded image
-    cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[1]
+
+    MIN_RADUIS = 15
+    MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
+
+    for i in range(len(cnts) - 1, -1, -1):
+        center, radius = cv2.minEnclosingCircle(cnts[i])
+        area = cv2.contourArea(cnts[i])
+        if radius < MIN_RADUIS or area < MIN_AREA:
+            print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+            del cnts[i]
+        else:
+            print("Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+
+    treshback = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
+    cv2.drawContours(treshback, cnts, -1, (0, 255, 0), 2)
+
+    pil = PIL.Image.fromarray(treshback)
+    pyroslib.publish("overtherainbow/processed", pil.tobytes("raw"))
+    print("Published pil image")
 
     results = []
 
+    print("Have " + str(len(cnts)) + " contours")
     for c in cnts:
         # initialize the shape detector and color labeler
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-        if len(approx) > 5:
-            # circle
+        # if len(approx) > 5:
+        #     # circle
+        #
 
-            center, radius = cv2.minEnclosingCircle(c)
+        center, radius = cv2.minEnclosingCircle(c)
 
-            # M = cv2.moments(c)
-            # cX = int(M["m10"] / M["m00"])
-            # cY = int(M["m01"] / M["m00"])
+        if radius > 10:
+            # colourName, extraInfo = findColourNameLAB(lab, c)
+            colourName, extraInfo = findColourNameHSV(hChannel, c)
 
-            # construct a mask for the contour, then compute the
-            # average L*a*b* value for the masked region
-            mask = numpy.zeros(lab.shape[:2], dtype="uint8")
-            cv2.drawContours(mask, [c], -1, 255, -1)
-            mask = cv2.erode(mask, None, iterations=2)
-            mean = cv2.mean(lab, mask=mask)[:3]
-
-            # initialize the minimum distance found thus far
-            minDist = (numpy.inf, None)
-
-            # loop over the known L*a*b* color values
-            for (i, row) in enumerate(labColours):
-                # compute the distance between the current L*a*b*
-                # color value and the mean of the image
-                # d = scipy.spatial.distance.euclidean(row[0], mean)
-                d = eucleadianDistance(row[0], mean)
-
-                # if the distance is smaller than the current distance,
-                # then update the bookkeeping variable
-                if d < minDist[0]:
-                    minDist = (d, i)
-
-            # return the name of the color with the smallest distance
-            colourName = colorNames[minDist[1]]
-
-            results.append((center[0], center[1], colourName, radius, str(mean)))
+            if len(colourName) > 0:
+                results.append((center[0], center[1], colourName, radius, str(extraInfo)))
 
     return results
 
