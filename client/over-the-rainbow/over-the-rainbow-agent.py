@@ -28,7 +28,7 @@ state = False
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
-ROTATE_SPEED = 40
+ROTATE_SPEED = 60
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
@@ -768,7 +768,7 @@ def processImageCV(image):
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published gray image")
 
-    thresh = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    thresh = cv2.threshold(gray, 90, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
 
     # find contours in the thresholded image
@@ -778,10 +778,12 @@ def processImageCV(image):
     MIN_RADUIS = 10
     MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
 
+    MAX_AREA = 13000.0
+
     for i in range(len(cnts) - 1, -1, -1):
         center, radius = cv2.minEnclosingCircle(cnts[i])
         area = cv2.contourArea(cnts[i])
-        if radius < MIN_RADUIS or area < MIN_AREA or center[1] >= 128:
+        if radius < MIN_RADUIS or area < MIN_AREA or area > MAX_AREA or center[1] >= 128:
             print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
             del cnts[i]
         else:

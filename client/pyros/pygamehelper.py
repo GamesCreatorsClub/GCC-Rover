@@ -21,7 +21,7 @@ def processKeys(onKeyDown, onKeyUp):
     keys = pygame.key.get_pressed()
     if not len(keys) == 0 and not len(lastkeys) == 0:
 
-        for i in range(0, len(keys) - 1):
+        for i in range(0, len(keys)):
 
             if keys[i] and not lastkeys[i]:
                 onKeyDown(i)
