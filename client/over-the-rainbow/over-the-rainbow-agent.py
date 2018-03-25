@@ -28,7 +28,7 @@ state = False
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
-ROTATE_SPEED = 20
+ROTATE_SPEED = 40
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
@@ -457,46 +457,9 @@ previous_error = 0
 AKP = 0.7
 AKD = 0.3
 
-def algorithm5Start():
-    global start_angle, previous_error
-    previous_error = 0
 
-    print("started algorithm 5...")
-    setAlgorithm(algorithm5Loop)
-    start_angle = gyroAngle
-
-
-def algorithm5Loop():
+def rotateForAngleRight(a):
     global previous_error
-    if gyroAngle > start_angle - (90 - EPSILON_ANGLE):
-
-        error = gyroAngle - (start_angle - 90)
-        deltaError = error - previous_error
-        previous_error = error
-
-        # deltaError = gyroDeltaAngle
-        control = error * AKP + deltaError * AKD
-
-        control = normalise(control, 90)
-
-        speed = calculateSpeed(control)
-
-        rotateLeft(speed)
-    else:
-        stop()
-        setAlgorithm(stop)
-
-
-def algorithm6Start():
-    global start_angle
-    print("started algorithm 6...")
-    setAlgorithm(algorithm6Loop)
-    start_angle = gyroAngle
-
-
-def algorithm6Loop():
-    global previous_error
-    a = 135
     if gyroAngle < start_angle + (a - EPSILON_ANGLE):
         error = gyroAngle - (start_angle + a)
         deltaError = error - previous_error
@@ -514,19 +477,61 @@ def algorithm6Loop():
         setAlgorithm(stop)
 
 
-def algorithm7Start():
+def rotateForAngleLeft(a):
+    global previous_error
+    if gyroAngle > start_angle - (a - EPSILON_ANGLE):
+
+        error = gyroAngle - (start_angle - a)
+        deltaError = previous_error - error
+        previous_error = error
+
+        # deltaError = gyroDeltaAngle
+        control = error * AKP + deltaError * AKD
+
+        control = normalise(control, a)
+
+        speed = calculateSpeed(control)
+
+        rotateLeft(speed)
+    else:
+        stop()
+        setAlgorithm(stop)
+
+def algorithm5Start():
+    global start_angle, previous_error
+    previous_error = 0
+
+    print("started algorithm 5...")
+    setAlgorithm(algorithm5Loop)
+    start_angle = gyroAngle
+
+
+def algorithm5Loop():
+    rotateForAngleLeft(90)
+
+
+def algorithm6Start():
     global start_angle
+    print("started algorithm 6...")
+    setAlgorithm(algorithm6Loop)
+    start_angle = gyroAngle
+
+
+def algorithm6Loop():
+    rotateForAngleRight(86)
+
+
+def algorithm7Start():
+    global start_angle, previous_error
+    previous_error = 0
+
     print("started algorithm 7...")
     setAlgorithm(algorithm7Loop)
     start_angle = gyroAngle
 
 
 def algorithm7Loop():
-    if gyroAngle > start_angle - 90:
-        rotateLeft()
-    else:
-        stop()
-        setAlgorithm(stop)
+    rotateForAngleLeft(135)
 
 
 def algorithm8Start():
@@ -537,11 +542,7 @@ def algorithm8Start():
 
 
 def algorithm8Loop():
-    if gyroAngle < start_angle + 90:
-        rotateRight()
-    else:
-        stop()
-        setAlgorithm(stop)
+    rotateForAngleRight(135)
 
 
 KP = 0.8

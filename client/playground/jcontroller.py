@@ -689,6 +689,8 @@ while True:
 
             pyros.gccui.drawText("º/s", (445 + pyros.gccui.bigFont.size(gyroDegPersSecText)[0], 15))
 
+            pyros.gccui.drawBigText(str(int(thisGyroAngle)), (440, 40))
+
     gyroLastReadTime = now
     gyroLastAngle = thisGyroAngle
 
