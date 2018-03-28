@@ -12,6 +12,7 @@ import re
 import copy
 import pyroslib
 import storagelib
+import smbus
 
 #
 # wheels service
@@ -28,6 +29,13 @@ DEBUG_SPEED = True
 DEBUG_SPEED_VERBOSE = False
 DEBUG_TURN = False
 DEBUG_SERVO = False
+
+
+I2C_BUS = 1
+I2C_ADDRESS = 0x04
+
+i2cBus = smbus.SMBus(I2C_BUS)
+
 
 PWM = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -70,26 +78,29 @@ wheelMap["servos"] = {}
 servoBlasterFile = None
 
 
+
 def moveServo(servoid, angle):
-    global servoBlasterFile
+    global servoBlasterFile, i2cBus
 
     angle = int(angle)
 
-    # TODO move this out to separate service
-    servoLine = str(servoid) + "=" + str(angle)
-    if DEBUG_SERVO:
-        print("ServoBlaser <- " + servoLine)
-    try:
-        servoBlasterFile.write(servoLine + "\n")
-        servoBlasterFile.flush()
-    except:
+    if 12 <= servoid <= 13:
+        i2cBus.write_byte_data(I2C_ADDRESS, servoid - 6, angle)
+    else:
+        servoLine = str(servoid) + "=" + str(angle)
+        if DEBUG_SERVO:
+            print("ServoBlaser <- " + servoLine)
         try:
-            servoBlasterFile.close()
+            servoBlasterFile.write(servoLine + "\n")
+            servoBlasterFile.flush()
         except:
-            pass
-        if DEBUG:
-            print("Lost connection to /dev/servoblaster - reopening")
-        servoBlasterFile = open("/dev/servoblaster", 'w')
+            try:
+                servoBlasterFile.close()
+            except:
+                pass
+            if DEBUG:
+                print("Lost connection to /dev/servoblaster - reopening")
+            servoBlasterFile = open("/dev/servoblaster", 'w')
 
 
 def initWheel(wheelName, motorServo, steerServo):
