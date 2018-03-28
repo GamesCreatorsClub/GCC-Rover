@@ -13,9 +13,12 @@ import struct
 import threading
 import time
 import traceback
+from enum import Enum
 from fcntl import ioctl
 
 import pyroslib as pyros
+
+
 
 DEBUG_AXES = False
 DEBUG_BUTTONS = False
@@ -29,6 +32,16 @@ lastDividerL = 1
 lastDividerR = 1
 dividerL = 1
 dividerR = 1
+
+
+class modes(Enum):
+    NONE = 0
+    NORMAL = 1
+    GOLF = 2
+    PINOON = 3
+    DUCK_SHOOT = 4
+
+mode = modes.DUCK_SHOOT
 
 # We'll store the states here.
 axis_states = {}
@@ -109,6 +122,7 @@ button_names = {
     # 0x2c2: 'dpad_up',
     # 0x2c3: 'dpad_down',
 }
+
 
 axis_map = []
 button_map = []
@@ -306,6 +320,12 @@ lastBoost = False
 
 balLocked = False
 
+target_charge = 0
+charge = 0
+last_charge = 0
+
+elevation = 0
+
 
 def moveServo(servoid, angle):
     # TODO move this out to separate service
@@ -314,12 +334,28 @@ def moveServo(servoid, angle):
     f.close()
 
 
+
+def setCharge(value):
+    global charge, lastCharge
+    lastCharge = charge
+    charge = value
+    if not charge == lastCharge:
+        motorSpeed = int(85 + charge * (105 - 85) / 100)
+        print("DUCK motor speed: " + str(motorSpeed) + " charge:" + str(charge))
+        pyros.publish("servo/13", motorSpeed)
+
+
+def addCharge(ammount):
+    global charge
+    setCharge(charge + ammount)
+
+
 def processButtons():
     global lastX3, lastY3, lastSelect, lastStart
-    global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY, lastDividerL, lastDividerR
+    global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY, lastDividerL, lastDividerR, target_charge
     global lastLButton, lastRButton, dividerL, dividerR
 
-    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked
+    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked, charge, mode, elevation
 
     # print("Axis states: " + str(axis_states))
 
@@ -397,52 +433,103 @@ def processButtons():
                 elif topSpeed > 50:
                     topSpeed = 50
 
-        if tl2 and tl2 != lastTL2:
-            print("prepared to do orbit")
-            prepareToOrbit = True
-            pyros.publish("sensor/distance/read", "0")
 
-        doOrbit = tl2
 
         # print("tl2: " + str(tl2) + " lastTL2: " + str(lastTL2))
 
-        continueToReadDistance = tl2
-        if tl2 != lastTL2:
-            if tl2:
-                pyros.publish("sensor/distance/continuous", "start")
-            else:
-                pyros.publish("sensor/distance/continuous", "stop")
-        lastBoost = boost
-        boost = tr
+        if mode == modes.PINOON:
+            if tl2 and tl2 != lastTL2:
+                print("prepared to do orbit")
+                prepareToOrbit = True
+                pyros.publish("sensor/distance/read", "0")
+
+            doOrbit = tl2
+
+            continueToReadDistance = tl2
+            if tl2 != lastTL2:
+                if tl2:
+                    pyros.publish("sensor/distance/continuous", "start")
+                else:
+                    pyros.publish("sensor/distance/continuous", "stop")
+            lastBoost = boost
+            boost = tr
 
         # kick
-
-        if lastTR2 != tr2:
-            if tr2:
-                pyros.publish("servo/1", "90")
-            else:
-                pyros.publish("servo/1", "165")
+        #
+        # if lastTR2 != tr2:
+        #     if tr2:
+        #         pyros.publish("servo/1", "90")
+        #     else:
+        #         pyros.publish("servo/1", "165")
 
         # golf
-        if bb and not lastB:
+        if mode == modes.GOLF:
+            if tr2 and not lastTR2:
 
-            balLocked = not balLocked
+                balLocked = not balLocked
 
-        if balLocked:
-            moveServo(8, 220)
+            if balLocked:
+                moveServo(8, 220)
 
-        if tl:
-            moveServo(8, 100)
-            balLocked = False
+            if tl:
+                moveServo(8, 100)
+                balLocked = False
+            else:
+                if not balLocked:
+                    moveServo(8, 150)
+
+            if bx and bx != lastBX:
+                kick = 1
+                pyros.publish("move/drive", "0 300")
+                pyros.sleep(1)
+                pyros.publish("move/drive", "0 0")
+
+        if mode == modes.DUCK_SHOOT:
+            # print("shooting ducks")
+            if tr:
+                pyros.publish("servo/9", "115")
+            else:
+                pyros.publish("servo/9", "175")
+
+            if tl and not lastTL:
+                target_charge = 100
+            elif not tl and lastTL:
+                target_charge = 65
+
+            if charge > target_charge:
+                addCharge(-1)
+            elif charge < target_charge:
+                addCharge(1)
+            setCharge(charge)
+
+            if tr2:
+                if elevation > -25:
+                    print("waaaa")
+                    elevation -= 1
+            if tl2:
+                if elevation < 25:
+                    print("weeeee")
+                    elevation += 1
+
+            servoValue = 150 + elevation
+            print("elevation: " + str(elevation) + " servo: " + str(servoValue))
+            pyros.publish("servo/12", str(servoValue))
+
         else:
-            if not balLocked:
-                moveServo(8, 150)
+            target_charge = 0
+            setCharge(0)
 
-        if bx and bx != lastBX:
-            kick = 1
-            # pyros.publish("move/drive", "0 300")
-            # pyros.sleep(1)
-            # pyros.publish("move/drive", "0 0")
+        if a:
+            mode = modes.NORMAL
+        elif bb:
+            mode = modes.DUCK_SHOOT
+            target_charge = 0
+            setCharge(0)
+            elevation = 0
+        elif bx:
+            mode = modes.GOLF
+        elif by:
+            mode = modes.PINOON
 
         lastX3 = x3
         lastY3 = y3
@@ -631,6 +718,8 @@ if __name__ == "__main__":
         pyros.init("jcontroller-service")
 
         print("Started jcontroller service.")
+
+        pyros.publish("servo/9", "175")
 
         pyros.forever(0.1, loop)
 

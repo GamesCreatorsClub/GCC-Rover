@@ -84,7 +84,7 @@ def moveServo(servoid, angle):
 
     angle = int(angle)
 
-    if 12 <= servoid <= 13:
+    if 12 <= int(servoid) <= 13:
         i2cBus.write_byte_data(I2C_ADDRESS, servoid - 6, angle)
     else:
         servoLine = str(servoid) + "=" + str(angle)
