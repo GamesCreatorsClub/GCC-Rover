@@ -28,11 +28,11 @@ state = False
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 TURN_SPEED = 50
-ROTATE_SPEED = 60
+ROTATE_SPEED = 100
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
-SPEEDS = SPEEDS_ROVER_2
+SPEEDS = SPEEDS_ROVER_4
 SPEEDS_OFFSET = 6
 
 DISTANCE_AVG_TIME = 0.5
@@ -66,6 +66,8 @@ digestTime = time.time()
 size = (320, 256)
 
 lastProcessed = time.time()
+algorithmIndex = 0
+algorithmsList = []
 
 
 def setAlgorithm(alg):
@@ -183,14 +185,15 @@ def handleGyroData(topic, message, groups):
 
 
 def handleOverTheRainbow(topic, message, groups):
-    global algorithm
+    global algorithm, algorithmsList
 
     data = message.split(":")
 
     cmd = data[0]
 
     if cmd == "stop":
-        setAlgorithm(stop)
+        algorithmsList[:] = []
+        stop()
     elif cmd == "alg1":
         setAlgorithm(algorithm1Start)
     elif cmd == "alg2":
@@ -274,10 +277,18 @@ def doNothing():
 
 
 def stop():
+    global algorithmIndex, algorithmsList
+    # print("stopping")
     stopDriving()
-    print("Stopping all...")
-    setAlgorithm(doNothing)
-    print("Stopped!")
+    algorithmIndex += 1
+    if algorithmIndex < len(algorithmsList):
+        print("setting algorithm to index " + str(algorithmIndex) + " out of " + str(len(algorithmsList)))
+        setAlgorithm(algorithmsList[algorithmIndex])
+    else:
+        print("Stopping all...")
+        setAlgorithm(doNothing)
+        algorithmsList[:] = algorithmsList
+        print("Stopped!")
 
 
 countDown = 0
@@ -338,7 +349,7 @@ def brake():
     countDown -= 1
 
     if countDown < -50:
-        setAlgorithm(stop)
+        stop()
     elif countDown < 0:
         stopDriving()
         log("Stopped for " + str(countDown))
@@ -352,7 +363,6 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
     if forwardDistance < STOP_DISTANCE:
         stop()
-        setAlgorithm(stop)
     else:
         outputForward = (forwardDistance - STOP_DISTANCE) * KP + forwardDelta * KD
 
@@ -384,7 +394,7 @@ def algorithm2Start():
     requestDistanceAtAngle("0")
     setAlgorithm(algorithm2Loop)
 
-
+# follow left wall
 def algorithm2Loop():
     distanceControl = STOP_DISTANCE * KC
 
@@ -415,7 +425,7 @@ def algorithm2Loop():
     #         log("TURN d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(distance))
     #         steer(distance, speed)
 
-
+# follow right wall
 def algorithm3Start():
     print("started algorithm 3...")
     requestDistanceAtAngle("90")
@@ -428,7 +438,7 @@ def algorithm3Loop():
 
     followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1)
 
-
+# corner
 def algorithm4Start():
     driveForward(FORWARD_SPEED)
     print("started algorithm 4...")
@@ -439,7 +449,7 @@ def algorithm4Start():
 def algorithm4Loop():
     if distance1 - deltaDistance1 < STOP_DISTANCE:
         stopDriving()
-        setAlgorithm(stop)
+        stop()
     else:
         output = (distance1 - STOP_DISTANCE) / STOP_DISTANCE * 0.7 - deltaDistance1 * 0.3
         if output > 1:
@@ -474,7 +484,7 @@ def rotateForAngleRight(a):
         rotateRight(speed)
     else:
         stop()
-        setAlgorithm(stop)
+        # setAlgorithm(stop)
 
 
 def rotateForAngleLeft(a):
@@ -495,15 +505,16 @@ def rotateForAngleLeft(a):
         rotateLeft(speed)
     else:
         stop()
-        setAlgorithm(stop)
+        # setAlgorithm(stop)
 
+#rotate left 90
 def algorithm5Start():
     global start_angle, previous_error
     previous_error = 0
+    start_angle = gyroAngle
 
     print("started algorithm 5...")
     setAlgorithm(algorithm5Loop)
-    start_angle = gyroAngle
 
 
 def algorithm5Loop():
@@ -558,23 +569,93 @@ previous_error = 0
 integral = 0
 
 
+
+
+def allTogether(stringOfFourLetters):
+    global algorithmIndex, algorithmsList
+
+    def left135():
+        algorithm7Start()
+
+    def right135():
+        algorithm8Start()
+
+    def left90():
+        algorithm5Start()
+
+    def right90():
+        algorithm6Start()
+
+    def rotate180():
+        global start_angle, previous_error
+        previous_error = 0
+        start_angle = gyroAngle
+
+        rotateForAngleRight(180)
+
+    def findCorner():
+        algorithm11Start()
+
+    def followLeftWall():
+        algorithm2Start()
+
+    def followRightWall():
+        algorithm3Start()
+
+
+    algorithmIndex = 0
+    algorithmsList[:] = []
+
+    # algorithmsList.append(right90)
+    # algorithmsList.append(right135)
+
+    algorithmsList.append(findCorner)
+    algorithmsList.append(right135)
+    algorithmsList.append(followLeftWall)
+    algorithmsList.append(right135)
+    algorithmsList.append(findCorner)
+    algorithmsList.append(left135)
+    algorithmsList.append(followRightWall())
+
+    setAlgorithm(algorithmsList[0])
+
+    pass
+
+
+
+
+
+
 def algorithm9Start():
     global drive_speed
 
     print("started algorithm 9...")
     requestDistanceAtAngle("45")
     drive_speed = FORWARD_SPEED
-    setAlgorithm(algorithm9Loop)
+    # setAlgorithm(algorithm9Loop)
+    allTogether("BGRY")
 
 
 def algorithm9Loop():
+    pass
+
+def algorithm11Start():
+    global drive_speed
+
+    print("started algorithm 11...")
+    requestDistanceAtAngle("45")
+    drive_speed = FORWARD_SPEED
+    setAlgorithm(algorithm11Loop)
+
+
+def algorithm11Loop():
     global countDown, drive_speed
 
     distanceControl = STOP_DISTANCE * KC
 
     if distance1 + distance2 < STOP_DISTANCE * 2:
         stop()
-        setAlgorithm(stop)
+        # setAlgorithm(stop)
     else:
 
         if abs(distance1 - distance2) > 1 and distance1 < 380 and distance2 < 380:
@@ -604,7 +685,7 @@ def algorithm10Loop():
     global countDown
     countDown -= 1
     if countDown <= 0:
-        setAlgorithm(stop)
+        stop()
 
 
 def handleCameraRaw(topic, message, groups):
@@ -779,6 +860,7 @@ def processImageCV(image):
     MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
 
     MAX_AREA = 13000.0
+
 
     for i in range(len(cnts) - 1, -1, -1):
         center, radius = cv2.minEnclosingCircle(cnts[i])
