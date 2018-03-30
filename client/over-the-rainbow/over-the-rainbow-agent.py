@@ -239,8 +239,9 @@ def calculateSpeed(speed):
     speed = SPEEDS[speedIndex]
     return speed
 
-def steer(distance=0, speed=FORWARD_SPEED):
-    pyroslib.publish("move/steer", str(distance) + " " + str(speed))
+
+def steer(steerDistance=0, speed=FORWARD_SPEED):
+    pyroslib.publish("move/steer", str(steerDistance) + " " + str(speed))
 
 
 def drive(angle=0, speed=FORWARD_SPEED):
@@ -394,36 +395,13 @@ def algorithm2Start():
     requestDistanceAtAngle("0")
     setAlgorithm(algorithm2Loop)
 
+
 # follow left wall
 def algorithm2Loop():
     distanceControl = STOP_DISTANCE * KC
 
     followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1)
-    #
-    # if distance1 < STOP_DISTANCE:
-    #     stop()
-    #     setAlgorithm(stop)
-    # else:
-    #     outputForward = (distance1 - STOP_DISTANCE) * KP + deltaDistance1 * KD
-    #
-    #     outputForward = normalise(outputForward, distanceControl)
-    #
-    #     speedIndex = int(outputForward * SPEEDS_OFFSET + SPEEDS_OFFSET)
-    #     speed = SPEEDS[speedIndex]
-    #
-    #     if deltaDistance2 < 10:
-    #         outputSide = (distance2 - SIDE_DISTANCE) * KP + deltaDistance2 * KD
-    #         outputSide = -normalise(outputSide, SIDE_DISTANCE)
-    #
-    #         angle = outputSide * 20
-    #
-    #         log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
-    #         drive(angle, speed)
-    #     else:
-    #         distance = -int(math.log10(abs(deltaDistance2)) * 400) * sign(deltaDistance2)
-    #
-    #         log("TURN d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(distance))
-    #         steer(distance, speed)
+
 
 # follow right wall
 def algorithm3Start():
@@ -437,6 +415,7 @@ def algorithm3Loop():
     distanceControl = STOP_DISTANCE * KC
 
     followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1)
+
 
 # corner
 def algorithm4Start():
@@ -463,6 +442,7 @@ def algorithm4Loop():
 
 start_angle = 0
 previous_error = 0
+integral = 0
 
 AKP = 0.7
 AKD = 0.3
@@ -507,7 +487,8 @@ def rotateForAngleLeft(a):
         stop()
         # setAlgorithm(stop)
 
-#rotate left 90
+
+# rotate left 90
 def algorithm5Start():
     global start_angle, previous_error
     previous_error = 0
@@ -565,11 +546,6 @@ STOP_DISTANCE = 120
 SIDE_DISTANCE = 120
 STEERING_DISTANCE = 400
 
-previous_error = 0
-integral = 0
-
-
-
 
 def allTogether(stringOfFourLetters):
     global algorithmIndex, algorithmsList
@@ -602,7 +578,6 @@ def allTogether(stringOfFourLetters):
     def followRightWall():
         algorithm3Start()
 
-
     algorithmIndex = 0
     algorithmsList[:] = []
 
@@ -622,10 +597,6 @@ def allTogether(stringOfFourLetters):
     pass
 
 
-
-
-
-
 def algorithm9Start():
     global drive_speed
 
@@ -638,6 +609,7 @@ def algorithm9Start():
 
 def algorithm9Loop():
     pass
+
 
 def algorithm11Start():
     global drive_speed
@@ -761,12 +733,12 @@ def processImageCV(image):
 
         return limit
 
-    def findColourNameHSV(hChannel, c):
+    def findColourNameHSV(hChannel, contour):
         # construct a mask for the contour, then compute the
         # average L*a*b* value for the masked region
         # mask = hChannel.copy()
         mask = numpy.zeros(hChannel.shape[:2], dtype="uint8")
-        cv2.drawContours(mask, [c], -1, 255, -1)
+        cv2.drawContours(mask, [contour], -1, 255, -1)
         mask = cv2.erode(mask, None, iterations=2)
         mean = cv2.mean(hChannel, mask=mask)
 
@@ -883,8 +855,6 @@ def processImageCV(image):
                 lastMin = threshLimit
                 threshLimit = (lastMax + lastMin) / 2
 
-
-
     # ratio = image.shape[0] / float(resized.shape[0])
 
     # blur the resized image slightly, then convert it to both
@@ -894,23 +864,23 @@ def processImageCV(image):
     # lab = cv2.cvtColor(blurred, cv2.COLOR_RGB2LAB)
 
     hsv = cv2.cvtColor(blurred, cv2.COLOR_RGB2HSV)
-    hChannel, sChannel, vChannel = cv2.split(hsv)
+    hueChannel, satChannel, valChannel = cv2.split(hsv)
 
-    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(hChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(hueChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published hue channel image")
 
-    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(vChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(valChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published value channel image")
 
-    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(sChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(satChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published saturation channel image")
 
-    cnts, thresh = adaptiveFindContours(sChannel, vChannel)
+    countours, threshold = adaptiveFindContours(satChannel, valChannel)
 
-    treshback = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
-    cv2.drawContours(treshback, cnts, -1, (0, 255, 0), 2)
+    treshback = cv2.cvtColor(threshold, cv2.COLOR_GRAY2RGB)
+    cv2.drawContours(treshback, countours, -1, (0, 255, 0), 2)
 
-    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(threshold, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published gray image")
 
     pil = PIL.Image.fromarray(treshback)
@@ -919,8 +889,8 @@ def processImageCV(image):
 
     results = []
 
-    print("Have " + str(len(cnts)) + " contours")
-    for c in cnts:
+    print("Have " + str(len(countours)) + " contours")
+    for c in countours:
         # initialize the shape detector and color labeler
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.04 * peri, True)
@@ -928,13 +898,13 @@ def processImageCV(image):
         #     # circle
         #
 
-        center, radius = cv2.minEnclosingCircle(c)
+        cntrCenter, cntrRadius = cv2.minEnclosingCircle(c)
 
         # colourName, extraInfo = findColourNameLAB(lab, c)
-        colourName, extraInfo = findColourNameHSV(hChannel, c)
+        colourName, extraInfo = findColourNameHSV(hueChannel, c)
 
         if len(colourName) > 0:
-            results.append((center[0], center[1], colourName, radius, str(extraInfo)))
+            results.append((cntrCenter[0], cntrCenter[1], colourName, cntrRadius, str(extraInfo)))
 
     return results
 
