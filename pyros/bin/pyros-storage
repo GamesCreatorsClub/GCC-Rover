@@ -105,6 +105,8 @@ def executeCommand(client):
 
 
 def processLine(line, path):
+    if path.startswith("storage/write/"):
+        path = path[14:]
     print(path + " = " + line)
 
 

@@ -30,6 +30,28 @@ def printHelp(rc):
     sys.exit(rc)
 
 
+def processSwitches(arguments):
+    global service, restart, tail
+
+    while len(arguments) > 0 and arguments[0].startswith("-"):
+        if arguments[0] == "-h":
+            printHelp(0)
+
+        elif arguments[0] == "-s" or arguments[0] == "--service":
+            service = True
+            del args[0]
+
+        elif arguments[0] == "-r" or arguments[0] == "--restart":
+            restart = True
+            del arguments[0]
+
+        elif arguments[0] == "-f" or arguments[0] == "--tail":
+            tail = True
+            del arguments[0]
+
+    return arguments
+
+
 if len(args) < 2:
     print("Not enought arguments. Got only " + str(len(args)) + ".")
     print(str(args))
@@ -38,17 +60,7 @@ if len(args) < 2:
 if pc.hasHelpSwitch:
     printHelp(0)
 
-if args[0] == "-s" or args[0] == "--service":
-    service = True
-    del args[0]
-
-if args[0] == "-r" or args[0] == "--restart":
-    restart = True
-    del args[0]
-
-if args[0] == "-f" or args[0] == "--tail":
-    tail = True
-    del args[0]
+args = processSwitches(args)
 
 processId = args[0]
 
