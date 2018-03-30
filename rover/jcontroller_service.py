@@ -19,7 +19,6 @@ from fcntl import ioctl
 import pyroslib as pyros
 
 
-
 DEBUG_AXES = False
 DEBUG_BUTTONS = False
 DEBUG_JOYSTICK = False
@@ -40,6 +39,7 @@ class modes(Enum):
     GOLF = 2
     PINOON = 3
     DUCK_SHOOT = 4
+
 
 mode = modes.DUCK_SHOOT
 
@@ -332,7 +332,7 @@ def moveServo(servoid, angle):
     f = open("/dev/servoblaster", 'w')
     f.write(str(servoid) + "=" + str(angle) + "\n")
     f.close()
-
+    pyros.publish("servo/" + str(servoid), str(int(angle)))
 
 
 def setCharge(value):
@@ -342,7 +342,7 @@ def setCharge(value):
     if not charge == lastCharge:
         motorSpeed = int(85 + charge * (105 - 85) / 100)
         print("DUCK motor speed: " + str(motorSpeed) + " charge:" + str(charge))
-        pyros.publish("servo/13", motorSpeed)
+        moveServo(13, motorSpeed)
 
 
 def addCharge(ammount):
@@ -433,8 +433,6 @@ def processButtons():
                 elif topSpeed > 50:
                     topSpeed = 50
 
-
-
         # print("tl2: " + str(tl2) + " lastTL2: " + str(lastTL2))
 
         if mode == modes.PINOON:
@@ -469,14 +467,14 @@ def processButtons():
                 balLocked = not balLocked
 
             if balLocked:
-                moveServo(8, 220)
+                moveServo(9, 220)
 
             if tl:
-                moveServo(8, 100)
+                moveServo(9, 100)
                 balLocked = False
             else:
                 if not balLocked:
-                    moveServo(8, 150)
+                    moveServo(9, 150)
 
             if bx and bx != lastBX:
                 kick = 1
@@ -649,7 +647,7 @@ def processJoysticks():
 
         alreadyStopped = 0
     elif ld > 0.1:
-        if doOrbit :
+        if doOrbit:
             print("orbiting")
             # distance = sensorDistance
             distance = 10
