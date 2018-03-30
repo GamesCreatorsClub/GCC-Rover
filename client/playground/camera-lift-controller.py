@@ -140,8 +140,6 @@ def onKeyDown(key):
         direction = IDLE
     elif key == pygame.K_r:
         reset()
-    else:
-        pyros.gcc.handleConnectKeyDown(key)
 
 
 def onKeyUp(key):
@@ -161,6 +159,8 @@ while True:
             sys.exit()
 
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
+
+    driveCamera()
 
     pyros.loop(0.03)
     pyros.gccui.background(True)
