@@ -245,6 +245,8 @@ def loop(deltaTime, inner=None):
 
 
 def forever(deltaTime, outer=None, inner=None):
+    global _received
+
     currentTime = time.time()
     nextTime = currentTime
 
@@ -266,5 +268,14 @@ def forever(deltaTime, outer=None, inner=None):
         sleepTime = nextTime - currentTime
         if sleepTime < 0.002:
             nextTime = currentTime
+
+            _received = False
+            client.loop(0.0005)  # wait for 0.1 ms
+            count = 10 # allow at least 5 messages
+            while count > 0 and _received:
+                _received = True
+                count -= 1
+                client.loop(0.0005)  # wait for 0.1 ms
+
         else:
             loop(sleepTime, inner=inner)
