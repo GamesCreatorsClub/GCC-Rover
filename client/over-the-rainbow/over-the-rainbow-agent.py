@@ -729,57 +729,37 @@ def toPILImage(imageBytes):
     return pilImage
 
 
-colorNames = ["red", "green", "blue", "yellow"]
-labColours = numpy.zeros((4, 1, 3), dtype="uint8")
-labColours[0] = (255, 0, 0)
-labColours[1] = (0, 255, 0)
-labColours[2] = (0, 0, 255)
-labColours[3] = (255, 255, 0)
-labColours = cv2.cvtColor(labColours, cv2.COLOR_RGB2LAB)
-
-print("Lab colours")
-for labColour in labColours:
-    print(str(labColour))
-
-
 def processImageCV(image):
 
-    def eucleadianDistance(v1, v2):
-        res = 0
-        for index in range(0, len(v1)):
-            d = v1[index] - v2[index]
-            res = res + (d * d)
+    def smooth(ar):
+        p = ar[0]
+        for i in range(0, len(ar) - 1):
+            n = ar[i + 1]
+            np = ar[i]
+            ar[i] = p + n / 2
+            p = np
 
-        try:
-            return math.sqrt(res)
-        except BaseException as e:
-            print("Error : " + str(res) + " " + str(e))
+    def findThreshold(ar, start, cutOff):
+        newArray = []
+        for a in ar:
+            newArray.append(a[0])
 
-    def findColourNameLAB(lab, c):
-        # construct a mask for the contour, then compute the
-        # average L*a*b* value for the masked region
-        mask = numpy.zeros(lab.shape[:2], dtype="uint8")
-        cv2.drawContours(mask, [c], -1, 255, -1)
-        mask = cv2.erode(mask, None, iterations=2)
-        mean = cv2.mean(lab, mask=mask)[:3]
+        ar = newArray
 
-        # initialize the minimum distance found thus far
-        minDist = (numpy.inf, None)
+        print("Array is " + str(ar))
 
-        # loop over the known L*a*b* color values
-        for (i, row) in enumerate(labColours):
-            # compute the distance between the current L*a*b*
-            # color value and the mean of the image
-            # d = scipy.spatial.distance.euclidean(row[0], mean)
-            d = eucleadianDistance(row[0], mean)
+        sigma = sum(ar)
+        total = len(ar)
+        average = sigma / total
+        print("Average value is " + str(average) + " total " + str(total) + " sigma " + str(sigma))
 
-            # if the distance is smaller than the current distance,
-            # then update the bookkeeping variable
-            if d < minDist[0]:
-                minDist = (d, i)
+        smooth(ar)
 
-        # return the name of the color with the smallest distance
-        return colorNames[minDist[1]], mean
+        limit = start
+        while limit < len(ar) and ar[limit] > average * cutOff:
+            limit += 1
+
+        return limit
 
     def findColourNameHSV(hChannel, c):
         # construct a mask for the contour, then compute the
@@ -823,13 +803,95 @@ def processImageCV(image):
         else:
             return "", value
 
+    def sanitiseContours(cnts):
+        MIN_RADUIS = 10
+        MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
+
+        MAX_AREA = 13000.0
+
+        for i in range(len(cnts) - 1, -1, -1):
+            center, radius = cv2.minEnclosingCircle(cnts[i])
+            area = cv2.contourArea(cnts[i])
+            if radius < MIN_RADUIS or area < MIN_AREA or area > MAX_AREA or center[1] >= 128:
+                # print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+                del cnts[i]
+            else:
+                # print("Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+                pass
+
+    def findContours(sChannel, vChannel):
+        gray = sChannel.copy()
+        cv2.addWeighted(sChannel, 0.4, vChannel, 0.6, 0, gray)
+
+        threshHist = cv2.calcHist([gray], [0], None, [256], [0, 256], False)
+        threshLimit = findThreshold(threshHist, 60, 0.2)
+        print("Calculated threshold " + str(threshLimit))
+
+        # threshLimit = 180
+
+        # thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        thresh = cv2.threshold(gray, threshLimit, 255, cv2.THRESH_BINARY)[1]
+        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 81, 0)
+
+        # find contours in the thresholded image
+        cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = cnts[1]
+
+        sanitiseContours(cnts)
+
+        return cnts, thresh
+
+    def adaptiveFindContours(sChannel, vChannel):
+        gray = sChannel.copy()
+        cv2.addWeighted(sChannel, 0.4, vChannel, 0.6, 0, gray)
+
+        lastMax = 256
+        lastMin = 0
+        threshLimit = 128
+
+        iteration = 0
+
+        while True:
+            thresh = cv2.threshold(gray, threshLimit, 255, cv2.THRESH_BINARY)[1]
+            iteration += 1
+
+            # find contours in the thresholded image
+            cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cnts = cnts[1]
+
+            initialCntNum = len(cnts)
+            sanitiseContours(cnts)
+
+            pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+            # print("Published gray image")
+
+            if iteration % 1 == 0:
+                print("... iteration " + str(iteration) + " min/current/max " + str(lastMin) + "/" + str(threshLimit) + "/" + str(lastMax) + " orig/sanitised " + str(initialCntNum) + "/" + str(len(cnts)))
+
+            if 0 < len(cnts) < 6:
+                print("Found good number of areas after " + str(iteration) + " iterations, contours " + str(len(cnts)))
+                return cnts, thresh
+
+            if threshLimit < 30 or threshLimit > 220 or lastMax - lastMin < 4:
+                print("Failed to find good number of areas after " + str(iteration) + " iterations")
+                return cnts, thresh
+
+            if len(cnts) == 0:
+                lastMax = threshLimit
+                threshLimit = (lastMax + lastMin) / 2
+            else:
+                lastMin = threshLimit
+                threshLimit = (lastMax + lastMin) / 2
+
+
+
     # ratio = image.shape[0] / float(resized.shape[0])
 
     # blur the resized image slightly, then convert it to both
     # grayscale and the L*a*b* color spaces
     blurred = cv2.GaussianBlur(image, (5, 5), 0)
     # gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-    lab = cv2.cvtColor(blurred, cv2.COLOR_RGB2LAB)
+    # lab = cv2.cvtColor(blurred, cv2.COLOR_RGB2LAB)
 
     hsv = cv2.cvtColor(blurred, cv2.COLOR_RGB2HSV)
     hChannel, sChannel, vChannel = cv2.split(hsv)
@@ -843,40 +905,17 @@ def processImageCV(image):
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(sChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
     print("Published saturation channel image")
 
-    gray = sChannel.copy()
-    cv2.addWeighted(sChannel, 0.2, vChannel, 0.8, 0, gray)
-
-    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-    print("Published gray image")
-
-    thresh = cv2.threshold(gray, 90, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-
-    # find contours in the thresholded image
-    cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = cnts[1]
-
-    MIN_RADUIS = 10
-    MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
-
-    MAX_AREA = 13000.0
-
-
-    for i in range(len(cnts) - 1, -1, -1):
-        center, radius = cv2.minEnclosingCircle(cnts[i])
-        area = cv2.contourArea(cnts[i])
-        if radius < MIN_RADUIS or area < MIN_AREA or area > MAX_AREA or center[1] >= 128:
-            print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
-            del cnts[i]
-        else:
-            print("Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+    cnts, thresh = adaptiveFindContours(sChannel, vChannel)
 
     treshback = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
     cv2.drawContours(treshback, cnts, -1, (0, 255, 0), 2)
 
+    pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
+    print("Published gray image")
+
     pil = PIL.Image.fromarray(treshback)
     pyroslib.publish("overtherainbow/processed", pil.tobytes("raw"))
-    print("Published pil image")
+    print("Published threshold image")
 
     results = []
 
@@ -891,12 +930,11 @@ def processImageCV(image):
 
         center, radius = cv2.minEnclosingCircle(c)
 
-        if radius > 10:
-            # colourName, extraInfo = findColourNameLAB(lab, c)
-            colourName, extraInfo = findColourNameHSV(hChannel, c)
+        # colourName, extraInfo = findColourNameLAB(lab, c)
+        colourName, extraInfo = findColourNameHSV(hChannel, c)
 
-            if len(colourName) > 0:
-                results.append((center[0], center[1], colourName, radius, str(extraInfo)))
+        if len(colourName) > 0:
+            results.append((center[0], center[1], colourName, radius, str(extraInfo)))
 
     return results
 
