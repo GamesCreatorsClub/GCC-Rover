@@ -12,6 +12,7 @@ import io
 import numpy as np
 import traceback
 import pyroslib
+import storagelib
 import PIL.ImageOps
 import PIL.ImageMath
 from PIL import Image, ImageEnhance
@@ -47,6 +48,31 @@ imageFormat = 'BW'
 size = (80, 64)
 adjustedSize = (96, 64)
 postProcess = False
+
+
+IDLE = 0
+UP = 1
+DOWN = 2
+RESET = 3
+
+DIRECTIONS = ["IDLE", "UP", "DOWN", "RESET"]
+
+status = "Idle"
+
+S1_FRONT = 60
+S1_MID = 161
+S1_BACK = 260
+
+S2_DOWN = 175
+S2_MID = 140
+S2_UP = 74
+
+direction = RESET
+stage = 0
+s1_pos = S1_MID
+s2_pos = S2_MID
+timer = 0
+didReset = False
 
 
 def initCamera():
@@ -89,6 +115,24 @@ def logt(msg):
         now = time.time()
         print("{0!s:>10} {1} Lasted {2}s".format(str(round(now - startTime, 4)), msg, str(round(now - lastTime, 4))))
         lastTime = now
+
+
+def loadStorage():
+    storagelib.subscribeWithPrototype("camera", {
+        "elev": {
+            "up": S2_UP,
+            "mid": S2_MID,
+            "down": S2_DOWN
+        },
+        "rudd": {
+            "front": S1_FRONT,
+            "mid": S1_MID,
+            "back": S1_BACK
+        }
+    })
+    storagelib.waitForData()
+
+    print("  Storage details loaded.")
 
 
 def capture():
@@ -305,9 +349,152 @@ def handleFormat(topic, message, groups):
     initCamera()
 
 
+def handleLift(topic, message, groups):
+    global direction, stage
+    if DEBUG:
+        print(message)
+
+    if message == "reset":
+        reset()
+        direction = RESET
+    elif message == "resetdown":
+        resetDown()
+        direction = IDLE
+    elif message == "stop":
+        direction = IDLE
+    else:
+        if didReset:
+            if message == "up":
+                if direction != RESET:
+                    direction = UP
+                    stage = 0
+            elif message == "down":
+                if direction != RESET:
+                    direction = DOWN
+                    stage = 0
+        else:
+            print("Cannot move until reset!")
+
+
+def resetDown():
+    global direction, stage, s1_pos, s2_pos, timer, didReset
+
+    elevation_down = int(storagelib.storageMap["camera"]["elev"]["down"])
+    rudder_front = int(storagelib.storageMap["camera"]["rudd"]["front"])
+
+    direction = IDLE
+    stage = 0
+    s1_pos = rudder_front
+    s2_pos = elevation_down
+    timer = 0
+    didReset = True
+
+
+def reset():
+    global direction, stage, s1_pos, s2_pos, timer
+
+    elevation_mid = int(storagelib.storageMap["camera"]["elev"]["mid"])
+    rudder_mid = int(storagelib.storageMap["camera"]["rudd"]["mid"])
+
+    direction = IDLE
+    stage = 0
+    s1_pos = rudder_mid
+    s2_pos = elevation_mid
+    timer = 0
+
+
+def driveCamera():
+    global direction, stage, s1_pos, s2_pos, status, timer, didReset
+
+    elevation_up = int(storagelib.storageMap["camera"]["elev"]["up"])
+    elevation_down = int(storagelib.storageMap["camera"]["elev"]["down"])
+    elevation_mid = int(storagelib.storageMap["camera"]["elev"]["mid"])
+
+    rudder_front = int(storagelib.storageMap["camera"]["rudd"]["front"])
+    rudder_back = int(storagelib.storageMap["camera"]["rudd"]["back"])
+    rudder_mid = int(storagelib.storageMap["camera"]["rudd"]["mid"])
+
+    if direction == IDLE:
+        status = DIRECTIONS[direction] + " s:" + str(stage) + " p:" + str(s1_pos) + " " + str(s2_pos)
+
+    elif direction == RESET:
+        status = DIRECTIONS[direction] + " s:" + str(stage) + " timer:" + str(timer)
+        if stage == 0:
+            if timer % 10 == 0:
+                pyroslib.publish("servo/11", str(rudder_mid))
+            elif timer % 10 > 1:
+                pyroslib.publish("servo/11", "0")
+        if stage == 1:
+            if timer % 10 == 0:
+                pyroslib.publish("servo/10", str(elevation_mid))
+            elif timer % 10 > 1:
+                pyroslib.publish("servo/10", "0")
+
+        timer += 1
+        if timer > 200:
+            if stage == 0:
+                stage = 1
+                timer = 0
+            else:
+                didReset = True
+                direction = IDLE
+                pyroslib.publish("camera/lift", "done reset")
+
+    elif direction == UP:
+        status = DIRECTIONS[direction] + " s:" + str(stage) + " p:" + str(s1_pos) + " " + str(s2_pos)
+        if stage == 0:
+            if s1_pos == rudder_mid:
+                stage = 1
+            else:
+                pyroslib.publish("servo/11", str(s1_pos))
+                s1_pos += 1
+
+        if stage == 1:
+            if s2_pos == elevation_up:
+                stage = 2
+            else:
+                pyroslib.publish("servo/10", str(s2_pos))
+                s2_pos -= 1
+
+        if stage == 2:
+            if s1_pos == rudder_front:
+                stage = 3
+                pyroslib.publish("camera/lift", "done up")
+            else:
+                pyroslib.publish("servo/11", str(s1_pos))
+                s1_pos -= 1
+
+    elif direction == DOWN:
+        status = DIRECTIONS[direction] + " s:" + str(stage) + " p:" + str(s1_pos) + " " + str(s2_pos)
+        if stage == 0:
+            if s1_pos == rudder_mid:
+                stage = 1
+            else:
+                pyroslib.publish("servo/11", str(s1_pos))
+                s1_pos += 1
+
+        if stage == 1:
+            if s2_pos == elevation_down:
+                stage = 2
+            else:
+                pyroslib.publish("servo/10", str(s2_pos))
+                s2_pos += 1
+
+        if stage == 2:
+            if s1_pos == rudder_front:
+                stage = 3
+                pyroslib.publish("camera/lift", "done down")
+            else:
+                pyroslib.publish("servo/11", str(s1_pos))
+                s1_pos -= 1
+
+    if DEBUG:
+        print(status)
+
+
 def loop():
     global doReadSensor, lastTimeRead, continuousMode
-
+    driveCamera()
     if doReadSensor:
         if postProcess:
             fetchProcessed()
@@ -324,6 +511,7 @@ def loop():
 
 if __name__ == "__main__":
     try:
+
         print("Starting camera service...")
 
         if os.path.exists("white-balance.png"):
@@ -337,9 +525,15 @@ if __name__ == "__main__":
         pyroslib.subscribe("camera/whitebalance/store", storeWhiteBalance)
         pyroslib.subscribe("camera/continuous", handleContinuousMode)
         pyroslib.subscribe("camera/format", handleFormat)
+        pyroslib.subscribe("camera/lift", handleLift)
         pyroslib.init("camera-service")
 
+        print("  Loading storage details...")
+        loadStorage()
+
         print("Started camera service.")
+
+        resetDown()
 
         pyroslib.forever(0.02, loop)
 

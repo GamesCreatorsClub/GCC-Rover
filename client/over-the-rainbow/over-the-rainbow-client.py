@@ -398,6 +398,7 @@ def toggleStart():
 
 def stop():
     global running
+    pyros.publish("camera/lift", "stop")
     pyros.publish("move/stop", "")
     pyros.publish("overtherainbow/command", "stop")
     running = False
@@ -459,7 +460,12 @@ def onKeyDown(key):
         pyros.publish("overtherainbow/command", "alg9")
     elif key == pygame.K_0:
         pyros.publish("overtherainbow/command", "alg10")
-
+    elif key == pygame.K_u:
+        pyros.publish("camera/lift", "up")
+    elif key == pygame.K_d:
+        pyros.publish("camera/lift", "down")
+    elif key == pygame.K_SLASH:
+        pyros.publish("camera/lift", "reset")
     elif key == pygame.K_LEFT:
         if ptr == -1:
             ptr = len(processedImages) - 2
@@ -532,7 +538,7 @@ while True:
     #     mx = max(historyDistances[1])
     #     pyros.gccui.drawGraph((320, 50), (81, 65), historyDistances[1], mn, mx, 80, stick = 10)
 
-    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
+    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear, camera: u-up, d-down, /-reset", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 
     pyros.gccui.drawImage(rawImage, (500, 50), 10)
     pyros.gccui.drawImage(rawImageBig, (688, 50), 10)

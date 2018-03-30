@@ -78,7 +78,6 @@ wheelMap["servos"] = {}
 servoBlasterFile = None
 
 
-
 def moveServo(servoid, angle):
     global servoBlasterFile, i2cBus
 
