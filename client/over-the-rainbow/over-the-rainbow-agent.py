@@ -104,7 +104,8 @@ ACTION_NONE = 0
 ACTION_TURN = 1
 ACTION_DRIVE = 2
 
-lastAction = ACTION_NONE
+lastActionTime = 0
+sideDeltaAccum = 0
 
 
 def setAlgorithm(alg):
@@ -450,12 +451,12 @@ def brake():
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global lastAction, stopCountdown
+    global stopCountdown, lastActionTime, sideDeltaAccum
 
     def log1(*msg):
         log(*((formatArgL("  dt", round(dt, 3), 5),
-               formatArgR("  d1", distance1, 5), formatArgR("  d2", distance2, 5),
-               formatArgR("  dd1", deltaDistance1, 5), formatArgR("  dd2", deltaDistance2, 5)) + msg))
+               formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
+               formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
     distanceControl = STOP_DISTANCE * 4
 
@@ -479,9 +480,40 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
         angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
 
-        drive(angle, forwardSpeed)
+        lastActionTime -= deltaTime
 
-        log1(formatArgR("s", round(forwardSpeed, 1), 4), formatArgR("a", round(angle, 1), 3))
+        if lastActionTime < 0:
+            sda = sideDeltaAccum
+            if abs(sideDelta) > 20 or abs(angle) > 15:
+                nextAction = ACTION_TURN
+            else:
+                nextAction = ACTION_DRIVE
+
+            lastActionTime = 0.5
+            sideDeltaAccum = 0
+        else:
+            nextAction = ACTION_DRIVE
+            sideDeltaAccum += sideDelta
+
+        if nextAction == ACTION_DRIVE:
+            angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
+            angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
+
+            log1(" DRIV ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5))
+            drive(angle, forwardSpeed)
+            lastAngle = angle
+        else:
+            if forwardDelta == 0:
+                forwardDelta = -50 # moving forward
+            elif forwardDelta < -60:
+                forwardDelta = -50 # jump 1
+
+            angleR = angle / 180
+
+            steerDistance = - direction * forwardDelta / angleR
+
+            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("sda", round(sda), 6), formatArgR("fwd", round(forwardDelta), 6))
+            steer(steerDistance, forwardSpeed)
 
         # # if abs(sideDelta) < 3:
         # if sideDistance > 90 and abs(sideDelta) < 3:
@@ -502,38 +534,39 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         #     steer(steerDistance, speed)
 
 
+def setupFollowSide():
+    global stopCountdown, sideDeltaAccum, lastActionTime
+
+    setAlgorithm(doNothing)
+    resetPid(forwardPid)
+    resetPid(sidePid)
+    stopCountdown = 0
+    sideDeltaAccum = 0
+    lastActionTime = 0.5
+
+
 def algorithm2Start():
-    global doDistance, stopCountdown
+    global doDistance
 
     def followSideHandleDistance():
         followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1, deltaTime)
 
     print("2: Following left wall")
-    resetPid(forwardPid)
-    resetPid(sidePid)
-    stopCountdown = 0
-
     requestDistanceAtAngle("0")
-    setAlgorithm(doNothing)
-
+    setupFollowSide()
     doDistance = followSideHandleDistance
 
 
 # follow right wall
 def algorithm3Start():
-    global doDistance, stopCountdown
+    global doDistance
 
     def followSideHandleDistance():
-        followSide(distance1, deltaDistance1, distance2, deltaDistance2, -1, deltaTime)
+        followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1, deltaTime)
 
     print("2: Following right wall")
-    resetPid(forwardPid)
-    resetPid(sidePid)
-    stopCountdown = 0
-
+    setupFollowSide()
     requestDistanceAtAngle("90")
-    setAlgorithm(doNothing)
-
     doDistance = followSideHandleDistance
 
 
