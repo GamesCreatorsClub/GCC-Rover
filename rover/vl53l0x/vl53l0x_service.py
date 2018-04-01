@@ -19,13 +19,13 @@ USE_PYTHON_IMPL = True
 
 SENSORS_SWITCH_GPIO = 4
 
-CONTINUOUS_MODE_TIMEOUT = 3  # 5 seconds before giving up on sending accel data out
+CONTINUOUS_MODE_TIMEOUT = 6  # 5 seconds before giving up on sending accel data out
 MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 20 times a second
 
 DEBUG_LEVEL_OFF = 0
 DEBUG_LEVEL_INFO = 1
 DEBUG_LEVEL_ALL = 2
-DEBUG_LEVEL = DEBUG_LEVEL_INFO
+DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
 SERVO_NUMBER = 8
 SERVO_SPEED = 0.14 * 2  # 0.14 seconds per 60 (expecting servo to be twice as slow as per specs
@@ -76,13 +76,12 @@ def moveServo(angle):
     angle += 150
     angle = int(angle)
 
-    with open("/dev/servoblaster", 'w') as f:
-        f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
+    pyroslib.publish("servo/" + str(SERVO_NUMBER), str(int(angle)))
 
     log(DEBUG_LEVEL_ALL, "Servo", "Moved servo to angle " + str(angle) + " for distance " + str(angleDistance) + " so sleepoing for " + str(sleepAmount))
 
     # wait for servo to reach the destination
-    time.sleep(sleepAmount)
+    # time.sleep(sleepAmount)
 
 
 def secondSensorOn():
@@ -413,9 +412,12 @@ def handleContinuousMode(topic, message, groups):
 
     else:
         if not continuousMode:
-            continuousMode = True
-            doReadSensor = True
             log(DEBUG_LEVEL_INFO, "Message", "  Started continuous mode...")
+        else:
+            log(DEBUG_LEVEL_INFO, "Message", "  Already in continuous mode...")
+
+        continuousMode = True
+        doReadSensor = True
 
         lastTimeReceivedRequestForContMode = time.time()
 
@@ -445,7 +447,7 @@ def handleConf(topic, message, groups):
 
 
 def loop():
-    global doReadSensor, lastTimeRead, continuousMode, newServoAngle
+    global doReadSensor, lastTimeRead, continuousMode, newServoAngle, lastTimeReceivedRequestForContMode
 
     if doReadSensor:
         if lastServoAngle != newServoAngle:
@@ -473,12 +475,13 @@ def loop():
             if distance > 0:
                 pyroslib.publish("sensor/distance", str(lastServoAngle) + ":" + str(distance))
 
-        if continuousMode:
-            if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
-                continuousMode = False
-                log(DEBUG_LEVEL_INFO, "Message", "  Stopped continuous mode.")
-        else:
+    if continuousMode:
+        if time.time() - lastTimeReceivedRequestForContMode > CONTINUOUS_MODE_TIMEOUT:
+            continuousMode = False
             doReadSensor = False
+            log(DEBUG_LEVEL_INFO, "Message", "  Stopped continuous mode.")
+    else:
+        doReadSensor = False
 
 
 if __name__ == "__main__":
@@ -504,7 +507,7 @@ if __name__ == "__main__":
 
         print("Started vl53l0x sensor service.")
 
-        pyroslib.forever(0.01, loop)
+        pyroslib.forever(0.02, loop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
