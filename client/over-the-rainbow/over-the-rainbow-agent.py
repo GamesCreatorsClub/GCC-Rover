@@ -27,7 +27,7 @@ MAX_ANGLE = 45
 TURN_SPEED = 50
 ROTATE_SPEED = 100
 
-STOP_DISTANCE = 120
+STOP_DISTANCE = 80
 SIDE_DISTANCE = 120
 STEERING_DISTANCE = 400
 
@@ -108,6 +108,7 @@ lastActionTime = 0
 sideAngleAccum = 0
 lastAngle = 0
 
+
 def setAlgorithm(alg):
     global algorithm
     algorithm = alg
@@ -118,6 +119,20 @@ def connected():
 
     pyroslib.publish("camera/processed/fetch", "")
     pyroslib.publish("camera/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
+
+
+def addToHistoryWithTime(value, valueTime, history, historyTimes, maxTime):
+    history.append(value)
+    historyTimes.append(valueTime)
+
+    while len(historyTimes) > 0 and historyTimes[0] < valueTime - maxTime:
+        del history[0]
+        del historyTimes[0]
+
+    if len(history) > 1:
+        return value - history[len(history) - 2], sum(history) / len(history)
+    else:
+        return 0, 0
 
 
 def handleDistances(topic, message, groups):
@@ -156,59 +171,26 @@ def handleDistances(topic, message, groups):
     distanceDeg2 = deg2
     distance2 = val2
 
-    if historyDistancesDeg1 == deg1:
-        if deg1 != -1:
-            historyDistances1.append(val1)
-            historyDistanceTimes1.append(receivedTime)
-    elif historyDistancesDeg1 == deg2:
-        if deg2 != -1:
-            historyDistances1.append(val2)
-            historyDistanceTimes1.append(receivedTime)
-    else:
+    if deg1 > deg2:
+        tmp = deg2
+        deg2 = deg1
+        deg1 = tmp
+
+        tmp = distanceDeg2
+        distanceDeg2 = distanceDeg1
+        distanceDeg1 = tmp
+
+    if historyDistancesDeg1 != deg1 or historyDistancesDeg2 != deg2:
         historyDistances1 = []
         historyDistanceTimes1 = []
         historyDistancesDeg1 = deg1
 
-    if historyDistancesDeg2 == deg1:
-        if deg1 != -1:
-            historyDistances2.append(val1)
-            historyDistanceTimes2.append(receivedTime)
-    elif historyDistancesDeg2 == deg2:
-        if deg2 != -1:
-            historyDistances2.append(val2)
-            historyDistanceTimes2.append(receivedTime)
-    else:
         historyDistances2 = []
         historyDistanceTimes2 = []
         historyDistancesDeg2 = deg2
 
-    while len(historyDistanceTimes1) > 0 and historyDistanceTimes1[0] < receivedTime - DISTANCE_AVG_TIME:
-        del historyDistances1[0]
-        del historyDistanceTimes1[0]
-
-    while len(historyDistanceTimes2) > 0 and historyDistanceTimes2[0] < receivedTime - DISTANCE_AVG_TIME:
-        del historyDistances2[0]
-        del historyDistanceTimes2[0]
-
-    if len(historyDistances1) > 0:
-        avgDistance1 = sum(historyDistances1) / len(historyDistances1)
-    else:
-        avgDistance1 = 0
-
-    if len(historyDistances2) > 0:
-        avgDistance2 = sum(historyDistances2) / len(historyDistances2)
-    else:
-        avgDistance2 = 0
-
-    if len(historyDistances1) > 1:
-        deltaDistance1 = distance1 - historyDistances1[len(historyDistances1) - 2]
-    else:
-        deltaDistance1 = 0
-
-    if len(historyDistances2) > 1:
-        deltaDistance2 = distance2 - historyDistances2[len(historyDistances2) - 2]
-    else:
-        deltaDistance2 = 0
+    deltaDistance1, avgDistance1 = addToHistoryWithTime(distance1, receivedTime, historyDistances1, historyDistanceTimes1, DISTANCE_AVG_TIME)
+    deltaDistance2, avgDistance2 = addToHistoryWithTime(distance2, receivedTime, historyDistances2, historyDistanceTimes2, DISTANCE_AVG_TIME)
 
     deltaTime = receivedTime - lastDistanceReceivedTime
     lastDistanceReceivedTime = receivedTime
@@ -484,7 +466,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
         saa = sideAngleAccum
         if lastActionTime < 0:
-            if abs(sideAngleAccum) > 12.5:
+            if abs(sideAngleAccum) > 12.5 and forwardSpeed > 0:
                 nextAction = ACTION_TURN
             else:
                 nextAction = ACTION_DRIVE
@@ -515,23 +497,6 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
             log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("fwd", round(forwardDelta), 6))
             steer(steerDistance, forwardSpeed)
 
-        # # if abs(sideDelta) < 3:
-        # if sideDistance > 90 and abs(sideDelta) < 3:
-        #     outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
-        #     outputSide = -normalise(outputSide, SIDE_DISTANCE)
-        #
-        #     angle = outputSide * 80 * direction
-        #     if abs(angle) > 50:
-        #         log1("TURN1 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(angle))
-        #         steer(angle * 10, speed)
-        #     else:
-        #         log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
-        #         drive(angle, speed)
-        # else:
-        #     steerDistance = direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
-        #
-        #     log("TURN2 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(steerDistance))
-        #     steer(steerDistance, speed)
 
 
 def setupFollowSide():
@@ -766,7 +731,7 @@ def algorithm11Loop():
 
     distanceControl = STOP_DISTANCE * KC
 
-    if distance1 + distance2 < STOP_DISTANCE * 2:
+    if distance1 + distance2 < STOP_DISTANCE:
         stop()
         # setAlgorithm(stop)
     else:
