@@ -25,7 +25,7 @@ import smbus
 #
 
 DEBUG = False
-DEBUG_SPEED = True
+DEBUG_SPEED = False
 DEBUG_SPEED_VERBOSE = False
 DEBUG_TURN = False
 DEBUG_SERVO = False
@@ -100,6 +100,9 @@ def moveServo(servoid, angle):
             if DEBUG:
                 print("Lost connection to /dev/servoblaster - reopening")
             servoBlasterFile = open("/dev/servoblaster", 'w')
+
+    if servoid == "0" and DEBUG_SPEED:
+        print(str(int(time.time() * 1000) % 10000000) + ": speed wheel 0 = " + str(angle))
 
 
 def initWheel(wheelName, motorServo, steerServo):
@@ -260,15 +263,22 @@ def driveWheel(wheelName):
     wheelCal = wheelCalibrationMap[wheelName]["speed"]
 
     speedStr = wheel["speed"]
-    if "speedServoPos" in wheel and "gen" in wheel:
-        # servo position is not a value, but a generator
+    # if "speedServoPos" in wheel and "gen" in wheel:
+    #     # servo position is not a value, but a generator
+    #     servoPosition = wheel["speedServoPos"]
+    #     if wheel["gen"] is not None:
+    #         servoPosition = next(wheel["gen"])
+    #
+    #     pwmPart = (int(servoPosition * 10) % 10) // 2
+    #     servoPosition = int(servoPosition) + PWM[pwmPart][pwmIndex]
+    #
+    #     servoNumber = wheelCal["servo"]
+    #
+    #     if speedStr != "0" and speedStr != "-0":
+    #         moveServo(servoNumber, servoPosition)
+
+    if "speedServoPos" in wheel:
         servoPosition = wheel["speedServoPos"]
-        if wheel["gen"] is not None:
-            servoPosition = next(wheel["gen"])
-
-        pwmPart = (int(servoPosition * 10) % 10) // 2
-        servoPosition = int(servoPosition) + PWM[pwmPart][pwmIndex]
-
         servoNumber = wheelCal["servo"]
 
         if speedStr != "0" and speedStr != "-0":
