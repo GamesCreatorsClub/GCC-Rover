@@ -130,7 +130,7 @@ def handleGyro(topic, message, groups):
 
 
 def handleImageDetails(topic, message, groups):
-    global rawImage, rawImageBig, lastcompleteRawImageImage
+    global rawImage, rawImageBig, completeRawImage
 
     results = []
 
@@ -160,9 +160,8 @@ def handleImageDetails(topic, message, groups):
         rawImageBig = pygame.transform.scale(completeRawImage, (320, 256))
 
         if record:
-            if len(processedImages) > 0:
-                processedImages[len(processedImages) - 1] = rawImage
-                processedBigImages[len(processedImages) - 1] = rawImageBig
+            processedImages.append(rawImage)
+            processedBigImages.append(rawImageBig)
 
 
 def handleCameraRaw(topic, message, groups):

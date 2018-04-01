@@ -20,16 +20,17 @@ import PIL.Image
 
 DEBUG = True
 
-stroboTime = -1
-nextTime = time.time()
-state = False
-
-
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 MAX_FORWARD_SPEED = 60
+MAX_ANGLE = 45
 TURN_SPEED = 50
 ROTATE_SPEED = 100
+
+STOP_DISTANCE = 120
+SIDE_DISTANCE = 120
+STEERING_DISTANCE = 400
+
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
@@ -66,9 +67,18 @@ digestTime = time.time()
 
 size = (320, 256)
 
+stopCountdown = 0
+
+
+def doNothing():
+    pass
+
+
 lastProcessed = time.time()
 algorithmIndex = 0
 algorithmsList = []
+doDistance = doNothing
+doGyro = doNothing
 
 KGAIN_INDEX = 0
 KpI = 1
@@ -81,14 +91,20 @@ INTEGRAL_INDEX = 2
 DERIVATIVE_INDEX = 3
 DELTA_TIME_INDEX = 4
 
+lastDistanceReceivedTime = time.time()
 deltaTime = 0
-lastTime = time.time()
 
-forwardGains = [1, 0.7, 0.0, 0.3]
+forwardGains = [1, 0.7, 0.0, 0.2]
 forwardPid = [0, 0, 0, 0, 0]
 
 sideGains = [0.3, 0.7, 0, 0]
 sidePid = [0, 0, 0, 0, 0]
+
+ACTION_NONE = 0
+ACTION_TURN = 1
+ACTION_DRIVE = 2
+
+lastAction = ACTION_NONE
 
 
 def setAlgorithm(alg):
@@ -106,8 +122,9 @@ def connected():
 def handleDistances(topic, message, groups):
     global historyDistancesDeg1, historyDistancesDeg2, historyDistances1, historyDistances2, historyDistanceTimes1, historyDistanceTimes2
     global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2, distanceTimestamp, deltaDistance1, deltaDistance2
+    global deltaTime, lastDistanceReceivedTime
 
-    n = time.time()
+    receivedTime = time.time()
 
     split = message.split(",")
     deg1 = -1
@@ -141,11 +158,11 @@ def handleDistances(topic, message, groups):
     if historyDistancesDeg1 == deg1:
         if deg1 != -1:
             historyDistances1.append(val1)
-            historyDistanceTimes1.append(n)
+            historyDistanceTimes1.append(receivedTime)
     elif historyDistancesDeg1 == deg2:
         if deg2 != -1:
             historyDistances1.append(val2)
-            historyDistanceTimes1.append(n)
+            historyDistanceTimes1.append(receivedTime)
     else:
         historyDistances1 = []
         historyDistanceTimes1 = []
@@ -154,21 +171,21 @@ def handleDistances(topic, message, groups):
     if historyDistancesDeg2 == deg1:
         if deg1 != -1:
             historyDistances2.append(val1)
-            historyDistanceTimes2.append(n)
+            historyDistanceTimes2.append(receivedTime)
     elif historyDistancesDeg2 == deg2:
         if deg2 != -1:
             historyDistances2.append(val2)
-            historyDistanceTimes2.append(n)
+            historyDistanceTimes2.append(receivedTime)
     else:
         historyDistances2 = []
         historyDistanceTimes2 = []
         historyDistancesDeg2 = deg2
 
-    while len(historyDistanceTimes1) > 0 and historyDistanceTimes1[0] < n - DISTANCE_AVG_TIME:
+    while len(historyDistanceTimes1) > 0 and historyDistanceTimes1[0] < receivedTime - DISTANCE_AVG_TIME:
         del historyDistances1[0]
         del historyDistanceTimes1[0]
 
-    while len(historyDistanceTimes2) > 0 and historyDistanceTimes2[0] < n - DISTANCE_AVG_TIME:
+    while len(historyDistanceTimes2) > 0 and historyDistanceTimes2[0] < receivedTime - DISTANCE_AVG_TIME:
         del historyDistances2[0]
         del historyDistanceTimes2[0]
 
@@ -191,6 +208,10 @@ def handleDistances(topic, message, groups):
         deltaDistance2 = distance2 - historyDistances2[len(historyDistances2) - 2]
     else:
         deltaDistance2 = 0
+
+    deltaTime = receivedTime - lastDistanceReceivedTime
+    lastDistanceReceivedTime = receivedTime
+    doDistance()
 
 
 def handleGyroData(topic, message, groups):
@@ -319,12 +340,12 @@ def stopDriving():
     pyroslib.publish("move/stop", "")
 
 
-def doNothing():
-    pass
-
-
 def stop():
-    global algorithmIndex, algorithmsList
+    global algorithmIndex, algorithmsList, doDistance, doGyro
+
+    doDistance = doNothing
+    doGyro = doNothing
+
     # print("stopping")
     stopDriving()
     algorithmIndex += 1
@@ -342,10 +363,31 @@ countDown = 0
 drive_speed = 0
 
 
-def log(msg):
+def formatArgL(label, value, fieldSize):
+    if len(label) > 0:
+        return label + ":" + str(value).ljust(fieldSize)
+    else:
+        return str(value).ljust(fieldSize)
+
+
+def formatArgR(label, value, fieldSize):
+    if len(label) > 0:
+        return label + ":" + str(value).rjust(fieldSize)
+    else:
+        return str(value).rjust(fieldSize)
+
+
+def log(*msg):
     tnow = time.time()
     dt = str((tnow - distanceTimestamp) * 1000) + "ms"
-    print(str(str(int(tnow * 1000) % 10000000)) + ": D:" + dt + " 1:" + str(distance1) + " 2:" + str(distance2) + " d1:" + str(deltaDistance1) + " d2:" + str(deltaDistance2) + " " + msg)
+
+    logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
+    print(logMsg)
+
+    #   + formatArg(" dt", deltaTime, 4) \
+    # + formatArg("d1", distance, 5) + formatArg("d1", distance, 5)\
+    # + formatArg("dd1", deltaDistance1, 5) + formatArg("dd1", deltaDistance1, 5)
+    # print(str() + ": D:" + dt + " 1:" + str(distance1) + " 2:" + str(distance2) + " d1:" + str(deltaDistance1) + " d2:" + str(deltaDistance2) + " " + msg)
 
 
 def algorithm1Start():
@@ -408,55 +450,91 @@ def brake():
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
+    global lastAction, stopCountdown
 
-    error = forwardDistance - STOP_DISTANCE
+    def log1(*msg):
+        log(*((formatArgL("  dt", round(dt, 3), 5),
+               formatArgR("  d1", distance1, 5), formatArgR("  d2", distance2, 5),
+               formatArgR("  dd1", deltaDistance1, 5), formatArgR("  dd2", deltaDistance2, 5)) + msg))
 
-    if error < 0:
-        stop()
+    distanceControl = STOP_DISTANCE * 4
+
+    if stopCountdown > 0:
+        log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
+        drive(0, 0)
+        stopCountdown -= 1
+        if stopCountdown == 0:
+            stop()
+
+    elif forwardDistance < STOP_DISTANCE:
+        # stop()
+        stopCountdown = 3
+
     else:
-        speed = pid(error, forwardPid, forwardGains, dt)
-        speed = MAX_FORWARD_SPEED * normalise(speed, 8190)
+        forwardPid[INTEGRAL_INDEX]
 
-        side_error = sideDistance - SIDE_DISTANCE
+        forwardSpeed = (forwardDistance - STOP_DISTANCE) * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI]
+        forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
 
-        side_control = pid(side_error, sidePid, sideGains, dt)
-        derivative = sidePid[DERIVATIVE_INDEX]
+        angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
+        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
 
-        if abs(derivative) < 150:
-            angle = -side_control
-            log("STRAIGHT sc:" + str(side_control) + " a:" + str(round(angle, 2)) + " s:" + str(speed) + " sidePid=" + str(sidePid))
-            drive(angle, speed)
-        else:
-            side_distance = -side_control
-            log("TURN1 sc:" + str(side_control) + " d:" + str(round(side_distance, 2)) + " s:" + str(speed) + " sidePid=" + str(sidePid))
-            steer(side_distance, speed)
+        drive(angle, forwardSpeed)
+
+        log1(formatArgR("s", round(forwardSpeed, 1), 4), formatArgR("a", round(angle, 1), 3))
+
+        # # if abs(sideDelta) < 3:
+        # if sideDistance > 90 and abs(sideDelta) < 3:
+        #     outputSide = (sideDistance - SIDE_DISTANCE) * KP + sideDelta * KD
+        #     outputSide = -normalise(outputSide, SIDE_DISTANCE)
+        #
+        #     angle = outputSide * 80 * direction
+        #     if abs(angle) > 50:
+        #         log1("TURN1 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(angle))
+        #         steer(angle * 10, speed)
+        #     else:
+        #         log("STRAIGHT d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
+        #         drive(angle, speed)
+        # else:
+        #     steerDistance = direction * int(math.log10(abs(sideDelta)) * STEERING_DISTANCE) * sign(sideDelta)
+        #
+        #     log("TURN2 d:" + str(round(outputForward, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " sd:" + str(steerDistance))
+        #     steer(steerDistance, speed)
 
 
 def algorithm2Start():
-    print("started algorithm 2...")
+    global doDistance, stopCountdown
+
+    def followSideHandleDistance():
+        followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1, deltaTime)
+
+    print("2: Following left wall")
+    resetPid(forwardPid)
+    resetPid(sidePid)
+    stopCountdown = 0
+
     requestDistanceAtAngle("0")
-    setAlgorithm(algorithm2Loop)
+    setAlgorithm(doNothing)
 
-
-# follow left wall
-def algorithm2Loop():
-    distanceControl = STOP_DISTANCE * KC
-
-    followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1, deltaTime)
+    doDistance = followSideHandleDistance
 
 
 # follow right wall
 def algorithm3Start():
-    print("started algorithm 3...")
+    global doDistance, stopCountdown
+
+    def followSideHandleDistance():
+        followSide(distance1, deltaDistance1, distance2, deltaDistance2, -1, deltaTime)
+
+    print("2: Following right wall")
+    resetPid(forwardPid)
+    resetPid(sidePid)
+    stopCountdown = 0
+
     requestDistanceAtAngle("90")
-    driveForward(FORWARD_SPEED)
-    setAlgorithm(algorithm3Loop)
+    setAlgorithm(doNothing)
 
-
-def algorithm3Loop():
-    distanceControl = STOP_DISTANCE * KC
-
-    followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1, deltaTime)
+    doDistance = followSideHandleDistance
 
 
 # corner
@@ -577,16 +655,6 @@ def algorithm8Loop():
     rotateForAngleRight(135)
 
 
-KP = 0.8
-KI = 0.0
-KD = 0.2
-KC = 2
-KA = 20
-STOP_DISTANCE = 120
-SIDE_DISTANCE = 120
-STEERING_DISTANCE = 400
-
-
 def allTogether(stringOfFourLetters):
     global algorithmIndex, algorithmsList
 
@@ -689,7 +757,7 @@ def algorithm10Start():
     global countDown
     print("started algorithm 10...")
     countDown = 50
-    driveBack(FORWARD_SPEED)
+    driveBack(MAX_FORWARD_SPEED)
     setAlgorithm(algorithm10Loop)
 
 
@@ -1051,7 +1119,7 @@ def drawSpot(image, cx, cy, colour, text):
 
 
 def mainLoop():
-    global renewContinuous, digestTime, deltaTime, lastTime
+    global renewContinuous, digestTime
 
     thisTime = time.time()
 
@@ -1061,9 +1129,6 @@ def mainLoop():
             pyroslib.publish("sensor/distance/continuous", "continue")
         if readingGyroContinuous:
             pyroslib.publish("sensor/gyro/continuous", "continue")
-
-    deltaTime = thisTime - lastTime
-    lastTime = thisTime
 
     if algorithm is not None:
         algorithm()
