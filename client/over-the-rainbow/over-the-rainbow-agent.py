@@ -29,6 +29,7 @@ ROTATE_SPEED = 100
 
 STOP_DISTANCE = 80
 SIDE_DISTANCE = 120
+CORNER_STOP_DISTANCE = 150
 STEERING_DISTANCE = 400
 
 
@@ -99,6 +100,8 @@ forwardPid = [0, 0, 0, 0, 0]
 
 sideGains = [1.1, 0.8, 0, 0.05]
 sidePid = [0, 0, 0, 0, 0]
+
+KA = 10
 
 ACTION_NONE = 0
 ACTION_TURN = 1
@@ -220,11 +223,11 @@ def handleOverTheRainbow(topic, message, groups):
         algorithmsList[:] = []
         stop()
     elif cmd == "alg1":
-        setAlgorithm(algorithm1Start)
+        setAlgorithm(findCorner)
     elif cmd == "alg2":
-        setAlgorithm(algorithm2Start)
+        setAlgorithm(followLeftRoad)
     elif cmd == "alg3":
-        setAlgorithm(algorithm3Start)
+        setAlgorithm(followRightRoad)
     elif cmd == "alg4":
         setAlgorithm(algorithm4Start)
     elif cmd == "alg5":
@@ -318,6 +321,25 @@ def requestDistanceAtAngle(angle):
     pyroslib.publish("sensor/distance/deg", str(angle))
 
 
+countDown = 0
+drive_speed = 0
+
+
+def brake():
+    global countDown
+
+    countDown -= 1
+
+    if countDown < -50:
+        stop()
+    elif countDown < 0:
+        stopDriving()
+        log("Stopped for " + str(countDown))
+    else:
+        log("Breaking for " + str(countDown))
+        driveBack(50)
+
+
 def stopDriving():
     pyroslib.publish("move", "0 0")
     pyroslib.publish("move/stop", "")
@@ -342,10 +364,6 @@ def stop():
         print("Stopped!")
 
 
-countDown = 0
-drive_speed = 0
-
-
 def formatArgL(label, value, fieldSize):
     if len(label) > 0:
         return label + ":" + str(value).ljust(fieldSize)
@@ -367,69 +385,55 @@ def log(*msg):
     logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
     print(logMsg)
 
-    #   + formatArg(" dt", deltaTime, 4) \
-    # + formatArg("d1", distance, 5) + formatArg("d1", distance, 5)\
-    # + formatArg("dd1", deltaDistance1, 5) + formatArg("dd1", deltaDistance1, 5)
-    # print(str() + ": D:" + dt + " 1:" + str(distance1) + " 2:" + str(distance2) + " d1:" + str(deltaDistance1) + " d2:" + str(deltaDistance2) + " " + msg)
 
+def findCorner():
+    global stopCountdown, lastActionTime, doDistance
 
-def algorithm1Start():
-    global drive_speed
-    log("started algorithm 1...")
-    resetPid(sidePid)
+    print("1: Find corner")
+    requestDistanceAtAngle("45")
+
+    setAlgorithm(doNothing)
     resetPid(forwardPid)
-    drive_speed = FORWARD_SPEED
-    setAlgorithm(algorithm1Loop)
+    stopCountdown = 0
+    doDistance = findCorderDistanceHandler
 
 
-def algorithm1Loop():
-    global countDown, drive_speed
-    # go to the corner
-    stopAt = 130
-    slowAt = 180
-    if avgDistance1 + deltaDistance1 * 4 < slowAt or avgDistance2 + deltaDistance2 * 4 < slowAt:
-        drive_speed = MINIMUM_FORWARD_SPEED
-        log("Slowing down")
+def findCorderDistanceHandler():
+    global stopCountdown
+
+    def log1(*msg):
+        log(*((formatArgL("  dt", round(deltaTime, 3), 5),
+               formatArgR("  ld", distance1, 5), formatArgR("  fdd", deltaDistance1, 5),
+               formatArgR("  rd", distance2, 5), formatArgR("  sdd", deltaDistance2, 5)) + msg))
+
+    dt = deltaTime
+    forwardDistance = distance1 + distance2
+    forwardDelta = - math.sqrt(deltaDistance1 * deltaDistance1 + deltaDistance2 * deltaDistance2)
+
+    if stopCountdown > 0:
+        log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
+        drive(0, 0)
+        stopCountdown -= 1
+        if stopCountdown == 0:
+            stop()
+
+    elif distance1 * distance1 + distance2 * distance2 < CORNER_STOP_DISTANCE * CORNER_STOP_DISTANCE:
+        # stop()
+        stopCountdown = 3
+
     else:
-        drive_speed = FORWARD_SPEED
-        log("Speeding up")
+        forwardError = math.sqrt(distance1 * distance1 + distance2 * distance2) - CORNER_STOP_DISTANCE
 
-    if distance1 + deltaDistance1 * 4 < stopAt and distance2 + deltaDistance2 * 4 < stopAt:
-        log("Need to brake")
-        countDown = 15
-        setAlgorithm(brake)
-        return
-    elif abs(distance1 - distance2) > 10:
-        if distance1 > distance2:
-            log("Left")
-            drive(30, drive_speed)
+        forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
+        forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
+
+        if abs(distance1 - distance2) > 1: # and distance1 < 380 and distance2 < 380:
+            angle = int(math.log10(abs(distance1 - distance2)) * KA) * sign(distance1 - distance2)
         else:
-            log("Right")
-            drive(-30, drive_speed)
-        # if lastDrive != "30" and distance1 > distance2:
-        #     drive(30)
-        #     lastDrive = "30"
-        # elif lastDrive != "-30" and distance2 > distance1:
-        #     drive(-30)
-        #     lastDrive = "-30"
-    else:
-        log("Forward")
-        driveForward(drive_speed)
+            angle = 0
 
-
-def brake():
-    global countDown
-
-    countDown -= 1
-
-    if countDown < -50:
-        stop()
-    elif countDown < 0:
-        stopDriving()
-        log("Stopped for " + str(countDown))
-    else:
-        log("Breaking for " + str(countDown))
-        driveBack(50)
+        drive(angle, forwardSpeed)
+        log1(" CORN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("e", round(forwardError), 5), formatArgR("fwd", round(forwardDelta), 6))
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
@@ -439,8 +443,6 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         log(*((formatArgL("  dt", round(dt, 3), 5),
                formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
                formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
-
-    distanceControl = STOP_DISTANCE * 4
 
     if stopCountdown > 0:
         log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
@@ -454,7 +456,6 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         stopCountdown = 3
 
     else:
-        forwardPid[INTEGRAL_INDEX]
 
         forwardSpeed = forwardGains[KGAIN_INDEX] * ((forwardDistance - STOP_DISTANCE) * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
         forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
@@ -498,7 +499,6 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
             steer(steerDistance, forwardSpeed)
 
 
-
 def setupFollowSide():
     global stopCountdown, sideAngleAccum, lastActionTime
 
@@ -510,7 +510,7 @@ def setupFollowSide():
     lastActionTime = 0.5
 
 
-def algorithm2Start():
+def followLeftRoad():
     global doDistance
 
     def followSideHandleDistance():
@@ -523,7 +523,7 @@ def algorithm2Start():
 
 
 # follow right wall
-def algorithm3Start():
+def followRightRoad():
     global doDistance
 
     def followSideHandleDistance():
