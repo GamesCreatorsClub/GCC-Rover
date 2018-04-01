@@ -94,10 +94,10 @@ DELTA_TIME_INDEX = 4
 lastDistanceReceivedTime = time.time()
 deltaTime = 0
 
-forwardGains = [1, 0.7, 0.0, 0.2]
+forwardGains = [1, 0.75, 0.0, 0.25]
 forwardPid = [0, 0, 0, 0, 0]
 
-sideGains = [0.3, 0.7, 0, 0]
+sideGains = [1.1, 0.8, 0, 0.05]
 sidePid = [0, 0, 0, 0, 0]
 
 ACTION_NONE = 0
@@ -105,8 +105,8 @@ ACTION_TURN = 1
 ACTION_DRIVE = 2
 
 lastActionTime = 0
-sideDeltaAccum = 0
-
+sideAngleAccum = 0
+lastAngle = 0
 
 def setAlgorithm(alg):
     global algorithm
@@ -451,7 +451,7 @@ def brake():
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global stopCountdown, lastActionTime, sideDeltaAccum
+    global stopCountdown, lastActionTime, sideAngleAccum, lastAngle
 
     def log1(*msg):
         log(*((formatArgL("  dt", round(dt, 3), 5),
@@ -474,34 +474,34 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
     else:
         forwardPid[INTEGRAL_INDEX]
 
-        forwardSpeed = (forwardDistance - STOP_DISTANCE) * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI]
+        forwardSpeed = forwardGains[KGAIN_INDEX] * ((forwardDistance - STOP_DISTANCE) * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
         forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
 
-        angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
+        angle = sideGains[KGAIN_INDEX] * ((sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
         angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
 
         lastActionTime -= deltaTime
 
+        saa = sideAngleAccum
         if lastActionTime < 0:
-            sda = sideDeltaAccum
-            if abs(sideDelta) > 20 or abs(angle) > 15:
+            if abs(sideAngleAccum) > 12.5:
                 nextAction = ACTION_TURN
             else:
                 nextAction = ACTION_DRIVE
 
             lastActionTime = 0.5
-            sideDeltaAccum = 0
+            sideAngleAccum = 0
         else:
             nextAction = ACTION_DRIVE
-            sideDeltaAccum += sideDelta
+            sideAngleAccum += angle
+
+        angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
+        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
+        lastAngle = angle
 
         if nextAction == ACTION_DRIVE:
-            angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
-            angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
-
-            log1(" DRIV ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5))
+            log1(" DRIV ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
             drive(angle, forwardSpeed)
-            lastAngle = angle
         else:
             if forwardDelta == 0:
                 forwardDelta = -50 # moving forward
@@ -510,9 +510,9 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
             angleR = angle / 180
 
-            steerDistance = - direction * forwardDelta / angleR
+            steerDistance = -1 * forwardDelta / angleR
 
-            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("sda", round(sda), 6), formatArgR("fwd", round(forwardDelta), 6))
+            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("fwd", round(forwardDelta), 6))
             steer(steerDistance, forwardSpeed)
 
         # # if abs(sideDelta) < 3:
@@ -535,13 +535,13 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, sideDeltaAccum, lastActionTime
+    global stopCountdown, sideAngleAccum, lastActionTime
 
     setAlgorithm(doNothing)
     resetPid(forwardPid)
     resetPid(sidePid)
     stopCountdown = 0
-    sideDeltaAccum = 0
+    sideAngleAccum = 0
     lastActionTime = 0.5
 
 
