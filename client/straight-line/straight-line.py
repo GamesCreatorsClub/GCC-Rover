@@ -150,6 +150,7 @@ while True:
 
     pyros.loop(0.03)
     pyros.gccui.background(True)
+    pyros.agent.keepAgents()
 
     text = bigFont.render("Steer Gain: " + str(round(steerGain, 1)), 1, (255, 128, 128))
     screen.blit(text, (10, 30))

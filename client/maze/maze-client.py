@@ -175,6 +175,7 @@ while True:
 
     pyros.loop(0.03)
     pyros.gccui.background(True)
+    pyros.agent.keepAgents()
 
     screen.blit(bigFont.render("Stopped: " + str(not run), 1, WHITE), pygame.Rect(10, 80, 0, 0))
 
