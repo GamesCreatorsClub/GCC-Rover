@@ -68,7 +68,8 @@ def log(level, where, what):
 
 def moveServo(angle):
     if ARDUINO:
-        moveServoArduino(angle)
+        moveServoRpi(angle)
+        # moveServoArduino(angle)
     else:
         moveServoRpi(angle)
 
@@ -79,9 +80,11 @@ def moveServoRpi(angle):
     angle += 150
     angle = int(angle)
 
-    f = open("/dev/servoblaster", 'w')
-    f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
-    f.close()
+    # f = open("/dev/servoblaster", 'w')
+    # f.write(str(SERVO_NUMBER) + "=" + str(angle) + "\n")
+    # f.close()
+
+    pyroslib.publish("servo/" + str(SERVO_NUMBER), str(int(angle)))
 
     angleDistance = abs(lastServoAngle - angle)
     sleepAmount = SERVO_SPEED * angleDistance / 60.0
@@ -198,6 +201,13 @@ def readDistancesArduino():
     return distances
 
 
+def handleDeg(topic, message, groups):
+    global newServoAngle
+
+    newServoAngle = float(message)
+    log(DEBUG_LEVEL_INFO, "Message", "  Got new angle " + message)
+
+
 def handleRead(topic, payload, groups):
     angle = float(payload)
     if DEBUG:
@@ -260,12 +270,13 @@ def handleContinuousMode(topic, message, groups):
 
 
 def loop():
-    global doReadSensor, lastTimeRead, continuousMode, newServoAngle
+    global doReadSensor, lastTimeRead, continuousMode, newServoAngle, lastServoAngle
 
     if doReadSensor:
         if lastServoAngle != newServoAngle:
             moveServo(newServoAngle)
             log(DEBUG_LEVEL_INFO, "Loop", "  Moved to the new angle " + str(newServoAngle))
+            lastServoAngle = newServoAngle
 
         distance = readDistance()
         if twoSensorsMode:
@@ -313,6 +324,7 @@ if __name__ == "__main__":
 
         time.sleep(1)
 
+        pyroslib.subscribe("sensor/distance/deg", handleDeg)
         pyroslib.subscribe("sensor/distance/read", handleRead)
         pyroslib.subscribe("sensor/distance/scan", handleScan)
         pyroslib.subscribe("sensor/distance/continuous", handleContinuousMode)

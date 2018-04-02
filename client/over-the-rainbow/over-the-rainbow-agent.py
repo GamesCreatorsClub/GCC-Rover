@@ -101,14 +101,14 @@ deltaTime = 0
 lastGyroReceivedTime = time.time()
 gyroDeltaTime = 0
 
-forwardGains = [1, 0.75, 0.3, 0.25]
+forwardGains = [1, 0.75, 0.4, 0.25]
 forwardPid = [0, 0, 0, 0, 0]
 forwardIntegral = 0
 
 sideGains = [1.1, 0.8, 0.3, 0.05]
 sidePid = [0, 0, 0, 0, 0]
 
-gyroGains = [1.1, 0.8, 0.4, 0.05]
+gyroGains = [1.1, 0.8, 0.8, 0.05]
 gyroPid = [0, 0, 0, 0, 0]
 
 KA = 10
@@ -610,6 +610,7 @@ def rotateForAngle(angle):
                 stopCountdown -= 1
                 if stopCountdown == 0:
                     stop()
+                    stopped = True
 
         if not stopped:
             gyroError = gyroAngle - angle
@@ -637,7 +638,6 @@ def rotateForAngle(angle):
             # else:
             #     log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
             #     rotate(speed)
-
 
     print("Rotating for " + str(angle))
     gyroAngle = 0
@@ -876,7 +876,8 @@ def processImageCV(image):
 
         lastMax = 256
         lastMin = 0
-        threshLimit = 128
+        threshLimit = 225
+        # threshLimit = 128
 
         iteration = 0
 
@@ -901,16 +902,18 @@ def processImageCV(image):
                 print("Found good number of areas after " + str(iteration) + " iterations, contours " + str(len(cnts)))
                 return cnts, thresh
 
-            if threshLimit < 30 or threshLimit > 220 or lastMax - lastMin < 4:
+            if threshLimit < 30 or threshLimit > 225 or lastMax - lastMin < 4:
                 print("Failed to find good number of areas after " + str(iteration) + " iterations")
                 return cnts, thresh
 
-            if len(cnts) == 0:
-                lastMax = threshLimit
-                threshLimit = (lastMax + lastMin) / 2
-            else:
-                lastMin = threshLimit
-                threshLimit = (lastMax + lastMin) / 2
+            threshLimit -= 25
+
+            # if len(cnts) == 0:
+            #     lastMax = threshLimit
+            #     threshLimit = (lastMax + lastMin) / 2
+            # else:
+            #     lastMin = threshLimit
+            #     threshLimit = (lastMax + lastMin) / 2
 
     # ratio = image.shape[0] / float(resized.shape[0])
 
