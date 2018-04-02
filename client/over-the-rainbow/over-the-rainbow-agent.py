@@ -23,8 +23,8 @@ DEBUG = True
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 MAX_FORWARD_SPEED = 60
-MAX_ROTATE_SPEED = 60
-MIN_ROTATE_SPEED = 10
+MAX_ROTATE_SPEED = 35
+MIN_ROTATE_SPEED = 14
 
 MAX_ANGLE = 45
 TURN_SPEED = 50
@@ -108,7 +108,7 @@ forwardIntegral = 0
 sideGains = [1.1, 0.8, 0.3, 0.05]
 sidePid = [0, 0, 0, 0, 0]
 
-gyroGains = [1.1, 0.8, 0.8, 0.05]
+gyroGains = [1.0, 0.8, 0.4, 0.2]
 gyroPid = [0, 0, 0, 0, 0]
 
 KA = 10
@@ -121,10 +121,23 @@ lastActionTime = 0
 sideAngleAccum = 0
 lastAngle = 0
 
+foundColours = ""
+cvResults = None
+
 
 def setAlgorithm(alg):
     global algorithm
     algorithm = alg
+
+
+def setAlgorithms(*algs):
+    global algorithmIndex, algorithmsList
+
+    algorithmIndex = 0
+    algorithmsList[:] = []
+    for a in algs:
+        algorithmsList.append(a)
+    setAlgorithm(algorithmsList[0])
 
 
 def connected():
@@ -245,7 +258,7 @@ def handleOverTheRainbow(topic, message, groups):
     elif cmd == "alg3":
         setAlgorithm(followRightWall)
     elif cmd == "alg4":
-        setAlgorithm(algorithm4Start)
+        setAlgorithm(findColours)
     elif cmd == "alg5":
         setAlgorithm(rotateLeft90)
     elif cmd == "alg6":
@@ -569,26 +582,181 @@ def followRightWall():
 
 
 # corner
-def algorithm4Start():
-    driveForward(FORWARD_SPEED)
+def findColours():
+    global foundColours, algorithmIndex, algorithmsList, askedCamera
+
     print("started algorithm 4...")
-    driveForward()
-    setAlgorithm(algorithm4Loop)
+
+    askedCamera = 0
+    foundColours = ""
+    algorithmIndex = 0
+    algorithmsList[:] = []
+
+    # algorithmsList.append(right90)
+    # algorithmsList.append(right135)
+
+    algorithmsList.append(rotateLeft45)
+    algorithmsList.append(findColoursLoop)
+
+    setAlgorithm(algorithmsList[0])
 
 
-def algorithm4Loop():
-    if distance1 - deltaDistance1 < STOP_DISTANCE:
-        stopDriving()
-        stop()
+def findColoursLoop():
+    global foundColours, askedCamera, cvResults
+
+    def colourToLetter(colour):
+        if "red" == colour:
+            return "R"
+        elif "green" == colour:
+            return "G"
+        elif "yellow" == colour:
+            return "Y"
+        else:
+            return "B"
+
+    def move90Deg():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotateLeft90, findColoursLoop)
+        print("Moving another 90 deg...")
+
+    def move90DegReverse():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotateRight90, findColoursLoop)
+        print("Moving reverse -90 deg...")
+
+    def move180Deg():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotate180, findColoursLoop)
+        print("Moving another 180 deg...")
+
+    def moveLast90Deg():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotateLeft90, foundColoursGoFurther)
+        print("Moving last 90 deg...")
+
+    def moveLast90DegReverse():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotateRight90, foundColoursGoFurther)
+        print("Moving last 90 deg...")
+
+    def moveLast180Deg():
+        global algorithmIndex, algorithmsList, askedCamera
+
+        askedCamera = 0
+        setAlgorithms(rotate180, foundColoursGoFurther)
+        print("Moving last 90 deg...")
+
+    if askedCamera == 0:
+        print("Asked camera first time")
+        cvResults = None
+        pyroslib.publish("camera/raw/fetch", "")
+        askedCamera = 1
+
+    elif cvResults is not None:
+        print("Got results...")
+        if 1 <= askedCamera < 4:
+            if len(cvResults) == 1 and cvResults[0][2] != "red" and cvResults[0][2] != "yellow":
+                foundColours = colourToLetter(cvResults[0][2]) + foundColours
+                print("Got one non red result " + foundColours)
+                move90Deg()
+            else:
+                print("Asked camera " + str(askedCamera) + ". Got " + str(len(cvResults)) + " results: " + str(cvResults))
+                pyroslib.publish("camera/raw/fetch", "")
+                askedCamera += 1
+        else:
+            if len(cvResults) == 1:
+                foundColours = colourToLetter(cvResults[0][2]) + foundColours
+                print("Got one result after " + str(askedCamera) + " times: " + foundColours)
+            else:
+                f = "X"
+                i = 0
+                while i < len(cvResults) and f == "X" or f == "R":
+                    f = colourToLetter(cvResults[i][2])
+                    i = i + 1
+
+                foundColours = f + foundColours
+                print("Cannot determine result so gone with " + f + " total: " + foundColours + " results: " + str(cvResults))
+
+            move90Deg()
+        cvResults = None
     else:
-        output = (distance1 - STOP_DISTANCE) / STOP_DISTANCE * 0.7 - deltaDistance1 * 0.3
-        if output > 1:
-            output = 1
+        pass
 
-        speedIndex = int(output * SPEEDS_OFFSET * 2)
-        speed = SPEEDS[speedIndex]
-        log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed))
-        drive(0, speed)
+    if "R" not in foundColours and "X" not in foundColours and len(foundColours) == 3:
+        print("Found colours: " + str(foundColours) + " stopping!")
+        foundColours = "R" + foundColours
+        moveLast90Deg()
+
+    elif len(foundColours) >= 4:
+        moveToRed = False
+        if "X" in foundColours:
+            if foundColours.count("X") == 1:
+                if "R" not in foundColours:
+                    foundColours = foundColours.replace("X", "R")
+                elif "G" not in foundColours:
+                    foundColours = foundColours.replace("X", "G")
+                elif "Y" not in foundColours:
+                    foundColours = foundColours.replace("X", "Y")
+                elif "B" not in foundColours:
+                    foundColours = foundColours.replace("X", "B")
+                moveToRed = True
+            else:
+                c = 0
+                while foundColours[0] != "X":
+                    foundColours = foundColours[3] + foundColours[0:3]
+                    c += 1
+
+                if c == 0:
+                    askedCamera = 1
+                    pyroslib.publish("camera/raw/fetch", "")
+                elif c == 1:
+                    print("Undetermined colour moving 90 deg")
+                    move90Deg()
+                elif c == 2:
+                    print("Undetermined colour moving 180 deg")
+                    move180Deg()
+                elif c == 3:
+                    print("Undetermined colour moving -90 deg")
+                    move90DegReverse()
+
+        else:
+            print("Found colours: " + str(foundColours) + " stopping!")
+            moveToRed = True
+
+        if moveToRed:
+            c = 0
+            while foundColours[0] != "R":
+                foundColours = foundColours[3] + foundColours[0:3]
+                c += 1
+
+            if c == 0:
+                setAlgorithms(foundColoursGoFurther)
+                print("Next step colours: " + str(foundColours) + "")
+                setAlgorithms(foundColoursGoFurther)
+            elif c == 1:
+                print("Next step colours: " + str(foundColours) + " last 90 deg")
+                moveLast90Deg()
+            elif c == 2:
+                print("Next step colours: " + str(foundColours) + " last 180 deg")
+                moveLast180Deg()
+            elif c == 3:
+                print("Next step colours: " + str(foundColours) + " last -90 deg")
+                moveLast90DegReverse()
+
+
+def foundColoursGoFurther():
+    print("Stopping now - result is " + foundColours)
+    allTogether(foundColours)
 
 
 def rotateForAngle(angle):
@@ -615,13 +783,20 @@ def rotateForAngle(angle):
         if not stopped:
             gyroError = gyroAngle - angle
 
-            if abs(gyroDeltaAngle) < 4:
+            # speed = pid(gyroError, gyroPid, gyroGains, gyroDeltaTime)
+            # speed = normalise(-speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
+
+            if abs(gyroDeltaAngle) < 2.5:
                 gyroIntegral += gyroError
+                if gyroIntegral > MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime):
+                    gyroIntegral = MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime)
             else:
                 gyroIntegral = 0
 
             speed = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
             speed = normalise(speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
+            # if abs(speed) < MIN_ROTATE_SPEED:
+            #     speed = sign(speed) * MIN_ROTATE_SPEED
 
             log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
             rotate(speed)
@@ -648,6 +823,14 @@ def rotateForAngle(angle):
     doGyro = handleGyroRorate
 
 
+def rotateRight4():
+    rotateForAngle(45)
+
+
+def rotateLeft45():
+    rotateForAngle(-45)
+
+
 def rotateRight90():
     rotateForAngle(90)
 
@@ -671,21 +854,10 @@ def rotate180():
 def allTogether(stringOfFourLetters):
     global algorithmIndex, algorithmsList
 
-    algorithmIndex = 0
-    algorithmsList[:] = []
-
-    # algorithmsList.append(right90)
-    # algorithmsList.append(right135)
-
-    algorithmsList.append(findCorner)
-    algorithmsList.append(rotateRight135)
-    algorithmsList.append(followLeftWall)
-    algorithmsList.append(rotateRight135)
-    algorithmsList.append(findCorner)
-    algorithmsList.append(rotateLeft135)
-    algorithmsList.append(followRightWall())
-
-    setAlgorithm(algorithmsList[0])
+    if stringOfFourLetters == "RYGB":
+        setAlgorithms(findCorner, rotateLeft135, followRightWall, rotateLeft135, findCorner, rotateRight135, followLeftWall)
+    else:
+        stop()
 
 
 def algorithm9Start():
@@ -759,6 +931,7 @@ def toPILImage(imageBytes):
 
 
 def processImageCV(image):
+    global cvResults
 
     def smooth(ar):
         p = ar[0]
@@ -965,6 +1138,8 @@ def processImageCV(image):
 
         if len(colourName) > 0:
             results.append((cntrCenter[0], cntrCenter[1], colourName, cntrRadius, str(extraInfo)))
+
+    cvResults = results
 
     return results
 
