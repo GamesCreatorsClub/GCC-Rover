@@ -25,11 +25,15 @@ screen_size = (1024, 800)
 
 screen = pyros.gccui.initAll(screen_size, True)
 
-
 cameraImage = Image.new("L", [80, 64])
 
 rawImage = pygame.Surface((80, 64), 24)
 rawImageBig = pygame.Surface((320, 256), 24)
+
+arrow_image = pygame.image.load("arrow.png")
+arrow_image = pygame.transform.scale(arrow_image, (50, 50))
+
+
 completeRawImage = None
 lastImage = None
 
@@ -415,6 +419,7 @@ def onKeyDown(key):
     global lights, forwardSpeed, running, ptr, imgNo
     global sequence, record, continuous
     global processedImages, processedBigImages
+    global gyroAngle
 
     if pyros.gcc.handleConnectKeyDown(key):
         pass
@@ -459,6 +464,9 @@ def onKeyDown(key):
         pyros.publish("overtherainbow/command", "alg9")
     elif key == pygame.K_0:
         pyros.publish("overtherainbow/command", "alg10")
+    elif key == pygame.K_g:
+        pyros.publish("sensor/gyro/continuous", "calibrate,50")
+        gyroAngle = 0
     elif key == pygame.K_u:
         pyros.publish("camera/lift", "up")
     elif key == pygame.K_d:
@@ -525,7 +533,7 @@ while True:
     hpos = pyros.gccui.drawKeyValue("Turn dist", str(feedback["turnDistance"]), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg1), str(distance1) + ", avg: " + avgDistance1String, 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg2), str(distance2) + ", avg: " + avgDistance2String, 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Gyro", str(round(gyroAngle, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Gyro", str(round(gyroAngle, 2)), 8, hpos)
 
     # if len(historyDistances[0]):
     #     mn = min(historyDistances[0])
@@ -536,6 +544,19 @@ while True:
     #     mn = min(historyDistances[1])
     #     mx = max(historyDistances[1])
     #     pyros.gccui.drawGraph((320, 50), (81, 65), historyDistances[1], mn, mx, 80, stick = 10)
+
+    loc = arrow_image.get_rect().center
+    rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
+    rot_arrow_image.get_rect().center = loc
+    screen.blit(rot_arrow_image, (530, 200))
+
+    # if len(rotSpeeds) > 0:
+    #     gyroDegPersSecText = str(round(sum(rotSpeeds) / len(rotSpeeds), 2))
+    #     pyros.gccui.drawBigText(gyroDegPersSecText, (440, 10))
+    #
+    #     pyros.gccui.drawText("º/s", (445 + pyros.gccui.bigFont.size(gyroDegPersSecText)[0], 15))
+    #
+    #     pyros.gccui.drawBigText(str(int(thisGyroAngle)), (440, 40))
 
     pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-sequence, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear, camera: u-up, d-down, /-reset", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 

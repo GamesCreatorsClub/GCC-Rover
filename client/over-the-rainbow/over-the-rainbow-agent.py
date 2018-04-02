@@ -23,9 +23,11 @@ DEBUG = True
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 MAX_FORWARD_SPEED = 60
+MAX_ROTATE_SPEED = 60
+MIN_ROTATE_SPEED = 10
+
 MAX_ANGLE = 45
 TURN_SPEED = 50
-ROTATE_SPEED = 100
 
 STOP_DISTANCE = 80
 SIDE_DISTANCE = 120
@@ -59,6 +61,8 @@ historyDistanceTimes2 = []
 
 gyroAngle = 0
 gyroDeltaAngle = 0
+gyroStartAngle = 0
+gyroIntegral = 0
 EPSILON_ANGLE = 2
 
 readingDistanceContinuous = True
@@ -94,12 +98,18 @@ DELTA_TIME_INDEX = 4
 
 lastDistanceReceivedTime = time.time()
 deltaTime = 0
+lastGyroReceivedTime = time.time()
+gyroDeltaTime = 0
 
-forwardGains = [1, 0.75, 0.0, 0.25]
+forwardGains = [1, 0.75, 0.3, 0.25]
 forwardPid = [0, 0, 0, 0, 0]
+forwardIntegral = 0
 
-sideGains = [1.1, 0.8, 0, 0.05]
+sideGains = [1.1, 0.8, 0.3, 0.05]
 sidePid = [0, 0, 0, 0, 0]
+
+gyroGains = [1.1, 0.8, 0.4, 0.05]
+gyroPid = [0, 0, 0, 0, 0]
 
 KA = 10
 
@@ -201,7 +211,7 @@ def handleDistances(topic, message, groups):
 
 
 def handleGyroData(topic, message, groups):
-    global gyroAngle, gyroDeltaAngle
+    global gyroAngle, gyroDeltaAngle, gyroDeltaTime, lastGyroReceivedTime
 
     data = message.split(",")
 
@@ -210,6 +220,12 @@ def handleGyroData(topic, message, groups):
     gyroDeltaAngle = gyroChange
 
     gyroAngle += gyroChange
+
+    gyroDeltaTime = float(data[3])
+
+    lastGyroReceivedTime = time.time()
+
+    doGyro()
 
 
 def handleOverTheRainbow(topic, message, groups):
@@ -225,23 +241,23 @@ def handleOverTheRainbow(topic, message, groups):
     elif cmd == "alg1":
         setAlgorithm(findCorner)
     elif cmd == "alg2":
-        setAlgorithm(followLeftRoad)
+        setAlgorithm(followLeftWall)
     elif cmd == "alg3":
-        setAlgorithm(followRightRoad)
+        setAlgorithm(followRightWall)
     elif cmd == "alg4":
         setAlgorithm(algorithm4Start)
     elif cmd == "alg5":
-        setAlgorithm(algorithm5Start)
+        setAlgorithm(rotateLeft90)
     elif cmd == "alg6":
-        setAlgorithm(algorithm6Start)
+        setAlgorithm(rotateRight90)
     elif cmd == "alg7":
-        setAlgorithm(algorithm7Start)
+        setAlgorithm(rotateLeft135)
     elif cmd == "alg8":
-        setAlgorithm(algorithm8Start)
+        setAlgorithm(rotateRight135)
     elif cmd == "alg9":
         setAlgorithm(algorithm9Start)
     elif cmd == "alg10":
-        setAlgorithm(algorithm10Start)
+        setAlgorithm(moveBack)
 
 
 def normalise(value, maxValue):
@@ -314,7 +330,11 @@ def rotateLeft(speed):
 
 
 def rotateRight(speed):
-    pyroslib.publish("move/rotate", str(speed))
+    pyroslib.publish("move/rotate", str(int(speed)))
+
+
+def rotate(speed):
+    pyroslib.publish("move/rotate", str(int(speed)))
 
 
 def requestDistanceAtAngle(angle):
@@ -387,7 +407,7 @@ def log(*msg):
 
 
 def findCorner():
-    global stopCountdown, lastActionTime, doDistance
+    global stopCountdown, lastActionTime, doDistance, forwardIntegral
 
     print("1: Find corner")
     requestDistanceAtAngle("45")
@@ -395,11 +415,12 @@ def findCorner():
     setAlgorithm(doNothing)
     resetPid(forwardPid)
     stopCountdown = 0
+    forwardIntegral = 0
     doDistance = findCorderDistanceHandler
 
 
 def findCorderDistanceHandler():
-    global stopCountdown
+    global stopCountdown, forwardIntegral
 
     def log1(*msg):
         log(*((formatArgL("  dt", round(deltaTime, 3), 5),
@@ -409,6 +430,11 @@ def findCorderDistanceHandler():
     dt = deltaTime
     forwardDistance = distance1 + distance2
     forwardDelta = - math.sqrt(deltaDistance1 * deltaDistance1 + deltaDistance2 * deltaDistance2)
+
+    if abs(forwardDelta) < 20:
+        forwardIntegral += forwardDelta
+    else:
+        forwardIntegral = 0
 
     if stopCountdown > 0:
         log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
@@ -427,17 +453,17 @@ def findCorderDistanceHandler():
         forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
         forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
 
-        if abs(distance1 - distance2) > 1: # and distance1 < 380 and distance2 < 380:
+        if abs(distance1 - distance2) > 1:  # and distance1 < 380 and distance2 < 380:
             angle = int(math.log10(abs(distance1 - distance2)) * KA) * sign(distance1 - distance2)
         else:
             angle = 0
 
         drive(angle, forwardSpeed)
-        log1(" CORN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("e", round(forwardError), 5), formatArgR("fwd", round(forwardDelta), 6))
+        log1(" CORN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("e", round(forwardError), 5), formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("fwd", round(forwardDelta), 6))
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global stopCountdown, lastActionTime, sideAngleAccum, lastAngle
+    global stopCountdown, lastActionTime, sideAngleAccum, lastAngle, forwardIntegral
 
     def log1(*msg):
         log(*((formatArgL("  dt", round(dt, 3), 5),
@@ -456,8 +482,14 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         stopCountdown = 3
 
     else:
+        if abs(forwardDelta) < 20:
+            forwardIntegral += forwardDelta
+        else:
+            forwardIntegral = 0
 
-        forwardSpeed = forwardGains[KGAIN_INDEX] * ((forwardDistance - STOP_DISTANCE) * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
+        forwardError = forwardDistance - STOP_DISTANCE
+
+        forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + forwardIntegral * forwardGains[KiI] + (forwardDelta / dt) * forwardGains[KdI])
         forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
 
         angle = sideGains[KGAIN_INDEX] * ((sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
@@ -483,13 +515,13 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         lastAngle = angle
 
         if nextAction == ACTION_DRIVE:
-            log1(" DRIV ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
             drive(angle, forwardSpeed)
         else:
             if forwardDelta == 0:
-                forwardDelta = -50 # moving forward
+                forwardDelta = -50  # moving forward
             elif forwardDelta < -60:
-                forwardDelta = -50 # jump 1
+                forwardDelta = -50  # jump 1
 
             angleR = angle / 180
 
@@ -500,17 +532,18 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, sideAngleAccum, lastActionTime
+    global stopCountdown, sideAngleAccum, lastActionTime, forwardIntegral
 
     setAlgorithm(doNothing)
     resetPid(forwardPid)
     resetPid(sidePid)
+    forwardIntegral = 0
     stopCountdown = 0
     sideAngleAccum = 0
     lastActionTime = 0.5
 
 
-def followLeftRoad():
+def followLeftWall():
     global doDistance
 
     def followSideHandleDistance():
@@ -523,7 +556,7 @@ def followLeftRoad():
 
 
 # follow right wall
-def followRightRoad():
+def followRightWall():
     global doDistance
 
     def followSideHandleDistance():
@@ -558,131 +591,85 @@ def algorithm4Loop():
         drive(0, speed)
 
 
-start_angle = 0
-# previous_error = 0
-# integral = 0
+def rotateForAngle(angle):
+    global gyroAngle, gyroStartAngle, doGyro, gyroIntegral
 
-# AKP = 0.7
-# AKD = 0.3
+    def log1(*msg):
+        log(*((formatArgL("  dt", round(gyroDeltaTime, 3), 5),
+               formatArgR("  ga", gyroAngle, 5), formatArgR("  gda", gyroDeltaAngle, 5)) + msg))
 
+    def handleGyroRorate():
+        global gyroAngle, gyroStartAngle, stopCountdown, gyroIntegral
 
-def rotateForAngleRight(a):
-    if gyroAngle < start_angle + (a - EPSILON_ANGLE):
-        error = gyroAngle - (start_angle + a)
-        deltaError = error - previous_error
-        previous_error = error
+        stopped = False
 
-        # deltaError = gyroDeltaAngle
-        control = error * AKP + deltaError * AKD
+        if abs(gyroAngle - angle) < EPSILON_ANGLE:
+            if stopCountdown == 0:
+                stopCountdown = 20
+            else:
+                stopCountdown -= 1
+                if stopCountdown == 0:
+                    stop()
 
-        control = normalise(control, a)
+        if not stopped:
+            gyroError = gyroAngle - angle
 
-        speed = calculateSpeed(-control)
-        rotateRight(speed)
-    else:
-        stop()
-        # setAlgorithm(stop)
+            if abs(gyroDeltaAngle) < 4:
+                gyroIntegral += gyroError
+            else:
+                gyroIntegral = 0
 
+            speed = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
+            speed = normalise(speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
 
-def rotateForAngleLeft(a):
-    if gyroAngle > start_angle - (a - EPSILON_ANGLE):
+            log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
+            rotate(speed)
 
-        error = gyroAngle - (start_angle - a)
-        deltaError = previous_error - error
-        previous_error = error
+            # if speed < MIN_ROTATE_SPEED:
+            #     speed = MIN_ROTATE_SPEED
 
-        # deltaError = gyroDeltaAngle
-        control = error * AKP + deltaError * AKD
-
-        control = normalise(control, a)
-
-        speed = calculateSpeed(control)
-
-        rotateLeft(speed)
-    else:
-        stop()
-        # setAlgorithm(stop)
-
-
-# rotate left 90
-def algorithm5Start():
-    global start_angle
-    previous_error = 0
-    start_angle = gyroAngle
-
-    print("started algorithm 5...")
-    setAlgorithm(algorithm5Loop)
+            # if stopCountdown > 0:
+            #     log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
+            #     drive(0, 0)
+            #     stopCountdown -= 1
+            #     if stopCountdown == 0:
+            #         stop()
+            # else:
+            #     log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
+            #     rotate(speed)
 
 
-def algorithm5Loop():
-    rotateForAngleLeft(90)
+    print("Rotating for " + str(angle))
+    gyroAngle = 0
+    gyroIntegral = 0
+    gyroStartAngle = 0
+    setAlgorithm(doNothing)
+    resetPid(gyroPid)
+    doGyro = handleGyroRorate
 
 
-def algorithm6Start():
-    global start_angle
-    print("started algorithm 6...")
-    setAlgorithm(algorithm6Loop)
-    start_angle = gyroAngle
+def rotateRight90():
+    rotateForAngle(90)
 
 
-def algorithm6Loop():
-    rotateForAngleRight(86)
+def rotateLeft90():
+    rotateForAngle(-90)
 
 
-def algorithm7Start():
-    global start_angle
-    previous_error = 0
-
-    print("started algorithm 7...")
-    setAlgorithm(algorithm7Loop)
-    start_angle = gyroAngle
+def rotateRight135():
+    rotateForAngle(135)
 
 
-def algorithm7Loop():
-    rotateForAngleLeft(135)
+def rotateLeft135():
+    rotateForAngle(-135)
 
 
-def algorithm8Start():
-    global start_angle
-    print("started algorithm 8...")
-    setAlgorithm(algorithm8Loop)
-    start_angle = gyroAngle
-
-
-def algorithm8Loop():
-    rotateForAngleRight(135)
+def rotate180():
+    rotateForAngle(180)
 
 
 def allTogether(stringOfFourLetters):
     global algorithmIndex, algorithmsList
-
-    def left135():
-        algorithm7Start()
-
-    def right135():
-        algorithm8Start()
-
-    def left90():
-        algorithm5Start()
-
-    def right90():
-        algorithm6Start()
-
-    def rotate180():
-        global start_angle
-        previous_error = 0
-        start_angle = gyroAngle
-
-        rotateForAngleRight(180)
-
-    def findCorner():
-        algorithm11Start()
-
-    def followLeftWall():
-        algorithm2Start()
-
-    def followRightWall():
-        algorithm3Start()
 
     algorithmIndex = 0
     algorithmsList[:] = []
@@ -691,16 +678,14 @@ def allTogether(stringOfFourLetters):
     # algorithmsList.append(right135)
 
     algorithmsList.append(findCorner)
-    algorithmsList.append(right135)
+    algorithmsList.append(rotateRight135)
     algorithmsList.append(followLeftWall)
-    algorithmsList.append(right135)
+    algorithmsList.append(rotateRight135)
     algorithmsList.append(findCorner)
-    algorithmsList.append(left135)
+    algorithmsList.append(rotateLeft135)
     algorithmsList.append(followRightWall())
 
     setAlgorithm(algorithmsList[0])
-
-    pass
 
 
 def algorithm9Start():
@@ -717,49 +702,15 @@ def algorithm9Loop():
     pass
 
 
-def algorithm11Start():
-    global drive_speed
-
-    print("started algorithm 11...")
-    requestDistanceAtAngle("45")
-    drive_speed = FORWARD_SPEED
-    setAlgorithm(algorithm11Loop)
-
-
-def algorithm11Loop():
-    global countDown, drive_speed
-
-    distanceControl = STOP_DISTANCE * KC
-
-    if distance1 + distance2 < STOP_DISTANCE:
-        stop()
-        # setAlgorithm(stop)
-    else:
-
-        if abs(distance1 - distance2) > 1 and distance1 < 380 and distance2 < 380:
-            angle = int(math.log10(abs(distance1 - distance2)) * KA) * sign(distance1 - distance2)
-        else:
-            angle = 0
-
-        output = (distance1 + distance2 - STOP_DISTANCE * 2) * KP + (deltaDistance1 + deltaDistance2) * KD
-
-        output = normalise(output, distanceControl)
-
-        speedIndex = int(output * SPEEDS_OFFSET + SPEEDS_OFFSET)
-        speed = SPEEDS[speedIndex]
-        log("d:" + str(round(output, 2)) + " i:" + str(speedIndex) + " s:" + str(speed) + " a:" + str(angle))
-        drive(angle, speed)
-
-
-def algorithm10Start():
+def moveBack():
     global countDown
     print("started algorithm 10...")
     countDown = 50
     driveBack(MAX_FORWARD_SPEED)
-    setAlgorithm(algorithm10Loop)
+    setAlgorithm(moveBackLoop)
 
 
-def algorithm10Loop():
+def moveBackLoop():
     global countDown
     countDown -= 1
     if countDown <= 0:
@@ -1099,21 +1050,22 @@ def calculateCentre(pixels):
 
 
 def drawSpot(image, cx, cy, colour, text):
-    if False:
-        for x in range(cx - 30, cx + 30):
-            if x >= 0 and x < 320:
-                if cy > 0:
-                    image.putpixel((x, cy - 1), (255, 255, 255))
-                image.putpixel((x, cy), colour)
-                if cy < 256 - 1:
-                    image.putpixel((x, cy + 1), (255, 255, 255))
-        for y in range(cy - 30, cy + 30):
-            if y >= 0 and y < 256:
-                if cx > 0:
-                    image.putpixel((cx - 1, y), (255, 255, 255))
-                image.putpixel((cx, y), colour)
-                if cx < 320 - 1:
-                    image.putpixel((cx + 1, y), (255, 255, 255))
+    # if False:
+    #     for x in range(cx - 30, cx + 30):
+    #         if x >= 0 and x < 320:
+    #             if cy > 0:
+    #                 image.putpixel((x, cy - 1), (255, 255, 255))
+    #             image.putpixel((x, cy), colour)
+    #             if cy < 256 - 1:
+    #                 image.putpixel((x, cy + 1), (255, 255, 255))
+    #     for y in range(cy - 30, cy + 30):
+    #         if y >= 0 and y < 256:
+    #             if cx > 0:
+    #                 image.putpixel((cx - 1, y), (255, 255, 255))
+    #             image.putpixel((cx, y), colour)
+    #             if cx < 320 - 1:
+    #                 image.putpixel((cx + 1, y), (255, 255, 255))
+    pass
 
 
 def mainLoop():
