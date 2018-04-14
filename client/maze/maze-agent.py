@@ -113,6 +113,10 @@ lastAngle = 0
 lastForwardDelta = 0
 accumSideDelta = 0
 
+forwardGains = [1, 0.8, 0.0, 0.05]
+forwardPid = [0, 0, 0, 0, 0]
+forwardIntegral = 0
+
 sideGains = [1.1, 0.8, 0.3, 0.05]
 sidePid = [0, 0, 0, 0, 0]
 
@@ -474,16 +478,31 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
     #     if stopCountdown == 0:
     #         stop()
     #
-    if forwardDistance < corridorWidth * 0.8:
+    forwardError = forwardDistance
+    forwardIntegral = 0
+    if abs(forwardDelta) > MAX_FORWARD_DELTA:
+        forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
+
+    forwardControl = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + forwardIntegral * forwardGains[KiI] + (forwardDelta / dt) * forwardGains[KdI])
+    forwardControl = normalise(forwardControl, corridorWidth) * corridorWidth
+
+    if forwardControl < corridorWidth:
+        # if turned:
+        #     log1(" LEFT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
+        #     turnLeft90()
+        # else:
+        #     log1(" RIGHT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
+        #     turnRight90()
+
+        steerDistance = forwardControl
         if turned:
-            log1(" LEFT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
-            turnLeft90()
-        else:
-            log1(" RIGHT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
-            turnRight90()
+            steerDistance = -steerDistance
+
+        log1(" CORNER ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("fwd", round(forwardDelta), 6))
+        steer(steerDistance, speed)
+
     elif sideDistance > corridorWidth:
         turned = True
-        # turnLeft180()
 
         log1(" T180 ", formatArgR("cw", round(corridorWidth, 1), 5))
         followRightWall()
@@ -548,7 +567,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
             angleR = saa / 180
 
-            fudgeFactor = 3
+            fudgeFactor = 1
 
             steerDistance = fudgeFactor * turnDirection * forwardDelta / abs(angleR)
 
@@ -626,7 +645,7 @@ def turnForAngle(angle):
                    formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
                    formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5))))
 
-        if forwardDistance > corridorWidth * 2:
+        if forwardDistance > corridorWidth:
             if turned:
                 log(DEBUG_LEVEL_INFO, "Go to following right wall after turn")
                 followRightWall()
@@ -642,71 +661,12 @@ def turnForAngle(angle):
     doDistance = handleDistance
 
 
-def turnForAngleX(angle):
-    global gyroAngle, gyroStartAngle, doGyro, gyroIntegral
-
-    def log1(*msg):
-        logArgs(*((formatArgL("  dt", round(gyroDeltaTime, 3), 5),
-                formatArgR("  ga", round(gyroAngle, 3), 5), formatArgR("  gda", round(gyroDeltaAngle, 3), 5)) + msg))
-
-    def handleGyroRorate():
-        global gyroAngle, gyroStartAngle, stopCountdown, gyroIntegral
-
-        gyroError = gyroAngle - angle
-        if (angle < 0 and gyroAngle < angle) or (angle >= 0 and gyroAngle > angle):
-            gyroError = 0
-
-        gyroIntegral = 0
-
-        control = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
-        control = normalise(control, 1)
-
-        if sign(control) != sign(angle):
-            if turned:
-                log(DEBUG_LEVEL_INFO, "Go to following right wall after turn")
-                followRightWall()
-            else:
-                log(DEBUG_LEVEL_INFO, "Go to following left wall")
-                followLeftWall()
-        else:
-            # gyroError = gyroAngle - angle
-            #
-            # if abs(gyroDeltaAngle) < 2.5:
-            #     gyroIntegral += gyroError
-            #     if gyroIntegral > MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime):
-            #         gyroIntegral = MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime)
-            # else:
-            #     gyroIntegral = 0
-            #
-            # speed = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
-            # speed = normalise(speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
-
-            log1(formatArgR("c", round(control, 1), 5), formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
-            if angle > 0:
-                steer(idealDistance, speed)
-            else:
-                steer(-idealDistance, speed)
-
-    log(DEBUG_LEVEL_DEBUG, "Rotating for " + str(angle))
-    gyroAngle = 0
-    gyroIntegral = 0
-    gyroStartAngle = 0
-    setAlgorithm(doNothing)
-    resetPid(gyroPid)
-    doDistance = doNothing
-    doGyro = handleGyroRorate
-
-
 def turnRight90():
     turnForAngle(90)
 
 
 def turnLeft90():
     turnForAngle(-90)
-
-
-def turnLeft180():
-    turnForAngle(-180)
 
 
 def connected():
