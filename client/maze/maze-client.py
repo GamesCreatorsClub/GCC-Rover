@@ -26,7 +26,15 @@ speed = INITIAL_SPEED
 pingLastTime = 0
 
 angle = 0
-distanceAtAngle = 0
+
+distanceDeg1 = -1
+distanceDeg2 = -1
+distance1 = -1
+distance2 = -1
+avgDistance1 = -1
+avgDistance2 = -1
+
+gyroAngle = 0
 
 corridorWidth = 0
 idealDistance = 0
@@ -48,31 +56,35 @@ def connected():
     stop()
 
 
-def sanitise(distance):
-    # distance -= 100
-    if distance < 2:
-        distance = 2
-    return distance
+def handleDistances(topic, message, groups):
+    global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2
+
+    c = 0
+    split1 = message.split(",")
+    for s1 in split1:
+        split2 = s1.split(":")
+        if len(split2) == 2:
+            deg = int(split2[0])
+            split3 = split2[1].split(";")
+            if len(split3) == 2:
+                dis = float(split3[0])
+                avg = float(split3[1])
+
+                if c == 0:
+                    distanceDeg1 = deg
+                    distance1 = dis
+                    avgDistance1 = avg
+                elif c == 1:
+                    distanceDeg2 = deg
+                    distance2 = dis
+                    avgDistance2 = avg
+        c += 1
 
 
-def toFloatString(f):
-    r = str(round(f, 1))
-    if "." not in r:
-        return r + ".0"
-    return r
+def handleGyro(topic, message, groups):
+    global gyroAngle
 
-
-def handleSensorDistance(topic, message, groups):
-    global distanceAtAngle
-
-    # print("** distance = " + message)
-    if "," in message:
-        pass
-    else:
-        split = message.split(":")
-        d = float(split[1])
-        if d >= 0:
-            distanceAtAngle = sanitise(d)
+    gyroAngle = float(message)
 
 
 def handleDataCorridor(topic, message, groups):
@@ -93,10 +105,20 @@ def stop():
     run = False
 
 
+def quickstart():
+    global run
+    pyros.publish("maze/command", "quickstart")
+    run = True
+
+
 def start():
     global run
     pyros.publish("maze/command", "start")
     run = True
+
+
+def scanWidth():
+    pyros.publish("maze/command", "scan")
 
 
 def onKeyDown(key):
@@ -112,10 +134,15 @@ def onKeyDown(key):
     elif key == pygame.K_RETURN:
         print("** Starting...")
         run = True
+        quickstart()
+    elif key == pygame.K_BACKSLASH:
+        print("** Starting...")
+        run = True
         start()
     elif key == pygame.K_s:
-        pyros.publish("sensor/distance/scan", "")
-        print("** Asked for scan")
+        scanWidth()
+        # pyros.publish("sensor/distance/scan", "")
+        # print("** Asked for scan")
     elif key == pygame.K_r:
         pyros.publish("sensor/distance/read", str(angle))
         print("** Asked for distance")
@@ -158,9 +185,10 @@ def onKeyUp(key):
         pass
 
 
+pyros.subscribe("maze/data/distances", handleDistances)
+pyros.subscribe("maze/data/gyro", handleGyro)
 pyros.subscribe("maze/data/corridor", handleDataCorridor)
 pyros.subscribe("maze/data/idealDistance", handleDataIdealDistance)
-pyros.subscribe("sensor/distance", handleSensorDistance)
 
 pyros.init("maze-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False, onConnected=connected)
 
@@ -177,25 +205,27 @@ while True:
     pyros.gccui.background(True)
     pyros.agent.keepAgents()
 
-    screen.blit(bigFont.render("Stopped: " + str(not run), 1, WHITE), pygame.Rect(10, 80, 0, 0))
+    hpos = 50
+    hpos = pyros.gccui.drawKeyValue("Stopped", str(not run), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Angle", str(angle), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Speed", str(speed), 8, hpos)
 
-    screen.blit(bigFont.render("Angle: " + str(angle), 1, WHITE), pygame.Rect(10, 120, 0, 0))
+    avgDistance1String = str(format(avgDistance1, '.2f'))
+    avgDistance2String = str(format(avgDistance2, '.2f'))
 
-    screen.blit(bigFont.render("Speed: " + str(speed), 1, WHITE), pygame.Rect(300, 120, 0, 0))
+    hpos +=40
 
-    screen.blit(bigFont.render("Dist: " + str(distanceAtAngle), 1, WHITE), pygame.Rect(10, 160, 0, 0))
+    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg1), str(distance1) + ", avg: " + avgDistance1String, 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg2), str(distance2) + ", avg: " + avgDistance2String, 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Gyro angle", str(round(gyroAngle, 2)), 8, hpos)
+    hpos +=40
 
-    screen.blit(bigFont.render("Selected: " + str(driveAngle), 1, WHITE), pygame.Rect(10, 200, 0, 0))
+    hpos = pyros.gccui.drawKeyValue("Selected", str(driveAngle), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Gain", str(round(gain, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Corridor", str(round(corridorWidth, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Ideal dist", str(round(idealDistance, 1)), 8, hpos)
 
-    screen.blit(bigFont.render("Gain: " + str(round(gain, 1)), 1, WHITE), pygame.Rect(300, 200, 0, 0))
-
-    screen.blit(bigFont.render("Corridor: " + str(round(corridorWidth, 1)), 1, WHITE), pygame.Rect(300, 240, 0, 0))
-
-    screen.blit(bigFont.render("Ideal dist: " + str(round(idealDistance, 1)), 1, WHITE), pygame.Rect(300, 280, 0, 0))
+    pyros.gccui.drawSmallText("s-scan, r-read, o/p-change angle, DOWN/UP-speed, LEFT/RIGHT-gain, SPACE-stop, RETURN-start", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
-
-    if time.time() - pingLastTime > MAX_PING_TIMEOUT:
-        pyros.publish("maze/ping", "")
-        pingLastTime = time.time()
