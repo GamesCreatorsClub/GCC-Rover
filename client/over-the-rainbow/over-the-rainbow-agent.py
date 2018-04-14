@@ -18,12 +18,19 @@ import PIL.Image
 # import scipy
 # import scipy.spatial
 
-DEBUG = True
+DEBUG_LEVEL_OFF = 0
+DEBUG_LEVEL_INFO = 1
+DEBUG_LEVEL_DEBUG = 2
+DEBUG_LEVEL_ALL = 3
+DEBUG_LEVEL = DEBUG_LEVEL_ALL
+
+remotDebug = True
 
 FORWARD_SPEED = 30
 MINIMUM_FORWARD_SPEED = 20
 MAX_FORWARD_SPEED = 60
-MAX_ROTATE_SPEED = 35
+MAX_FORWARD_DELTA = 50
+MAX_ROTATE_SPEED = 50
 MIN_ROTATE_SPEED = 14
 
 MAX_ANGLE = 45
@@ -34,6 +41,9 @@ SIDE_DISTANCE = 120
 CORNER_STOP_DISTANCE = 150
 STEERING_DISTANCE = 400
 
+MIN_RADUIS = 8
+MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
+MAX_AREA = 13000.0
 
 SPEEDS_ROVER_2 = [-20, -20, -20, -15, -10, -9, 9, 10, 12, 15, 20, 30, 30]
 SPEEDS_ROVER_4 = [-20, -20, -20, -15, -14, -14, 30, 30, 35, 40, 35, 40, 40]
@@ -80,6 +90,7 @@ def doNothing():
 
 
 lastProcessed = time.time()
+algorithm = doNothing
 algorithmIndex = 0
 algorithmsList = []
 doDistance = doNothing
@@ -101,14 +112,14 @@ deltaTime = 0
 lastGyroReceivedTime = time.time()
 gyroDeltaTime = 0
 
-forwardGains = [1, 0.75, 0.4, 0.25]
+forwardGains = [1, 0.8, 0.4, 0.2]
 forwardPid = [0, 0, 0, 0, 0]
 forwardIntegral = 0
 
 sideGains = [1.1, 0.8, 0.3, 0.05]
 sidePid = [0, 0, 0, 0, 0]
 
-gyroGains = [1.0, 0.8, 0.4, 0.2]
+gyroGains = [1.5, 0.8, 0.8, 0.2]
 gyroPid = [0, 0, 0, 0, 0]
 
 KA = 10
@@ -120,9 +131,25 @@ ACTION_DRIVE = 2
 lastActionTime = 0
 sideAngleAccum = 0
 lastAngle = 0
+lastForwardSpeed = 0
+lastForwardDelta = 0
+accumSideDelta = 0
 
 foundColours = ""
 cvResults = None
+
+
+def log(level, what):
+    if level <= DEBUG_LEVEL:
+        print(what)
+
+
+def logArgs(*msg):
+    tnow = time.time()
+    dt = str((tnow - distanceTimestamp) * 1000) + "ms"
+
+    logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
+    log(DEBUG_LEVEL_DEBUG, logMsg)
 
 
 def setAlgorithm(alg):
@@ -147,24 +174,23 @@ def connected():
     pyroslib.publish("camera/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
 
 
-def addToHistoryWithTime(value, valueTime, history, historyTimes, maxTime):
-    history.append(value)
-    historyTimes.append(valueTime)
-
-    while len(historyTimes) > 0 and historyTimes[0] < valueTime - maxTime:
-        del history[0]
-        del historyTimes[0]
-
-    if len(history) > 1:
-        return value - history[len(history) - 2], sum(history) / len(history)
-    else:
-        return 0, 0
-
-
 def handleDistances(topic, message, groups):
     global historyDistancesDeg1, historyDistancesDeg2, historyDistances1, historyDistances2, historyDistanceTimes1, historyDistanceTimes2
     global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2, distanceTimestamp, deltaDistance1, deltaDistance2
     global deltaTime, lastDistanceReceivedTime
+
+    def addToHistoryWithTime(value, valueTime, history, historyTimes, maxTime):
+        history.append(value)
+        historyTimes.append(valueTime)
+
+        while len(historyTimes) > 0 and historyTimes[0] < valueTime - maxTime:
+            del history[0]
+            del historyTimes[0]
+
+        if len(history) > 1:
+            return value - history[len(history) - 2], sum(history) / len(history)
+        else:
+            return 0, 0
 
     receivedTime = time.time()
 
@@ -367,9 +393,9 @@ def brake():
         stop()
     elif countDown < 0:
         stopDriving()
-        log("Stopped for " + str(countDown))
+        log(DEBUG_LEVEL_ALL, "Stopped for " + str(countDown))
     else:
-        log("Breaking for " + str(countDown))
+        log(DEBUG_LEVEL_ALL, "Breaking for " + str(countDown))
         driveBack(50)
 
 
@@ -384,17 +410,17 @@ def stop():
     doDistance = doNothing
     doGyro = doNothing
 
-    # print("stopping")
+    # log(DEBUG_LEVEL_ALL, "stopping")
     stopDriving()
     algorithmIndex += 1
     if algorithmIndex < len(algorithmsList):
-        print("setting algorithm to index " + str(algorithmIndex) + " out of " + str(len(algorithmsList)))
+        log(DEBUG_LEVEL_ALL, "setting algorithm to index " + str(algorithmIndex) + " out of " + str(len(algorithmsList)))
         setAlgorithm(algorithmsList[algorithmIndex])
     else:
-        print("Stopping all...")
+        log(DEBUG_LEVEL_ALL, "Stopping all...")
         setAlgorithm(doNothing)
         algorithmsList[:] = algorithmsList
-        print("Stopped!")
+        log(DEBUG_LEVEL_INFO, "Stopped!")
 
 
 def formatArgL(label, value, fieldSize):
@@ -411,34 +437,26 @@ def formatArgR(label, value, fieldSize):
         return str(value).rjust(fieldSize)
 
 
-def log(*msg):
-    tnow = time.time()
-    dt = str((tnow - distanceTimestamp) * 1000) + "ms"
-
-    logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
-    print(logMsg)
-
-
 def findCorner():
     global stopCountdown, lastActionTime, doDistance, forwardIntegral
 
-    print("1: Find corner")
+    log(DEBUG_LEVEL_DEBUG, "Finding corner")
     requestDistanceAtAngle("45")
 
     setAlgorithm(doNothing)
     resetPid(forwardPid)
     stopCountdown = 0
     forwardIntegral = 0
-    doDistance = findCorderDistanceHandler
+    doDistance = findCornerDistanceHandler
 
 
-def findCorderDistanceHandler():
+def findCornerDistanceHandler():
     global stopCountdown, forwardIntegral
 
     def log1(*msg):
-        log(*((formatArgL("  dt", round(deltaTime, 3), 5),
-               formatArgR("  ld", distance1, 5), formatArgR("  fdd", deltaDistance1, 5),
-               formatArgR("  rd", distance2, 5), formatArgR("  sdd", deltaDistance2, 5)) + msg))
+        logArgs(*((formatArgL("  dt", round(deltaTime, 3), 5),
+                   formatArgR("  ld", distance1, 5), formatArgR("  fdd", deltaDistance1, 5),
+                   formatArgR("  rd", distance2, 5), formatArgR("  sdd", deltaDistance2, 5)) + msg))
 
     dt = deltaTime
     forwardDistance = distance1 + distance2
@@ -463,7 +481,7 @@ def findCorderDistanceHandler():
     else:
         forwardError = math.sqrt(distance1 * distance1 + distance2 * distance2) - CORNER_STOP_DISTANCE
 
-        forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
+        forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] - forwardIntegral * forwardGains[KiI] + (forwardDelta / dt) * forwardGains[KdI])
         forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
 
         if abs(distance1 - distance2) > 1:  # and distance1 < 380 and distance2 < 380:
@@ -476,12 +494,13 @@ def findCorderDistanceHandler():
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global stopCountdown, lastActionTime, sideAngleAccum, lastAngle, forwardIntegral
+    global stopCountdown, lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
+    global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
 
     def log1(*msg):
-        log(*((formatArgL("  dt", round(dt, 3), 5),
-               formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
-               formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
+        logArgs(*((formatArgL("  dt", round(dt, 3), 5),
+                   formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
+                   formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
     if stopCountdown > 0:
         log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
@@ -495,6 +514,12 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         stopCountdown = 3
 
     else:
+        if forwardDistance > 1000:
+            forwardDelta = - MAX_FORWARD_DELTA
+
+        if abs(forwardDelta) > MAX_FORWARD_DELTA:
+            forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
+
         if abs(forwardDelta) < 20:
             forwardIntegral += forwardDelta
         else:
@@ -510,42 +535,66 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
         lastActionTime -= deltaTime
 
-        saa = sideAngleAccum
+        if sideAngleAccumCnt > 0:
+            saa = sideAngleAccum / sideAngleAccumCnt
+        else:
+            saa = sideAngleAccum
+
         if lastActionTime < 0:
-            if abs(sideAngleAccum) > 12.5 and forwardSpeed > 0:
+            if abs(saa) > 12.5 and forwardSpeed > 0:
                 nextAction = ACTION_TURN
             else:
                 nextAction = ACTION_DRIVE
 
             lastActionTime = 0.5
             sideAngleAccum = 0
+            sideAngleAccumCnt = 0
         else:
             nextAction = ACTION_DRIVE
             sideAngleAccum += angle
+            sideAngleAccumCnt += 1
 
         angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
         angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
         lastAngle = angle
+        accumSideDelta += sideDelta
 
         if nextAction == ACTION_DRIVE:
             log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
             drive(angle, forwardSpeed)
         else:
+            turnDirection = -1
+            if accumSideDelta < 0:
+                turnDirection = 1
+
+            if forwardSpeed < MINIMUM_FORWARD_SPEED:
+                forwardSpeed = MINIMUM_FORWARD_SPEED
+
+            forwardSpeed = (forwardSpeed + lastForwardSpeed) / 2
+
             if forwardDelta == 0:
-                forwardDelta = -50  # moving forward
-            elif forwardDelta < -60:
-                forwardDelta = -50  # jump 1
+                forwardDelta = -MAX_FORWARD_DELTA  # moving forward
 
-            angleR = angle / 180
+            forwardDelta = (lastForwardDelta + forwardDelta) / 2
 
-            steerDistance = -1 * forwardDelta / angleR
+            angleR = saa / 180
 
-            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("fwd", round(forwardDelta), 6))
+            fudgeFactor = 3
+
+            steerDistance = fudgeFactor * turnDirection * forwardDelta / abs(angleR)
+
+            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6))
             steer(steerDistance, forwardSpeed)
+
+            accumSideDelta = 0
+
+        lastForwardSpeed = forwardSpeed
+        lastForwardDelta = forwardDelta
+        lastSideDelta = sideDelta
 
 
 def setupFollowSide():
-    global stopCountdown, sideAngleAccum, lastActionTime, forwardIntegral
+    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
 
     setAlgorithm(doNothing)
     resetPid(forwardPid)
@@ -553,7 +602,11 @@ def setupFollowSide():
     forwardIntegral = 0
     stopCountdown = 0
     sideAngleAccum = 0
+    sideAngleAccumCnt = 0
     lastActionTime = 0.5
+    lastForwardSpeed = 0
+    lastForwardDelta = 0
+    accumSideDelta = 0
 
 
 def followLeftWall():
@@ -562,7 +615,7 @@ def followLeftWall():
     def followSideHandleDistance():
         followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1, deltaTime)
 
-    print("2: Following left wall")
+    log(DEBUG_LEVEL_DEBUG, "Following left wall")
     requestDistanceAtAngle("0")
     setupFollowSide()
     doDistance = followSideHandleDistance
@@ -575,7 +628,7 @@ def followRightWall():
     def followSideHandleDistance():
         followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1, deltaTime)
 
-    print("2: Following right wall")
+    log(DEBUG_LEVEL_DEBUG, "Following right wall")
     setupFollowSide()
     requestDistanceAtAngle("90")
     doDistance = followSideHandleDistance
@@ -585,15 +638,12 @@ def followRightWall():
 def findColours():
     global foundColours, algorithmIndex, algorithmsList, askedCamera
 
-    print("started algorithm 4...")
+    log(DEBUG_LEVEL_DEBUG, "Finding colours")
 
     askedCamera = 0
     foundColours = ""
     algorithmIndex = 0
     algorithmsList[:] = []
-
-    # algorithmsList.append(right90)
-    # algorithmsList.append(right135)
 
     algorithmsList.append(rotateLeft45)
     algorithmsList.append(findColoursLoop)
@@ -619,64 +669,64 @@ def findColoursLoop():
 
         askedCamera = 0
         setAlgorithms(rotateLeft90, findColoursLoop)
-        print("Moving another 90 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving another 90 deg...")
 
     def move90DegReverse():
         global algorithmIndex, algorithmsList, askedCamera
 
         askedCamera = 0
         setAlgorithms(rotateRight90, findColoursLoop)
-        print("Moving reverse -90 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving reverse -90 deg...")
 
     def move180Deg():
         global algorithmIndex, algorithmsList, askedCamera
 
         askedCamera = 0
         setAlgorithms(rotate180, findColoursLoop)
-        print("Moving another 180 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving another 180 deg...")
 
     def moveLast90Deg():
         global algorithmIndex, algorithmsList, askedCamera
 
         askedCamera = 0
         setAlgorithms(rotateLeft90, foundColoursGoFurther)
-        print("Moving last 90 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving last 90 deg...")
 
     def moveLast90DegReverse():
         global algorithmIndex, algorithmsList, askedCamera
 
         askedCamera = 0
         setAlgorithms(rotateRight90, foundColoursGoFurther)
-        print("Moving last 90 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving last 90 deg...")
 
     def moveLast180Deg():
         global algorithmIndex, algorithmsList, askedCamera
 
         askedCamera = 0
         setAlgorithms(rotate180, foundColoursGoFurther)
-        print("Moving last 90 deg...")
+        log(DEBUG_LEVEL_DEBUG, "Moving last 90 deg...")
 
     if askedCamera == 0:
-        print("Asked camera first time")
+        log(DEBUG_LEVEL_DEBUG, "Asked camera first time")
         cvResults = None
         pyroslib.publish("camera/raw/fetch", "")
         askedCamera = 1
 
     elif cvResults is not None:
-        print("Got results...")
+        log(DEBUG_LEVEL_ALL, "Got results...")
         if 1 <= askedCamera < 4:
             if len(cvResults) == 1 and cvResults[0][2] != "red" and cvResults[0][2] != "yellow":
                 foundColours = colourToLetter(cvResults[0][2]) + foundColours
-                print("Got one non red result " + foundColours)
+                log(DEBUG_LEVEL_DEBUG, "Got one non red result " + foundColours)
                 move90Deg()
             else:
-                print("Asked camera " + str(askedCamera) + ". Got " + str(len(cvResults)) + " results: " + str(cvResults))
+                log(DEBUG_LEVEL_ALL, "Asked camera " + str(askedCamera) + ". Got " + str(len(cvResults)) + " results: " + str(cvResults))
                 pyroslib.publish("camera/raw/fetch", "")
                 askedCamera += 1
         else:
             if len(cvResults) == 1:
                 foundColours = colourToLetter(cvResults[0][2]) + foundColours
-                print("Got one result after " + str(askedCamera) + " times: " + foundColours)
+                log(DEBUG_LEVEL_DEBUG, "Got one result after " + str(askedCamera) + " times: " + foundColours)
             else:
                 f = "X"
                 i = 0
@@ -685,7 +735,7 @@ def findColoursLoop():
                     i = i + 1
 
                 foundColours = f + foundColours
-                print("Cannot determine result so gone with " + f + " total: " + foundColours + " results: " + str(cvResults))
+                log(DEBUG_LEVEL_DEBUG, "Cannot determine result so gone with " + f + " total: " + foundColours + " results: " + str(cvResults))
 
             move90Deg()
         cvResults = None
@@ -693,7 +743,7 @@ def findColoursLoop():
         pass
 
     if "R" not in foundColours and "X" not in foundColours and len(foundColours) == 3:
-        print("Found colours: " + str(foundColours) + " stopping!")
+        log(DEBUG_LEVEL_DEBUG, "Found colours: " + str(foundColours) + " stopping!")
         foundColours = "R" + foundColours
         moveLast90Deg()
 
@@ -720,17 +770,17 @@ def findColoursLoop():
                     askedCamera = 1
                     pyroslib.publish("camera/raw/fetch", "")
                 elif c == 1:
-                    print("Undetermined colour moving 90 deg")
+                    log(DEBUG_LEVEL_DEBUG, "Undetermined colour moving 90 deg")
                     move90Deg()
                 elif c == 2:
-                    print("Undetermined colour moving 180 deg")
+                    log(DEBUG_LEVEL_DEBUG, "Undetermined colour moving 180 deg")
                     move180Deg()
                 elif c == 3:
-                    print("Undetermined colour moving -90 deg")
+                    log(DEBUG_LEVEL_DEBUG, "Undetermined colour moving -90 deg")
                     move90DegReverse()
 
         else:
-            print("Found colours: " + str(foundColours) + " stopping!")
+            log(DEBUG_LEVEL_DEBUG, "Found colours: " + str(foundColours) + " stopping!")
             moveToRed = True
 
         if moveToRed:
@@ -741,21 +791,21 @@ def findColoursLoop():
 
             if c == 0:
                 setAlgorithms(foundColoursGoFurther)
-                print("Next step colours: " + str(foundColours) + "")
+                log(DEBUG_LEVEL_DEBUG, "Next step colours: " + str(foundColours) + "")
                 setAlgorithms(foundColoursGoFurther)
             elif c == 1:
-                print("Next step colours: " + str(foundColours) + " last 90 deg")
+                log(DEBUG_LEVEL_DEBUG, "Next step colours: " + str(foundColours) + " last 90 deg")
                 moveLast90Deg()
             elif c == 2:
-                print("Next step colours: " + str(foundColours) + " last 180 deg")
+                log(DEBUG_LEVEL_DEBUG, "Next step colours: " + str(foundColours) + " last 180 deg")
                 moveLast180Deg()
             elif c == 3:
-                print("Next step colours: " + str(foundColours) + " last -90 deg")
+                log(DEBUG_LEVEL_DEBUG, "Next step colours: " + str(foundColours) + " last -90 deg")
                 moveLast90DegReverse()
 
 
 def foundColoursGoFurther():
-    print("Stopping now - result is " + foundColours)
+    log(DEBUG_LEVEL_DEBUG, "Final result is " + foundColours)
     allTogether(foundColours)
 
 
@@ -763,8 +813,8 @@ def rotateForAngle(angle):
     global gyroAngle, gyroStartAngle, doGyro, gyroIntegral
 
     def log1(*msg):
-        log(*((formatArgL("  dt", round(gyroDeltaTime, 3), 5),
-               formatArgR("  ga", gyroAngle, 5), formatArgR("  gda", gyroDeltaAngle, 5)) + msg))
+        logArgs(*((formatArgL("  dt", round(gyroDeltaTime, 3), 5),
+                formatArgR("  ga", gyroAngle, 5), formatArgR("  gda", gyroDeltaAngle, 5)) + msg))
 
     def handleGyroRorate():
         global gyroAngle, gyroStartAngle, stopCountdown, gyroIntegral
@@ -783,9 +833,6 @@ def rotateForAngle(angle):
         if not stopped:
             gyroError = gyroAngle - angle
 
-            # speed = pid(gyroError, gyroPid, gyroGains, gyroDeltaTime)
-            # speed = normalise(-speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
-
             if abs(gyroDeltaAngle) < 2.5:
                 gyroIntegral += gyroError
                 if gyroIntegral > MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime):
@@ -795,26 +842,11 @@ def rotateForAngle(angle):
 
             speed = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
             speed = normalise(speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
-            # if abs(speed) < MIN_ROTATE_SPEED:
-            #     speed = sign(speed) * MIN_ROTATE_SPEED
 
             log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
             rotate(speed)
 
-            # if speed < MIN_ROTATE_SPEED:
-            #     speed = MIN_ROTATE_SPEED
-
-            # if stopCountdown > 0:
-            #     log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
-            #     drive(0, 0)
-            #     stopCountdown -= 1
-            #     if stopCountdown == 0:
-            #         stop()
-            # else:
-            #     log1(formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
-            #     rotate(speed)
-
-    print("Rotating for " + str(angle))
+    log(DEBUG_LEVEL_DEBUG, "Rotating for " + str(angle))
     gyroAngle = 0
     gyroIntegral = 0
     gyroStartAngle = 0
@@ -856,6 +888,16 @@ def allTogether(stringOfFourLetters):
 
     if stringOfFourLetters == "RYGB":
         setAlgorithms(findCorner, rotateLeft135, followRightWall, rotateLeft135, findCorner, rotateRight135, followLeftWall)
+    elif stringOfFourLetters == "RGBY":
+        setAlgorithms(findCorner, rotate180, rotateRight135, followLeftWall, rotateRight135, findCorner)
+    elif stringOfFourLetters == "RBYG":
+        setAlgorithms(findCorner, rotateRight135, followLeftWall, rotateRight90, followLeftWall, rotateRight90, followLeftWall)
+    elif stringOfFourLetters == "RYBG":
+        setAlgorithms(findCorner, rotate180, findCorner, rotateLeft135, followRightWall, rotateLeft135, findCorner)
+    elif stringOfFourLetters == "RGYB":
+        setAlgorithms(findCorner, rotateLeft135, followRightWall, rotateLeft90, followRightWall, rotateLeft90, followRightWall)
+    elif stringOfFourLetters == "RBGY":
+        setAlgorithms(findCorner, rotateRight135, followLeftWall, rotateRight135, findCorner, rotateLeft135, followRightWall)
     else:
         stop()
 
@@ -863,7 +905,7 @@ def allTogether(stringOfFourLetters):
 def algorithm9Start():
     global drive_speed
 
-    print("started algorithm 9...")
+    log(DEBUG_LEVEL_DEBUG, "started algorithm 9...")
     requestDistanceAtAngle("45")
     drive_speed = FORWARD_SPEED
     # setAlgorithm(algorithm9Loop)
@@ -876,7 +918,7 @@ def algorithm9Loop():
 
 def moveBack():
     global countDown
-    print("started algorithm 10...")
+    log(DEBUG_LEVEL_DEBUG, "started algorithm 10...")
     countDown = 50
     driveBack(MAX_FORWARD_SPEED)
     setAlgorithm(moveBackLoop)
@@ -917,12 +959,9 @@ def handleCameraRaw(topic, message, groups):
     if len(message) > 0:
         message = message[:-1]
 
-    print(message)
+    log(DEBUG_LEVEL_DEBUG, "Image details: " + message)
 
     pyroslib.publish("overtherainbow/imagedetails", message)
-
-    # if sequence and not continuous:
-    #     pyroslib.publish("camera/raw/fetch", "")
 
 
 def toPILImage(imageBytes):
@@ -948,12 +987,12 @@ def processImageCV(image):
 
         ar = newArray
 
-        print("Array is " + str(ar))
+        log(DEBUG_LEVEL_ALL, "Array is " + str(ar))
 
         sigma = sum(ar)
         total = len(ar)
         average = sigma / total
-        print("Average value is " + str(average) + " total " + str(total) + " sigma " + str(sigma))
+        log(DEBUG_LEVEL_ALL, "Average value is " + str(average) + " total " + str(total) + " sigma " + str(sigma))
 
         smooth(ar)
 
@@ -964,9 +1003,7 @@ def processImageCV(image):
         return limit
 
     def findColourNameHSV(hChannel, contour):
-        # construct a mask for the contour, then compute the
-        # average L*a*b* value for the masked region
-        # mask = hChannel.copy()
+
         mask = numpy.zeros(hChannel.shape[:2], dtype="uint8")
         cv2.drawContours(mask, [contour], -1, 255, -1)
         mask = cv2.erode(mask, None, iterations=2)
@@ -976,7 +1013,7 @@ def processImageCV(image):
         cv2.bitwise_and(hChannel, mask, maskAnd)
 
         pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(maskAnd, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-        print("Published mask ")
+        log(DEBUG_LEVEL_ALL, "Published mask ")
 
         mean = mean[0]
 
@@ -985,7 +1022,7 @@ def processImageCV(image):
         histMaxIndex = numpy.argmax(hist)
         # histMax = hist[histMaxIndex]
 
-        print("Got mean as " + str(mean) + " max hist " + str(histMaxIndex))
+        log(DEBUG_LEVEL_ALL, "Got mean as " + str(mean) + " max hist " + str(histMaxIndex))
 
         value = histMaxIndex
 
@@ -994,11 +1031,11 @@ def processImageCV(image):
         # yellow >= 45 <= 70 - 22/35
         # green >= 86 <= 155 - 43/176
         # blue >= 180 <= 276 - 90/138
-        if value < 22 or value > 145:
+        if value < 19 or value > 145:
             return "red", value
-        elif 22 <= value <= 35:
+        elif 19 <= value <= 34:
             return "yellow", value
-        elif 43 <= value <= 76:
+        elif 40 <= value <= 76:
             return "green", value
         elif 90 <= value <= 138:
             return "blue", value
@@ -1006,19 +1043,15 @@ def processImageCV(image):
             return "", value
 
     def sanitiseContours(cnts):
-        MIN_RADUIS = 10
-        MIN_AREA = MIN_RADUIS * MIN_RADUIS * math.pi * 0.7
-
-        MAX_AREA = 13000.0
 
         for i in range(len(cnts) - 1, -1, -1):
             center, radius = cv2.minEnclosingCircle(cnts[i])
             area = cv2.contourArea(cnts[i])
             if radius < MIN_RADUIS or area < MIN_AREA or area > MAX_AREA or center[1] >= 128:
-                # print("Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+                # log(DEBUG_LEVEL_ALL, "Deleting contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
                 del cnts[i]
             else:
-                # print("Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
+                # log(DEBUG_LEVEL_ALL, "Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
                 pass
 
     def findContours(sChannel, vChannel):
@@ -1027,13 +1060,9 @@ def processImageCV(image):
 
         threshHist = cv2.calcHist([gray], [0], None, [256], [0, 256], False)
         threshLimit = findThreshold(threshHist, 60, 0.2)
-        print("Calculated threshold " + str(threshLimit))
+        log(DEBUG_LEVEL_ALL, "Calculated threshold " + str(threshLimit))
 
-        # threshLimit = 180
-
-        # thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
         thresh = cv2.threshold(gray, threshLimit, 255, cv2.THRESH_BINARY)[1]
-        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 81, 0)
 
         # find contours in the thresholded image
         cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1066,47 +1095,34 @@ def processImageCV(image):
             sanitiseContours(cnts)
 
             pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-            # print("Published gray image")
+            # log(DEBUG_LEVEL_ALL, "Published gray image")
 
             if iteration % 1 == 0:
-                print("... iteration " + str(iteration) + " min/current/max " + str(lastMin) + "/" + str(threshLimit) + "/" + str(lastMax) + " orig/sanitised " + str(initialCntNum) + "/" + str(len(cnts)))
+                log(DEBUG_LEVEL_ALL, "... iteration " + str(iteration) + " min/current/max " + str(lastMin) + "/" + str(threshLimit) + "/" + str(lastMax) + " orig/sanitised " + str(initialCntNum) + "/" + str(len(cnts)))
 
             if 0 < len(cnts) < 6:
-                print("Found good number of areas after " + str(iteration) + " iterations, contours " + str(len(cnts)))
+                log(DEBUG_LEVEL_ALL, "Found good number of areas after " + str(iteration) + " iterations, contours " + str(len(cnts)))
                 return cnts, thresh
 
             if threshLimit < 30 or threshLimit > 225 or lastMax - lastMin < 4:
-                print("Failed to find good number of areas after " + str(iteration) + " iterations")
+                log(DEBUG_LEVEL_ALL, "Failed to find good number of areas after " + str(iteration) + " iterations")
                 return cnts, thresh
 
             threshLimit -= 25
 
-            # if len(cnts) == 0:
-            #     lastMax = threshLimit
-            #     threshLimit = (lastMax + lastMin) / 2
-            # else:
-            #     lastMin = threshLimit
-            #     threshLimit = (lastMax + lastMin) / 2
-
-    # ratio = image.shape[0] / float(resized.shape[0])
-
-    # blur the resized image slightly, then convert it to both
-    # grayscale and the L*a*b* color spaces
     blurred = cv2.GaussianBlur(image, (5, 5), 0)
-    # gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-    # lab = cv2.cvtColor(blurred, cv2.COLOR_RGB2LAB)
 
     hsv = cv2.cvtColor(blurred, cv2.COLOR_RGB2HSV)
     hueChannel, satChannel, valChannel = cv2.split(hsv)
 
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(hueChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-    print("Published hue channel image")
+    log(DEBUG_LEVEL_ALL, "Published hue channel image")
 
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(valChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-    print("Published value channel image")
+    log(DEBUG_LEVEL_ALL, "Published value channel image")
 
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(satChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-    print("Published saturation channel image")
+    log(DEBUG_LEVEL_ALL, "Published saturation channel image")
 
     countours, threshold = adaptiveFindContours(satChannel, valChannel)
 
@@ -1114,26 +1130,22 @@ def processImageCV(image):
     cv2.drawContours(treshback, countours, -1, (0, 255, 0), 2)
 
     pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(threshold, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-    print("Published gray image")
+    log(DEBUG_LEVEL_ALL, "Published gray image")
 
     pil = PIL.Image.fromarray(treshback)
     pyroslib.publish("overtherainbow/processed", pil.tobytes("raw"))
-    print("Published threshold image")
+    log(DEBUG_LEVEL_ALL, "Published threshold image")
 
     results = []
 
-    print("Have " + str(len(countours)) + " contours")
+    log(DEBUG_LEVEL_ALL, "Have " + str(len(countours)) + " contours")
     for c in countours:
-        # initialize the shape detector and color labeler
+
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-        # if len(approx) > 5:
-        #     # circle
-        #
 
         cntrCenter, cntrRadius = cv2.minEnclosingCircle(c)
 
-        # colourName, extraInfo = findColourNameLAB(lab, c)
         colourName, extraInfo = findColourNameHSV(hueChannel, c)
 
         if len(colourName) > 0:
@@ -1142,108 +1154,6 @@ def processImageCV(image):
     cvResults = results
 
     return results
-
-
-def processImage(image):
-
-    red_pixels = []
-    green_pixels = []
-    blue_pixels = []
-    yellow_pixels = []
-
-    for y in range(0, 256):
-        for x in range(0, 320):
-            p = image.getpixel((x, y))
-            if isRed(p):
-                red_pixels.append((x, y))
-            if isGreen(p):
-                green_pixels.append((x, y))
-            if isBlue(p):
-                blue_pixels.append((x, y))
-            if isYellow(p):
-                yellow_pixels.append((x, y))
-
-    results = []
-
-    if len(red_pixels) > 20:
-        centre = calculateCentre(red_pixels)
-        results.append((centre[0], centre[1], "red", 5))
-
-        drawSpot(image, centre[0], centre[1], (255, 64, 64), "red")
-
-    if len(green_pixels) > 20:
-        centre = calculateCentre(green_pixels)
-        results.append((centre[0], centre[1], "green", 5))
-
-        drawSpot(image, centre[0], centre[1], (64, 255, 64), "green")
-
-    if len(blue_pixels) > 20:
-        centre = calculateCentre(blue_pixels)
-        results.append((centre[0], centre[1], "blue", 5))
-
-        drawSpot(image, centre[0], centre[1], (64, 64, 255), "blue")
-
-    if len(yellow_pixels) > 20:
-        centre = calculateCentre(yellow_pixels)
-        results.append((centre[0], centre[1], "yellow", 5))
-
-        drawSpot(image, centre[0], centre[1], (255, 255, 64), "yellow")
-
-    return results
-
-
-def isRed(p):
-    return p[0] > 64 and distance(p[0], p[1]) > 1.2 and distance(p[0], p[1]) > 1.2 and 0.8 < distance(p[1], p[2]) < 1.2
-
-
-def isGreen(p):
-    return p[1] > 64 and distance(p[1], p[0]) > 1.2 and distance(p[1], p[2]) > 1.2 and 0.8 < distance(p[0], p[2]) < 1.2
-
-
-def isBlue(p):
-    return p[2] > 64 and distance(p[2], p[0]) > 1.2 and distance(p[2], p[1]) > 1.2 and 0.8 < distance(p[0], p[1]) < 1.2
-
-
-def isYellow(p):
-    return p[0] > 64 and p[1] > 128 and 0.8 < distance(p[0], p[1]) < 1.2 and distance(p[0], p[2]) > 1.2 and distance(p[1], p[2]) > 1.2
-
-
-def distance(x, y):
-    if y != 0:
-        return x / y
-    else:
-        return x / 256
-
-
-def calculateCentre(pixels):
-    cx = 0
-    cy = 0
-    for p in pixels:
-        cx = cx + p[0]
-        cy = cy + p[1]
-
-    cx = int(cx / len(pixels))
-    cy = int(cy / len(pixels))
-    return cx, cy
-
-
-def drawSpot(image, cx, cy, colour, text):
-    # if False:
-    #     for x in range(cx - 30, cx + 30):
-    #         if x >= 0 and x < 320:
-    #             if cy > 0:
-    #                 image.putpixel((x, cy - 1), (255, 255, 255))
-    #             image.putpixel((x, cy), colour)
-    #             if cy < 256 - 1:
-    #                 image.putpixel((x, cy + 1), (255, 255, 255))
-    #     for y in range(cy - 30, cy + 30):
-    #         if y >= 0 and y < 256:
-    #             if cx > 0:
-    #                 image.putpixel((cx - 1, y), (255, 255, 255))
-    #             image.putpixel((cx, y), colour)
-    #             if cx < 320 - 1:
-    #                 image.putpixel((cx + 1, y), (255, 255, 255))
-    pass
 
 
 def mainLoop():
@@ -1264,6 +1174,7 @@ def mainLoop():
     if thisTime > digestTime:
         pyroslib.publish("overtherainbow/distances", str(distanceDeg1) + ":" + str(distance1) + ";" + str(avgDistance1) + "," + str(distanceDeg2) + ":" + str(distance2) + ";" + str(avgDistance2))
         pyroslib.publish("overtherainbow/gyro", str(gyroAngle))
+        digestTime = thisTime + 0.1
 
 
 algorithm = doNothing

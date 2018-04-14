@@ -516,7 +516,6 @@ while True:
 
     pyros.loop(0.03)
     pyros.agent.keepAgents()
-
     pyros.gccui.background(True)
 
     avgDistance1String = str(format(avgDistance1, '.2f'))
