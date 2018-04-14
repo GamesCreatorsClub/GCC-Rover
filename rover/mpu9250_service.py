@@ -128,7 +128,7 @@ def initMPU():
     global i2cBus
     global magXcoef, magYcoef, magZcoef
     i2cBus = smbus.SMBus(I2C_BUS)
-    #i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x01)
+    # i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x01)
 
     i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x00)
     time.sleep(0.1)
@@ -138,7 +138,6 @@ def initMPU():
     i2cBus.write_byte_data(I2C_ADDRESS, 0x1A, GYRO_LOW_PASS_FILTER_CUTOFF_41Hz)
 
     i2cBus.write_byte_data(I2C_ADDRESS, 0x19, 0x04)
-
 
     # i2cBus.write_byte_data(I2C_ADDRESS, 0x1A, GYRO_LOW_PASS_FILTER_CUTOFF_92Hz)
 
@@ -152,10 +151,7 @@ def initMPU():
 
     time.sleep(0.1)
 
-
-
-# AK8963_ADDRESS
-
+    # AK8963_ADDRESS
 
     i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x00)
     time.sleep(0.1)
@@ -163,7 +159,7 @@ def initMPU():
     i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x0F)  # fuse ROM access mode
     time.sleep(0.1)
 
-     # Correction values
+    # Correction values
     data = i2cBus.read_i2c_block_data(AK8963_ADDRESS, 0x10, 3)
 
     magXcoef = (data[0] - 128) / 256.0 + 1.0
@@ -180,9 +176,6 @@ def initMPU():
     i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x16)  # 16 bit (0.15uT/LSB not 0.015), mode 2 : 100Hz
     # i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x12)  # 16 bit (0.15uT/LSB not 0.015), mode 1 :8Hz
     time.sleep(0.1)
-
-
-
 
 
 def readAccel():
@@ -236,6 +229,7 @@ def readGyro():
     lastTimeGyroRead = now
 
     return x, y, -z, deltaTime
+
 
 def readMagno():
     global magXcoef, magYcoef, magZcoef
@@ -305,8 +299,8 @@ def calcGyroCalibrationData():
                 minV[i] = data[i]
             if data[i] > maxV[i]:
                 maxV[i] = data[i]
-            # avg[i] += data[i]
-            avg[i] += (minV[i]+maxV[i])/2
+            avg[i] += data[i]
+            # avg[i] += (minV[i]+maxV[i])/2
 
         c += 1
         time.sleep(0.02)
@@ -339,7 +333,6 @@ def calcAccelCalibrationData():
                 maxV[i] = data[i]
             avg[i] += data[i]
             # avg[i] += (minV[i]+maxV[i])/2
-
 
         c += 1
         time.sleep(0.02)
@@ -406,7 +399,7 @@ def handleContinuousAccel(topic, message, groups):
             continuousModeAccel = True
             doReadAccel = True
             if DEBUG:
-                print("  Started 1continuous accel mode...")
+                print("  Started continuous accel mode...")
 
     lastTimeReceivedRequestForContAccelMode = time.time()
 
