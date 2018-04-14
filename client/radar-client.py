@@ -13,7 +13,7 @@ import pyros.gcc
 import pyros.gccui
 import pyros.pygamehelper
 
-SCALE = 10
+SCALE = 2
 WHITE = (255, 255, 255)
 
 screen = pyros.gccui.initAll((600, 600), True)
@@ -28,25 +28,42 @@ def parseDistances(p):
     distances.clear()
     for pair in p.split(","):
         split = pair.split(":")
-        distances[float(split[0])] = float(split[1])
+        try:
+            distances[float(split[0])] = float(split[1])
+        except:
+            pass
 
 
 def handleSensorDistance(topic, message, groups):
-    global received, angle
+    global received # , angle
 
     print("** distance = " + message)
     parseDistances(message)
     received = True
+    print([d for d in distances])
 
     angle = 0
     largestDist = 0
     for d in distances:
-
         if distances[d] > largestDist:
             angle = float(d)
             largestDist = distances[d]
     print(" LARGEST DISTANCE = angle: " + str(angle) + " | distance: " + str(largestDist))
 
+
+def drawObstacles():
+    angles = list(distances.keys())
+    angles.sort()
+    colour = 255
+    for a in angles:
+        d2 = distances[a]
+        cAngleRadians = math.pi * (180 - a) / 180
+
+        A = (int(300 + d2 / SCALE * math.sin(cAngleRadians)),
+             int(300 + d2 / SCALE * math.cos(cAngleRadians)))
+
+        pygame.draw.circle(screen, (colour, colour, 255), A, 10, 1)
+        colour -= 20
 
 def drawRadar():
 
@@ -124,11 +141,14 @@ while True:
     screen.blit(font.render("Angle (o, p): " + str(angle), 1, WHITE), (10, 80))
 
     distanceStr = "---"
-    if angle in distances:
-        distanceStr = str(distances[angle])
-    screen.blit(font.render("Distance (r, s): " + str(distanceStr), 1, WHITE), (300, 80))
+    v = 0
+    for a in distances:
+        distanceStr = str(distances[a])
+        screen.blit(font.render("Distance (r, s): " + str(distanceStr), 1, WHITE), (300, 80+v*20))
+        v+=1
 
     drawRadar()
+    drawObstacles()
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
