@@ -28,7 +28,7 @@ MIN_DISTANCE = 100
 SQRT2 = math.sqrt(2)
 
 INITIAL_SPEED = 40
-INITIAL_GAIN = 1.7
+INITIAL_GAIN = 1.0
 
 
 gain = INITIAL_GAIN
@@ -54,7 +54,7 @@ SCAN_TIME = 1.2
 continuousCounter = 0
 wallEndWaitTimeout = 0
 
-DISTANCE_AVG_TIME = 0.5
+DISTANCE_AVG_TIME = 0.6
 
 distances = {}
 
@@ -455,14 +455,8 @@ def preStart():
         followLeftWall()
 
 
-# def goForward():
-#     global doDistance
-#     # doDistance = goForwardDistanceHandler
-#     # followLeftWall()
-
-
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global stopCountdown, lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
+    global lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
     global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
     global turned
 
@@ -471,14 +465,12 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                    formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
                    formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
-    # if stopCountdown > 0:
-    #     log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
-    #     drive(0, 0)
-    #     stopCountdown -= 1
-    #     if stopCountdown == 0:
-    #         stop()
-    #
-    forwardError = forwardDistance
+    overshootFactor = sideDistance - idealDistance
+    if overshootFactor < 0:
+        overshootFactor = 0
+    overshootFactor = 0
+
+    forwardError = forwardDistance + overshootFactor
     forwardIntegral = 0
     if abs(forwardDelta) > MAX_FORWARD_DELTA:
         forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
@@ -486,26 +478,20 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
     forwardControl = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + forwardIntegral * forwardGains[KiI] + (forwardDelta / dt) * forwardGains[KdI])
     forwardControl = normalise(forwardControl, corridorWidth) * corridorWidth
 
-    if forwardControl < corridorWidth:
-        # if turned:
-        #     log1(" LEFT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
-        #     turnLeft90()
-        # else:
-        #     log1(" RIGHT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
-        #     turnRight90()
+    if forwardControl < corridorWidth * gain:
 
         steerDistance = forwardControl
         if turned:
             steerDistance = -steerDistance
 
-        log1(" CORNER ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("fwd", round(forwardDelta), 6))
+        log1(" CORNER ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("fwe", round(forwardError), 6), formatArgR("osf", round(corridorWidth * gain), 6))
         steer(steerDistance, speed)
 
-    elif sideDistance > corridorWidth:
+    elif not turned and sideDistance > corridorWidth:
         turned = True
 
         log1(" T180 ", formatArgR("cw", round(corridorWidth, 1), 5))
-        followRightWall()
+        pauseBeforeRightWall()
 
     else:
         if forwardDistance > 1000:
@@ -553,7 +539,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         accumSideDelta += sideDelta
 
         if nextAction == ACTION_DRIVE:
-            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(speed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(speed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("fc", round(forwardControl), 6))
             drive(angle, speed)
         else:
             turnDirection = -1
@@ -624,49 +610,22 @@ def followRightWall():
     doGyro = doNothing
 
 
-def turnForAngle(angle):
-    global doDistance
+def pauseBeforeRightWall():
+    global cnt, doDistance
+
+    cnt = 2
 
     def handleDistance():
-        global doDistance
+        global cnt
 
-        if turned:
-            forwardDistance = distance2
-            forwardDelta = deltaDistance2
-            sideDistance = distance1
-            sideDelta = deltaDistance1
+        cnt -= 1
+        if cnt <= 0:
+            followRightWall()
         else:
-            forwardDistance = distance1
-            forwardDelta = deltaDistance1
-            sideDistance = distance2
-            sideDelta = deltaDistance2
-
-        logArgs(*((formatArgL("  dt", round(deltaTime, 3), 5),
-                   formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
-                   formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5))))
-
-        if forwardDistance > corridorWidth:
-            if turned:
-                log(DEBUG_LEVEL_INFO, "Go to following right wall after turn")
-                followRightWall()
-            else:
-                log(DEBUG_LEVEL_INFO, "Go to following left wall")
-                followLeftWall()
-        else:
-            if angle < 0:
-                steer(-idealDistance, speed)
-            else:
-                steer(idealDistance, speed)
+            log(DEBUG_LEVEL_INFO, "Waiting " + str(cnt))
 
     doDistance = handleDistance
-
-
-def turnRight90():
-    turnForAngle(90)
-
-
-def turnLeft90():
-    turnForAngle(-90)
+    requestDistanceAtAngle("90")
 
 
 def connected():

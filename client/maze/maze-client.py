@@ -18,7 +18,7 @@ WHITE = (255, 255, 255)
 MAX_PING_TIMEOUT = 1
 
 INITIAL_SPEED = 40
-INITIAL_GAIN = 1.7
+INITIAL_GAIN = 1.0
 
 gain = INITIAL_GAIN
 speed = INITIAL_SPEED
@@ -159,25 +159,39 @@ def onKeyDown(key):
         pyros.publish("sensor/distance/read", str(angle))
         print("** Asked for distance")
     elif key == pygame.K_DOWN:
-        speed -= 1
+        if speed > 100:
+            speed -= 50
+        elif speed > 50:
+            speed -= 5
+        else:
+            speed -= 1
+
         if speed < 1:
-            speed = -1
+            speed = 1
+
         pyros.publish("maze/speed", int(speed))
     elif key == pygame.K_UP:
-        speed += 1
-        if speed > 100:
-            speed = 100
+        if speed >= 100:
+            speed += 50
+        elif speed >= 50:
+            speed += 10
+        else:
+            speed += 1
+
+        if speed > 300:
+            speed = 300
+
         pyros.publish("maze/speed", int(speed))
     elif key == pygame.K_LEFT:
         gain -= 0.1
-        if gain < 1:
-            gain = 1
-        pyros.publish("maze/gain", int(round(gain, 1)))
+        if gain < 0.1:
+            gain = 0.1
+        pyros.publish("maze/gain", str(float(round(gain, 1))))
     elif key == pygame.K_RIGHT:
         gain += 0.1
         if gain > 10:
             gain = 10
-        pyros.publish("maze/gain", int(round(gain, 1)))
+        pyros.publish("maze/gain", str(float(round(gain, 1))))
     elif key == pygame.K_g:
         pyros.publish("sensor/gyro/continuous", "calibrate,50")
         gyroAngle = 0
