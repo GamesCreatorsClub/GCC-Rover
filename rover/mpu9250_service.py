@@ -10,7 +10,7 @@ import time
 import traceback
 import smbus
 import pyroslib
-
+import math
 
 #
 # MPU 9250 sensor service
@@ -20,6 +20,10 @@ import pyroslib
 # This service is responsible reading gyroscope and accelerometer.
 #
 
+# also http://ozzmaker.com/guide-to-interfacing-a-gyro-and-accelerometer-with-a-raspberry-pi/
+# https://github.com/micropython-IMU/micropython-mpu9x50/blob/master/mpu9250.py
+
+
 DEBUG = True
 
 CONTINUOUS_MODE_TIMEOUT = 5  # 5 seconds before giving up on sending accel data out
@@ -27,6 +31,7 @@ MAX_TIMEOUT = 0.05  # 0.02 is 50 times a second so this is 50% longer
 
 I2C_BUS = 1
 I2C_ADDRESS = 0x68
+AK8963_ADDRESS = 0x0C
 
 EARTH_GRAVITY_MS2 = 9.80665
 
@@ -39,6 +44,7 @@ GYRO_RESOLUTION_250_DPS = 250.0/32768.0
 GYRO_RESOLUTION_500_DPS = 500.0/32768.0
 GYRO_RESOLUTION_1000_DPS = 1000.0/32768.0
 GYRO_RESOLUTION_2000_DPS = 2000.0/32768.0
+
 
 GYRO_LOW_PASS_FILTER_CUTOFF_250Hz = 0
 GYRO_LOW_PASS_FILTER_CUTOFF_184Hz = 1
@@ -76,6 +82,10 @@ AXES = ["x", "y", "z"]
 
 gyroResolution = GYRO_RESOLUTION_250_DPS
 accelResolution = ACCEL_RESOUTION_2G
+
+gyroResolutionRecp = 1.0/GYRO_RESOLUTION_250_DPS
+accelResolutionRecp = 1.0/ACCEL_RESOUTION_2G
+
 
 lastTimeAccelRead = 0
 lastTimeGyroRead = 0
@@ -116,19 +126,21 @@ def dataConv(data1, data2):
 
 def initMPU():
     global i2cBus
+    global magXcoef, magYcoef, magZcoef
     i2cBus = smbus.SMBus(I2C_BUS)
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x01)
+    #i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x01)
 
     i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x00)
     time.sleep(0.1)
     i2cBus.write_byte_data(I2C_ADDRESS, 0x6B, 0x01)
     time.sleep(0.1)
 
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x19, 0x04)
-
     i2cBus.write_byte_data(I2C_ADDRESS, 0x1A, GYRO_LOW_PASS_FILTER_CUTOFF_41Hz)
 
-    i2cBus.write_byte_data(I2C_ADDRESS, 0x1A, GYRO_LOW_PASS_FILTER_CUTOFF_92Hz)
+    i2cBus.write_byte_data(I2C_ADDRESS, 0x19, 0x04)
+
+
+    # i2cBus.write_byte_data(I2C_ADDRESS, 0x1A, GYRO_LOW_PASS_FILTER_CUTOFF_92Hz)
 
     i2cBus.write_byte_data(I2C_ADDRESS, 0x1B, GYRO_RANGE_250_DPS << 3)
 
@@ -137,6 +149,40 @@ def initMPU():
     i2cBus.write_byte_data(I2C_ADDRESS, 0x1D, ACCEL_LOW_PASS_FILTER_CUTOFF_41Hz)
 
     i2cBus.write_byte_data(I2C_ADDRESS, 0x37, PASS_THROUGH_ON)
+
+    time.sleep(0.1)
+
+
+
+# AK8963_ADDRESS
+
+
+    i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x00)
+    time.sleep(0.1)
+
+    i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x0F)  # fuse ROM access mode
+    time.sleep(0.1)
+
+     # Correction values
+    data = i2cBus.read_i2c_block_data(AK8963_ADDRESS, 0x10, 3)
+
+    magXcoef = (data[0] - 128) / 256.0 + 1.0
+    magYcoef = (data[1] - 128) / 256.0 + 1.0
+    magZcoef = (data[2] - 128) / 256.0 + 1.0
+    if DEBUG:
+        print(str(float(magXcoef))+", "+str(float(magYcoef))+" ,"+str(float(magZcoef)))
+
+    time.sleep(0.1)
+
+    i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x00)  # Power down mode (AK8963 manual 6.4.6)
+    time.sleep(0.1)
+
+    i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x16)  # 16 bit (0.15uT/LSB not 0.015), mode 2 : 100Hz
+    # i2cBus.write_byte_data(AK8963_ADDRESS, 0x0A, 0x12)  # 16 bit (0.15uT/LSB not 0.015), mode 1 :8Hz
+    time.sleep(0.1)
+
+
+
 
 
 def readAccel():
@@ -155,8 +201,16 @@ def readAccel():
     y = round(y * accelResolution * EARTH_GRAVITY_MS2, 3)
     z = round(z * accelResolution * EARTH_GRAVITY_MS2, 3)
 
+    # x = x * accelResolution * EARTH_GRAVITY_MS2
+    # y = y * accelResolution * EARTH_GRAVITY_MS2
+    # z = z * accelResolution * EARTH_GRAVITY_MS2
+
+    AccXangle = math.degrees(math.atan2(y, z) + math.pi)
+    AccYangle = math.degrees(math.atan2(z, x) + math.pi)
+    AccZangle = math.degrees(math.atan2(x, y) + math.pi)
+
     lastTimeAccelRead = now
-    return x, y, z, deltaTime
+    return x, y, z, deltaTime, AccXangle, AccYangle, AccZangle
 
 
 def readGyro():
@@ -171,13 +225,44 @@ def readGyro():
     y = dataConv(data[3], data[2])
     z = dataConv(data[5], data[4])
 
-    x = round(x * gyroResolution, 3) * deltaTime
-    y = round(y * gyroResolution, 3) * deltaTime
-    z = round(z * gyroResolution, 3) * deltaTime
+    # x = round(x * gyroResolution, 3) * deltaTime
+    # y = round(y * gyroResolution, 3) * deltaTime
+    # z = round(z * gyroResolution, 3) * deltaTime
+
+    x = deltaTime * x / gyroResolutionRecp
+    y = deltaTime * y / gyroResolutionRecp
+    z = deltaTime * z / gyroResolutionRecp
 
     lastTimeGyroRead = now
 
     return x, y, -z, deltaTime
+
+def readMagno():
+    global magXcoef, magYcoef, magZcoef
+
+    x = 0
+    y = 0
+    z = 0
+
+    # check data ready
+    drdy = i2cBus.read_byte_data(AK8963_ADDRESS, 0x02)  # increments mag_stale_count - AK8963_ST1
+    if drdy & 0x01:
+        data = i2cBus.read_i2c_block_data(AK8963_ADDRESS, 0x03, 7)  # AK8963_MAGNET_OUT
+        # dataX = i2cBus.read_byte_data(AK8963_ADDRESS, 0x09) # ST2
+        # check overflow
+        if (data[6] & 0x08) != 0x08:
+            print("raw data "+ ' '.join(str(x) for x in data), end="\t")
+            x = dataConv(data[0], data[1])
+            y = dataConv(data[2], data[3])
+            z = dataConv(data[4], data[5])
+
+            scale = 0.15  # scale is 0.15uT/LSB
+
+            x = round(x * scale * magXcoef, 3)
+            y = round(y * scale * magYcoef, 3)
+            z = round(z * scale * magZcoef, 3)
+
+    return x,y,z
 
 
 def initialCalibrate():
@@ -205,8 +290,8 @@ def initialCalibrate():
 
 def calcGyroCalibrationData():
 
-    minV = [0, 0, 0]
-    maxV = [0, 0, 0]
+    minV = [1000, 1000, 1000]
+    maxV = [-1000, -1000, -1000]
     avg = [0, 0, 0]
 
     if DEBUG:
@@ -220,7 +305,8 @@ def calcGyroCalibrationData():
                 minV[i] = data[i]
             if data[i] > maxV[i]:
                 maxV[i] = data[i]
-            avg[i] += data[i]
+            # avg[i] += data[i]
+            avg[i] += (minV[i]+maxV[i])/2
 
         c += 1
         time.sleep(0.02)
@@ -234,13 +320,13 @@ def calcGyroCalibrationData():
             "max": maxV[i]
         }
         if DEBUG:
-            print("    Calibrated gyro axis " + AXES[i] + " offset as " + str(gyroCalibrationData[i]["offset"]))
+            print("    Calibrated gyro axis " + AXES[i] + " offset,min,max as " + str(gyroCalibrationData[i]["offset"]) + ", " + str(gyroCalibrationData[i]["min"]) + ", " + str(gyroCalibrationData[i]["max"]))
 
 
 def calcAccelCalibrationData():
 
-    minV = [0, 0, 0]
-    maxV = [0, 0, 0]
+    minV = [1000, 1000, 1000]
+    maxV = [-1000, -1000, -1000]
     avg = [0, 0, 0]
 
     c = 0
@@ -252,6 +338,8 @@ def calcAccelCalibrationData():
             if data[i] > maxV[i]:
                 maxV[i] = data[i]
             avg[i] += data[i]
+            # avg[i] += (minV[i]+maxV[i])/2
+
 
         c += 1
         time.sleep(0.02)
@@ -265,7 +353,7 @@ def calcAccelCalibrationData():
             "max": maxV[i]
         }
         if DEBUG:
-            print("    Calibrated accel axis " + AXES[i] + " offset as " + str(gyroCalibrationData[i]["offset"]))
+            print("    Calibrated accel axis " + AXES[i] + " offset as " + str(accelCalibrationData[i]["offset"]))
 
 
 def handleReadAccel(topic, message, groups):
@@ -318,7 +406,7 @@ def handleContinuousAccel(topic, message, groups):
             continuousModeAccel = True
             doReadAccel = True
             if DEBUG:
-                print("  Started continuous accel mode...")
+                print("  Started 1continuous accel mode...")
 
     lastTimeReceivedRequestForContAccelMode = time.time()
 
@@ -367,6 +455,12 @@ def loop():
     global continuousModeGyro, continuousModeGyroCalibrate, continuousModeAccel, continuousModeAccelCalibrate
     global data
 
+    if DEBUG:
+        rawData = readMagno()
+        if rawData[0] != 0:
+            print("magno data "+ str(rawData[0]) + ", "+ str(rawData[1]) + ", "+ str(rawData[2]), end="\t")
+            print("heading "+ str(180 * math.atan2(rawData[2], rawData[1])/math.pi) )
+
     if doReadAccel:
         if time.time() - lastTimeAccelRead > MAX_TIMEOUT:
             rawData = readAccel()
@@ -376,9 +470,13 @@ def loop():
         data = []
         for i in range(0, 3):
             data.append(rawData[i] - accelCalibrationData[i]["offset"])
-        data.append(rawData[3])
+        data += rawData[3:]
 
-        pyroslib.publish("sensor/accel", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]))
+        # if DEBUG:
+        #     print("accel XY data "+ str(data[4]) + ", "+ str(data[5]) + ", "+ str(data[6]))
+
+        pyroslib.publish("sensor/accel", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]) + "," + str(data[4]) + "," + str(data[5]) + "," + str(data[6]))
+
 
         if continuousModeAccelCalibrate:
             accelCalibrationReadots.append(rawData)
@@ -400,7 +498,7 @@ def loop():
 
     if doReadGyro:
         if time.time() - lastTimeGyroRead > MAX_TIMEOUT:
-            gyroData = readGyro()
+            rawData = readGyro()
             time.sleep(0.02)
 
         rawData = readGyro()
@@ -410,6 +508,8 @@ def loop():
         data.append(rawData[3])
 
         pyroslib.publish("sensor/gyro", str(data[0]) + "," + str(data[1]) + "," + str(data[2]) + "," + str(data[3]))
+        # if DEBUG:
+        #     print("gyro Z data "+ str(data[2]) + ", "+ str(gyroCalibrationData[2]["min"]) + ", "+ str(gyroCalibrationData[2]["max"]))
 
         if continuousModeGyroCalibrate:
             gyroCalibrationReadots.append(rawData)
