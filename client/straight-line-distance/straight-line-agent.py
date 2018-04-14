@@ -5,7 +5,7 @@
 # MIT License
 #
 
-import sys
+import math
 import time
 import traceback
 import pyroslib
@@ -15,7 +15,6 @@ DEBUG = True
 MAX_TIMEOUT = 5
 
 run = False
-lastPing = time.time()
 
 leftDeg = 0
 rightDeg = 0
@@ -26,54 +25,88 @@ derivativeError = 0
 
 calibrationStartedTime = 0
 
-lastContGyroTime = 0
+digestTime = 0
+lastDriverTime = 0
 lastTimeGyroRead = 0
 thisTimeGyroRead = 0
+renewContinuous = 0
 
-
-MAXSpeed = 300
-SELECTSpeed = MAXSpeed
-
-leftSideSpeed = SELECTSpeed
-rightSideSpeed = SELECTSpeed
+leftSideSpeed = 75
+rightSideSpeed = 75
 
 driving = False
 calibrating = True
 driveAfterCalibrate = False
 
-STEER_GAIN = 1
-# STEER_MAX_CONTROL = 30
+MAX_SPEED = 150
+SPEED_RAMPUP = 20
+SPEED_RAMPUP_MAX = 300
+STEER_GAIN = 0.5
+STEER_MAX_CONTROL = 30
 # INTEGRAL_FADE_OUT = 0.95
-# INTEGRAL_FADE_OUT = 1
+INTEGRAL_FADE_OUT = 1
 
 # P_GAIN = 0.9 and I_GAIN = 0.1
 # P_GAIN = 0.7, I_GAIN = 0.3, GAIN = 2
 
-# P_GAIN = 0.70
-# I_GAIN = 0.30
-# D_GAIN = 0.00
+P_GAIN = 0.70
+I_GAIN = 0.25
+D_GAIN = 0.06
 
 steerGain = STEER_GAIN
-# pGain = P_GAIN
-# iGain = I_GAIN
-# dGain = D_GAIN
-# integralFadeOut = INTEGRAL_FADE_OUT
-# steerMaxControl = STEER_MAX_CONTROL
+pGain = P_GAIN
+iGain = I_GAIN
+dGain = D_GAIN
+integralFadeOut = INTEGRAL_FADE_OUT
+steerMaxControl = STEER_MAX_CONTROL
 
-MINDISTANCE = 40
-MAXDISTANCE = 8000
+
+drivingWithGyro = False
+drivingWithDistance = True
+
+DISTANCE_AVG_TIME = 0.5
+
+distanceTimestamp = 0
+distanceDeg1 = -1
+distanceDeg2 = -1
+distance1 = -1
+distance2 = -1
+avgDistance1 = -1
+avgDistance2 = -1
+deltaDistance1 = -1
+deltaDistance2 = -1
+
+historyDistancesDeg1 = -1
+historyDistancesDeg2 = -1
+historyDistances1 = []
+historyDistanceTimes1 = []
+historyDistances2 = []
+historyDistanceTimes2 = []
+
+lastDistanceReceivedTime = 0
+lastDeltaDistance = 0
+
+
+def sign(x):
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    else:
+        return 0
+
 
 def connected():
-    # pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
-    pyroslib.publish("sensor/distance/read", 45)
+    pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
 
-# def handleStraight(topic, message, groups):
-#     global integratedError, driving, calibrating
-#
-#     if message == "forward":
-#         startDriving()
-#     elif message == "stop":
-#         stopDriving()
+
+def handleStraight(topic, message, groups):
+    global integratedError, driving, calibrating
+
+    if message == "forward":
+        startDriving()
+    elif message == "stop":
+        stopDriving()
 
 
 def wheelDeg(wheelName, angle):
@@ -89,15 +122,19 @@ wheelDeg("br", 0)
 
 def startDriving():
     global driveAfterCalibrate, driving, calibrating, leftSideSpeed, rightSideSpeed, leftDeg, rightDeg, integratedError, derivativeError
+    global lastDeltaDistance
 
     print("DRIVE DIRVE DRIVE!")
     calibrating = False
     driving = True
+    # leftSideSpeed = 75
+    # rightSideSpeed = 75
     leftSideSpeed = 0
     rightSideSpeed = 0
     integratedError = 0
     derivativeError = 0
-    pyroslib.publish("sensor/distance/continuous", "start")
+    lastDeltaDistance = 0
+    pyroslib.publish("sensor/gyro/continuous", "start")
 
 
 def stopDriving():
@@ -108,189 +145,183 @@ def stopDriving():
 
     driving = False
     calibrating = True
-    pyroslib.publish("sensor/distance/continuous", "stop")
-    # pyroslib.publish("sensor/distance/continuous", "calibrate,50")
+    pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
 
 
-# def handleGyro(topic, message, groups):
-#     global driving, calibrating
-#     global proportionalError, integratedError, derivativeError
-#     global leftDeg, rightDeg
-#     global rightSideSpeed, leftSideSpeed
-#     global calibrationStartedTime
-#
-#     previousError = 0
-#     control = 0
-#
-#     data = message.split(",")
-#     z = float(data[2])
-#     dt = float(data[3])
-#
-#     thisTimeGyroRead2 = time.time()
-#     if driving:
-#
-#         integratedError *= integralFadeOut
-#
-#         proportionalError = z
-#         integratedError += proportionalError  # * dt
-#
-#         if dt == 0:
-#             derivativeError = 0
-#         else:
-#             derivativeError = (proportionalError - previousError)  # / dt
-#
-#         previousError = proportionalError
-#
-#         control = pGain * proportionalError + iGain * integratedError + dGain * derivativeError
-#
-#         controlSteer = control * steerGain
-#         if controlSteer > steerMaxControl:
-#             controlSteer = steerMaxControl
-#         elif controlSteer < -steerMaxControl:
-#             controlSteer = -steerMaxControl
-#
-#         leftDeg = int(-controlSteer)
-#         rightDeg = int(-controlSteer)
-#
-#         if leftSideSpeed < 50:
-#             leftSideSpeed += 25
-#             rightSideSpeed += 25
-#         elif leftSideSpeed < 300:
-#             leftSideSpeed += 50
-#             rightSideSpeed += 50
-#         else:
-#             leftSideSpeed = 300
-#             rightSideSpeed = 300
-#
-#     elif calibrating:
-#
-#         leftDeg = 0
-#         rightDeg = 0
-#
-#         rightSideSpeed = 0
-#         leftSideSpeed = 0
-#
-#     else:
-#         leftDeg = 0
-#         rightDeg = 0
-#
-#         proportionalError = 0
-#         integratedError = 0
-#         derivativeError = 0
-#
-#         previousError = 0
-#         control = 0
-#
-#         rightSideSpeed = 0
-#         leftSideSpeed = 0
-#
-#     if driving:
-#         mode = "Driving:    "
-#     elif calibrating:
-#         mode = "Calibrating:"
-#     else:
-#         mode = "Idle:       "
-#
-#     if DEBUG:
-#         print(mode + " g:{0:>8} d:{1:>8} c:{2:>8} p:{3:>8} i:{4:>8} d:{5:>8} 7:{6:>8}".format(
-#               str(round(z, 3)),
-#               str(round(leftDeg, 1)),
-#               str(round(control, 3)),
-#               str(round(proportionalError, 3)),
-#               str(round(integratedError, 3)),
-#               str(round(derivativeError, 3)),
-#               str(round(dt, 3))))
+def addToHistoryWithTime(value, valueTime, history, historyTimes, maxTime):
+    history.append(value)
+    historyTimes.append(valueTime)
 
-def handleSensorDistance(topic, message, groups):
-    global driving
+    while len(historyTimes) > 0 and historyTimes[0] < valueTime - maxTime:
+        del history[0]
+        del historyTimes[0]
+
+    if len(history) > 1:
+        return value - history[len(history) - 2], sum(history) / len(history)
+    else:
+        return 0, 0
+
+
+def handleDistances(topic, message, groups):
+    global historyDistancesDeg1, historyDistancesDeg2, historyDistances1, historyDistances2, historyDistanceTimes1, historyDistanceTimes2
+    global distanceDeg1, distanceDeg2, distance1, distance2, avgDistance1, avgDistance2, distanceTimestamp, deltaDistance1, deltaDistance2
+    global deltaTime, lastDistanceReceivedTime
+
+    receivedTime = time.time()
+
+    split = message.split(",")
+    deg1 = -1
+    val1 = -1
+    deg2 = -1
+    val2 = -1
+
+    i = 0
+    for s in split:
+        kv = s.split(":")
+        if kv[0] == "timestamp":
+            distanceTimestamp = float(kv[1])
+        else:
+            deg = int(float(kv[0]))
+            val = int(float(kv[1]))
+
+            if i == 0:
+                deg1 = deg
+                val1 = val
+            elif i == 1:
+                deg2 = deg
+                val2 = val
+
+            i += 1
+
+    distanceDeg1 = deg1
+    distance1 = val1
+    distanceDeg2 = deg2
+    distance2 = val2
+
+    if deg1 > deg2:
+        tmp = deg2
+        deg2 = deg1
+        deg1 = tmp
+
+        tmp = distanceDeg2
+        distanceDeg2 = distanceDeg1
+        distanceDeg1 = tmp
+
+    if historyDistancesDeg1 != deg1 or historyDistancesDeg2 != deg2:
+        historyDistances1 = []
+        historyDistanceTimes1 = []
+        historyDistancesDeg1 = deg1
+
+        historyDistances2 = []
+        historyDistanceTimes2 = []
+        historyDistancesDeg2 = deg2
+
+    deltaDistance1, avgDistance1 = addToHistoryWithTime(distance1, receivedTime, historyDistances1, historyDistanceTimes1, DISTANCE_AVG_TIME)
+    deltaDistance2, avgDistance2 = addToHistoryWithTime(distance2, receivedTime, historyDistances2, historyDistanceTimes2, DISTANCE_AVG_TIME)
+
+    deltaTime = receivedTime - lastDistanceReceivedTime
+    lastDistanceReceivedTime = receivedTime
+    doDriving()
+
+
+def handleGyro(topic, message, groups):
+    global driving, calibrating
+    global proportionalError, integratedError, derivativeError
     global leftDeg, rightDeg
     global rightSideSpeed, leftSideSpeed
+    global calibrationStartedTime
 
-    print(">>> distance = " + message)
+    previousError = 0
+    control = 0
 
-    distances = [] # dictionary
-    for pair in message.split(","):
-        split = pair.split(":")
-        try:
-            # distances[]=(angle,distance)
-            distances.append( ( float(split[0]), float(split[1])) )
-        except:
-            pass
+    data = message.split(",")
+    z = float(data[2])
+    dt = float(data[3])
 
-    middle = 0
-    leftd = 8000
-    rightd = 8000
-    leftScale = 1
-    rightScale = 1
+    thisTimeGyroRead2 = time.time()
+    if drivingWithGyro:
+        if driving:
 
-    if distances[0][0] < 0:
-        leftd = distances[0][1]
-        rightd = distances[1][1]
-    else:
-        leftd = distances[1][1]
-        rightd = distances[0][1]
+            integratedError *= integralFadeOut
 
+            proportionalError = z
+            integratedError += proportionalError  # * dt
 
-    if leftd < MINDISTANCE or rightd < MINDISTANCE:
-        stopDriving()
+            if dt == 0:
+                derivativeError = 0
+            else:
+                derivativeError = (proportionalError - previousError)  # / dt
 
-    if driving:
-        # never steer - just use velocity of wheels
-        leftDeg = 0
-        rightDeg = 0
+            previousError = proportionalError
 
-        middle = (leftd + rightd) / 2
-        if middle != 0:
-            if leftd < MAXDISTANCE and rightd < MAXDISTANCE:
-                leftScale = min(1,1 - ( (leftd - middle) / middle))
-                rightScale = min(1,1 - ( (rightd - middle) / middle))
-            elif leftd > MAXDISTANCE and rightd < MAXDISTANCE:
-                leftScale = 0
-            elif leftd < MAXDISTANCE and rightd > MAXDISTANCE:
-                rightScale = 0
+            control = pGain * proportionalError + iGain * integratedError + dGain * derivativeError
 
-        rightScale *= steerGain
+            controlSteer = control * steerGain
+            if controlSteer > steerMaxControl:
+                controlSteer = steerMaxControl
+            elif controlSteer < -steerMaxControl:
+                controlSteer = -steerMaxControl
 
-        # get up to speed
-        # if leftSideSpeed < 50:
-        #     leftSideSpeed += 25
-        #     rightSideSpeed += 25
-        # elif leftSideSpeed < SELECTSpeed:
-        #     leftSideSpeed += 50
-        #     rightSideSpeed += 50
-        # else:
+            leftDeg = int(-controlSteer)
+            rightDeg = int(-controlSteer)
 
-        leftSideSpeed = SELECTSpeed
-        rightSideSpeed = SELECTSpeed
+            if leftSideSpeed < 50:
+                leftSideSpeed += 25
+                rightSideSpeed += 25
+            elif leftSideSpeed < 300:
+                leftSideSpeed += 50
+                rightSideSpeed += 50
+            else:
+                leftSideSpeed = 300
+                rightSideSpeed = 300
 
-        leftSideSpeed *= leftScale
-        rightSideSpeed *= rightScale
+        elif calibrating:
 
-    else:
-        leftDeg = 0
-        rightDeg = 0
+            leftDeg = 0
+            rightDeg = 0
 
-        rightSideSpeed = 0
-        leftSideSpeed = 0
+            rightSideSpeed = 0
+            leftSideSpeed = 0
 
+        else:
+            leftDeg = 0
+            rightDeg = 0
 
-    if DEBUG:
+            proportionalError = 0
+            integratedError = 0
+            derivativeError = 0
+
+            previousError = 0
+            control = 0
+
+            rightSideSpeed = 0
+            leftSideSpeed = 0
+
         if driving:
             mode = "Driving:    "
+            if DEBUG:
+                print(mode + " g:{0:>8} d:{1:>8} c:{2:>8} p:{3:>8} i:{4:>8} d:{5:>8} 7:{6:>8}".format(
+                    str(round(z, 3)),
+                    str(round(leftDeg, 1)),
+                    str(round(control, 3)),
+                    str(round(proportionalError, 3)),
+                    str(round(integratedError, 3)),
+                    str(round(derivativeError, 3)),
+                    str(round(dt, 3))))
+        elif calibrating:
+            mode = "Calibrating:"
         else:
             mode = "Idle:       "
 
-        print("{0} lspeed:{1:>8.3f}  rspeed:{2:>8.3f}  ldist:{3:>8.3f} rdist:{4:>8.3f} lscale:{5:>8.3f} rscale:{6:>8.3f} gain:{7:>8.3f}".format(
-            mode,
-            leftSideSpeed, rightSideSpeed, leftd, rightd, leftScale, rightScale, steerGain))
-        # print("{0} ld:{1:>8.3f} rd:{2:>8.3f} ls:{3:>8.3f} rs:{4:>8.3f} {5} {6} {7:>8.3f}".format(
-        #     mode,
-        #       leftDeg, rightDeg, leftSideSpeed, rightSideSpeed, leftd, rightd, rightScale))
-
-
-def handlePing(topic, message, groups):
-    global lastPing
-    lastPing = time.time()
+        # if DEBUG:
+        #     print(mode + " g:{0:>8} d:{1:>8} c:{2:>8} p:{3:>8} i:{4:>8} d:{5:>8} 7:{6:>8}".format(
+        #           str(round(z, 3)),
+        #           str(round(leftDeg, 1)),
+        #           str(round(control, 3)),
+        #           str(round(proportionalError, 3)),
+        #           str(round(integratedError, 3)),
+        #           str(round(derivativeError, 3)),
+        #           str(round(dt, 3))))
 
 
 def handleSteerGain(topic, message, groups):
@@ -298,84 +329,148 @@ def handleSteerGain(topic, message, groups):
 
     steerGain = float(message)
 
-#
-# def handlePGain(topic, message, groups):
-#     global pGain
-#
-#     pGain = float(message)
-#
-#
-# def handleIGain(topic, message, groups):
-#     global iGain
-#
-#     iGain = float(message)
-#
-#
-# def handleDGain(topic, message, groups):
-#     global dGain
-#
-#     dGain = float(message)
 
-def handleSpeed(topic,payload,groups):
-    global SELECTSpeed
-    speed = int(payload)
-    print( "Message", "Got speed - setting to " + str(speed))
+def handlePGain(topic, message, groups):
+    global pGain
 
-    if speed > 0:
-        SELECTSpeed = MAXSpeed//(5-speed)
-        startDriving()
+    pGain = float(message)
+
+
+def handleIGain(topic, message, groups):
+    global iGain
+
+    iGain = float(message)
+
+
+def handleDGain(topic, message, groups):
+    global dGain
+
+    dGain = float(message)
+
+
+def requestDistanceAtAngle(angle):
+    pyroslib.publish("sensor/distance/deg", str(angle))
+
+
+def doDriving():
+    global leftSideSpeed, rightSideSpeed, leftDeg, rightDeg, leftSideSpeed, rightSideSpeed, lastDeltaDistance
+
+    error = distance2 - distance1
+    if abs(error) < 1:
+        deltaDistance = 0
     else:
-        stopDriving()
+        deltaDistance = math.log(abs(error)) * sign(error)
+
+    deltaDeltaDistance = (lastDeltaDistance - deltaDistance)
+
+    lastDeltaDistance = deltaDeltaDistance
+
+    control = pGain * deltaDistance + dGain * deltaDeltaDistance
+
+    if drivingWithDistance:
+        if driving:
+            controlSteer = deltaDistance * steerGain
+            if controlSteer > steerMaxControl:
+                controlSteer = steerMaxControl
+            elif controlSteer < -steerMaxControl:
+                controlSteer = -steerMaxControl
+
+            leftDeg = int(-controlSteer)
+            rightDeg = int(-controlSteer)
+
+            if leftSideSpeed < SPEED_RAMPUP_MAX:
+                leftSideSpeed += SPEED_RAMPUP
+                rightSideSpeed += SPEED_RAMPUP
+            elif leftSideSpeed < MAX_SPEED:
+                leftSideSpeed += SPEED_RAMPUP * 2
+                rightSideSpeed += SPEED_RAMPUP * 2
+            else:
+                leftSideSpeed = MAX_SPEED
+                rightSideSpeed = MAX_SPEED
+
+            if leftSideSpeed > MAX_SPEED:
+                leftSideSpeed = MAX_SPEED
+            if rightSideSpeed > MAX_SPEED:
+                rightSideSpeed = MAX_SPEED
+
+        else:
+            leftDeg = 0
+            rightDeg = 0
+
+            rightSideSpeed = 0
+            leftSideSpeed = 0
+
+        if driving:
+            mode = "Driving:    "
+            if DEBUG:
+                print(mode + " d1:{0:>8} d2:{1:>8} dd:{2:>8} ddd:{3:>8} c:{4:>8} a:{5:>8}".format(
+                    str(round(distance1, 1)),
+                    str(round(distance2, 1)),
+                    str(round(deltaDistance, 1)),
+                    str(round(deltaDeltaDistance, 1)),
+                    str(round(control, 3)),
+                    str(round(leftDeg, 3))))
+        elif calibrating:
+            mode = "Calibrating:"
+        else:
+            mode = "Idle:       "
+
+
 
 def loop():
-    global lastContGyroTime
+    global renewContinuous, lastDriverTime, digestTime
 
     now = time.time()
 
-    if now - lastTimeGyroRead > 1:
+    if now > renewContinuous:
+        renewContinuous = time.time() + 1
+
         if calibrating:
-            # pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
-            pyroslib.publish("sensor/distance/continuous", "stop")
-            pass
+            pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
         else:
-            pyroslib.publish("sensor/distance/continuous", "start")
+            pyroslib.publish("sensor/gyro/continuous", "start")
 
-        lastContGyroTime = now
+        pyroslib.publish("sensor/distance/continuous", "continue")
 
-    pyroslib.publish("wheel/fl/speed", leftSideSpeed)
-    pyroslib.publish("wheel/bl/speed", leftSideSpeed)
-    pyroslib.publish("wheel/fr/speed", rightSideSpeed)
-    pyroslib.publish("wheel/br/speed", rightSideSpeed)
+    if now - lastDriverTime > 0.02:
 
-    wheelDeg("fl", str(int(leftDeg)))
-    wheelDeg("fr", str(int(rightDeg)))
-    wheelDeg("bl", 0)
-    wheelDeg("br", 0)
+        pyroslib.publish("wheel/all",
+                         "fld:" + str(int(leftDeg)) + " frd:" + str(int(rightDeg)) + " bld:" + str(0) + " brd:" + str(0) + " fls:" + str(leftSideSpeed) + " frs:" + str(rightSideSpeed) + " bls:" + str(leftSideSpeed) + " brs:" + str(rightSideSpeed))
 
-    if now - lastPing > MAX_TIMEOUT:
-        print("** Didn't receive ping for more than " + str(now - lastPing) + "s. Leaving...")
-       # pyroslib.publish("sensor/distance/continuous", "stop")
-        stopDriving()
-        sys.exit(0)
+        # pyroslib.publish("wheel/fl/speed", leftSideSpeed)
+        # pyroslib.publish("wheel/bl/speed", leftSideSpeed)
+        # pyroslib.publish("wheel/fr/speed", rightSideSpeed)
+        # pyroslib.publish("wheel/br/speed", rightSideSpeed)
+        #
+        # wheelDeg("fl", str(int(leftDeg)))
+        # wheelDeg("fr", str(int(rightDeg)))
+        # wheelDeg("bl", 0)
+        # wheelDeg("br", 0)
+
+        lastDriverTime = now
+
+    if now > digestTime:
+        pyroslib.publish("straightline/distances", str(distanceDeg1) + ":" + str(distance1) + ";" + str(avgDistance1) + "," + str(distanceDeg2) + ":" + str(distance2) + ";" + str(avgDistance2))
+        digestTime = now + 0.1
 
 
 if __name__ == "__main__":
     try:
         print("Starting straight-line agent...")
 
-        pyroslib.subscribe("straightline/speed", handleSpeed)
-        # pyroslib.subscribe("sensor/gyro", handleGyro)
-        # pyroslib.subscribe("straight", handleStraight)
-        pyroslib.subscribe("straight/ping", handlePing)
+        pyroslib.subscribe("sensor/gyro", handleGyro)
+        pyroslib.subscribe("sensor/distance", handleDistances)
+        pyroslib.subscribe("straight", handleStraight)
         pyroslib.subscribe("straight/steerGain", handleSteerGain)
-        # pyroslib.subscribe("straight/pGain", handlePGain)
-        # pyroslib.subscribe("straight/iGain", handleIGain)
-        # pyroslib.subscribe("straight/dGain", handleDGain)
-        pyroslib.subscribe("sensor/distance", handleSensorDistance)
+        pyroslib.subscribe("straight/pGain", handlePGain)
+        pyroslib.subscribe("straight/iGain", handleIGain)
+        pyroslib.subscribe("straight/dGain", handleDGain)
 
         pyroslib.init("straight-line-agent", onConnected=connected)
 
         print("Started straight-line agent.")
+
+        requestDistanceAtAngle(45)
 
         pyroslib.forever(0.02, loop)
 
