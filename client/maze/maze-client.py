@@ -17,7 +17,7 @@ import pyros.pygamehelper
 WHITE = (255, 255, 255)
 MAX_PING_TIMEOUT = 1
 
-INITIAL_SPEED = 20
+INITIAL_SPEED = 40
 INITIAL_GAIN = 1.7
 
 gain = INITIAL_GAIN
@@ -122,7 +122,7 @@ def scanWidth():
 
 
 def onKeyDown(key):
-    global run, angle, speed, gain
+    global run, angle, speed, gain, gyroAngle
 
     if pyros.gcc.handleConnectKeyDown(key):
         pass
@@ -178,6 +178,9 @@ def onKeyDown(key):
         if gain > 10:
             gain = 10
         pyros.publish("maze/gain", int(round(gain, 1)))
+    elif key == pygame.K_g:
+        pyros.publish("sensor/gyro/continuous", "calibrate,50")
+        gyroAngle = 0
 
 
 def onKeyUp(key):
@@ -225,7 +228,7 @@ while True:
     hpos = pyros.gccui.drawKeyValue("Corridor", str(round(corridorWidth, 1)), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Ideal dist", str(round(idealDistance, 1)), 8, hpos)
 
-    pyros.gccui.drawSmallText("s-scan, r-read, o/p-change angle, DOWN/UP-speed, LEFT/RIGHT-gain, SPACE-stop, RETURN-start", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
+    pyros.gccui.drawSmallText("g-calibrate, s-scan, r-read, o/p-change angle, DOWN/UP-speed, LEFT/RIGHT-gain, SPACE-stop, RETURN-start", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()

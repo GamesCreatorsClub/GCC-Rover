@@ -11,7 +11,12 @@ import traceback
 
 import pyroslib
 
-DEBUG = True
+DEBUG_LEVEL_OFF = 0
+DEBUG_LEVEL_INFO = 1
+DEBUG_LEVEL_DEBUG = 2
+DEBUG_LEVEL_ALL = 3
+DEBUG_LEVEL = DEBUG_LEVEL_ALL
+
 
 MAX_TIMEOUT = 5
 
@@ -22,7 +27,7 @@ MIN_DISTANCE = 100
 
 SQRT2 = math.sqrt(2)
 
-INITIAL_SPEED = 20
+INITIAL_SPEED = 40
 INITIAL_GAIN = 1.7
 
 
@@ -83,6 +88,37 @@ digestTime = time.time()
 readingDistanceContinuous = True
 readingGyroContinuous = True
 
+KGAIN_INDEX = 0
+KpI = 1
+KiI = 2
+KdI = 3
+
+ERROR_INDEX = 0
+PREVIOUS_ERROR_INDEX = 1
+INTEGRAL_INDEX = 2
+DERIVATIVE_INDEX = 3
+DELTA_TIME_INDEX = 4
+
+MAX_FORWARD_DELTA = 50
+MINIMUM_FORWARD_SPEED = 20
+MAX_ANGLE = 45
+
+ACTION_NONE = 0
+ACTION_TURN = 1
+ACTION_DRIVE = 2
+
+lastActionTime = 0
+sideAngleAccum = 0
+lastAngle = 0
+lastForwardDelta = 0
+accumSideDelta = 0
+
+sideGains = [1.1, 0.8, 0.3, 0.05]
+sidePid = [0, 0, 0, 0, 0]
+
+gyroGains = [1.5, 0.8, 0.8, 0.2]
+gyroPid = [0, 0, 0, 0, 0]
+
 
 def doNothing():
     pass
@@ -93,6 +129,33 @@ doGyro = doNothing
 algorithm = doNothing
 algorithmIndex = 0
 algorithmsList = []
+
+
+def log(level, what):
+    if level <= DEBUG_LEVEL:
+        print(what)
+
+
+def logArgs(*msg):
+    tnow = time.time()
+    dt = str((tnow - distanceTimestamp) * 1000) + "ms"
+
+    logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
+    log(DEBUG_LEVEL_DEBUG, logMsg)
+
+
+def formatArgL(label, value, fieldSize):
+    if len(label) > 0:
+        return label + ":" + str(value).ljust(fieldSize)
+    else:
+        return str(value).ljust(fieldSize)
+
+
+def formatArgR(label, value, fieldSize):
+    if len(label) > 0:
+        return label + ":" + str(value).rjust(fieldSize)
+    else:
+        return str(value).rjust(fieldSize)
 
 
 def setAlgorithm(alg):
@@ -253,7 +316,7 @@ def quickstart():
     justScanWidth = False
 
     scanTime = time.time() + SCAN_TIME
-    pyroslib.publish("sensor/distance/read", str(45))
+    pyroslib.publish("sensor/distance/read", str(0))
     setAlgorithm(preStart)
 
 
@@ -267,6 +330,44 @@ def scanWidth():
     preStartInitiateLeftScan()
 
 
+def steer(steerDistance, speed):
+    pyroslib.publish("move/steer", str(int(steerDistance)) + " " + str(int(speed)))
+
+
+def drive(angle, speed):
+    pyroslib.publish("move/drive", str(int(angle)) + " " + str(int(speed)))
+
+
+def requestDistanceAtAngle(angle):
+    pyroslib.publish("sensor/distance/deg", str(angle))
+
+
+def normalise(value, maxValue):
+    if value > maxValue:
+        value = maxValue
+    if value < -maxValue:
+        value = -maxValue
+
+    return value / maxValue
+
+
+def sign(x):
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    else:
+        return 0
+
+
+def resetPid(pidValues):
+    pidValues[ERROR_INDEX] = 0
+    pidValues[PREVIOUS_ERROR_INDEX] = 0
+    pidValues[DERIVATIVE_INDEX] = 0
+    pidValues[INTEGRAL_INDEX] = 0
+    pidValues[DELTA_TIME_INDEX] = 0
+
+
 def preStartInitiateLeftScan():
     global scanTime
     scanTime = time.time() + SCAN_TIME
@@ -278,8 +379,7 @@ def preStartLeftScan():
     global leftDistance
     if time.time() > scanTime:
         leftDistance = avgDistance2
-        if DEBUG:
-            print("LeftDistance = " + str(leftDistance))
+        log(DEBUG_LEVEL_INFO, "LeftDistance = " + str(leftDistance))
         preStartInitiateRightScan()
 
 
@@ -294,8 +394,7 @@ def preStartRightScan():
     global rightDistance
     if time.time() > scanTime:
         rightDistance = avgDistance1
-        if DEBUG:
-            print("RightDistance = " + str(rightDistance))
+        log(DEBUG_LEVEL_INFO, "RightDistance = " + str(rightDistance))
         preStartWarmUp()
 
 
@@ -313,10 +412,9 @@ def preStartWarmUp():
 
     corridorWidth = leftDistance + rightDistance
 
-    idealDistance = (corridorWidth / 2) * SQRT2
+    idealDistance = (corridorWidth / 2)  # * SQRT2
 
-    if DEBUG:
-        print("Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
+    log(DEBUG_LEVEL_INFO, "Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
 
     pyroslib.publish("maze/data/corridor", str(corridorWidth))
     pyroslib.publish("maze/data/idealDistance", str(idealDistance))
@@ -337,10 +435,9 @@ def preStartWarmUp():
         setAlgorithm(preStart)
 
     corridorWidth = leftDistance + rightDistance
-    idealDistance = (corridorWidth / 2) * SQRT2
+    idealDistance = (corridorWidth / 2)  # * SQRT2
 
-    if DEBUG:
-        print("Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
+    log(DEBUG_LEVEL_INFO, "Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
 
     pyroslib.publish("maze/data/corridor", str(corridorWidth))
     pyroslib.publish("maze/data/idealDistance", str(idealDistance))
@@ -350,142 +447,266 @@ def preStartWarmUp():
 
 def preStart():
     if time.time() > scanTime:
-        setAlgorithm(goForward)
+        setAlgorithm(doNothing)
+        followLeftWall()
 
 
-def goForward():
-    global doDistance
-    doDistance = goForwardDistanceHandler
+# def goForward():
+#     global doDistance
+#     # doDistance = goForwardDistanceHandler
+#     # followLeftWall()
 
 
-def goForwardDistanceHandler():
-    global lastWallDistance, wallEndWaitTimeout, distances
-
-    # if "-45.0" in distances:
-    # distance = distances["-45.0"]
-    if turned:
-        distance = distance1
-    else:
-        distance = distance2
-
-    if abs(distance) > idealDistance * 1.75:
-        if DEBUG:
-            print("FORWARD: Got distance " + str(distance) + ", waiting for end of the wall...")
-        if "-90.0" in distances:
-            del distances["-90.0"]
-        pyroslib.publish("sensor/distance/deg", "0")
-        pyroslib.publish("move/steer", str(int(-MAX_ROTATE_DISTANCE * 2)) + " " + str(speed))  # go straight
-
-        wallEndWaitTimeout = 0
-        setAlgorithm(waitForTurning)
-    else:
-        lastWallDistance = distance
-
-        realDistance = distance
-
-        if distance < idealDistance:
-            difference = distance / idealDistance
-
-            difference *= difference
-            difference *= gain
-            if difference > 1:
-                difference = 1
-
-            rotateDistance = MIN_ROTATE_DISTANCE + (MAX_ROTATE_DISTANCE - MIN_ROTATE_DISTANCE) * difference
-            if DEBUG:
-                print("FORWARD: Move away from the wall at distance " + str(realDistance) + " where difference is " + str(round(difference, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
-        else:
-            distance -= idealDistance
-            difference = distance / idealDistance
-
-            difference = 1 - difference
-
-            difference *= difference
-            difference *= gain
-            if difference > 1:
-                difference = 1
-
-            rotateDistance = MIN_ROTATE_DISTANCE + (MAX_ROTATE_DISTANCE - MIN_ROTATE_DISTANCE) * difference
-
-            rotateDistance = -rotateDistance
-            if DEBUG:
-                print("FORWARD: Move to the wall at distance " + str(realDistance) + " where difference is " + str(round(difference, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
-
-        pyroslib.publish("move/steer", str(int(rotateDistance)) + " " + str(speed))
-
-
-def waitForTurning():
-    global doDistance
-    doDistance = waitForTurningDistanceHandler
-
-
-def waitForTurningDistanceHandler():
-    global lastWallDistance, wallEndWaitTimeout, distances
-
-    # if "-90.0" in distances:
-    # distance = distances["-90.0"]
-    distance = distance2
-
-    if abs(distance) >= idealDistance * 1.25:
-        turnDistance = lastWallDistance
-
-        if DEBUG:
-            print("WAIT: Got distance " + str(distance) + ", starting turning at steering distance " + str(-round(turnDistance, 2)))
-        if "-45.0" in distances:
-            del distances["-45.0"]
-        pyroslib.publish("sensor/distance/deg", "45")
-        pyroslib.publish("move/steer", str(int(-turnDistance)) + " " + str(speed))
-
-        setAlgorithm(turning)
-    elif distance < MIN_DISTANCE or wallEndWaitTimeout >= MAX_WALL_END_WAIT_TIMEOUT:
-        setAlgorithm(goForward)
-        if "90.0" in distances:
-            del distances["90.0"]
-
-        delta = idealDistance - distance
-        rotateDistance = MAX_ROTATE_DISTANCE - delta * gain
-        if rotateDistance < 100:
-            rotateDistance = 100
-        pyroslib.publish("sensor/distance/deg", "45")
-        pyroslib.publish("move/steer", str(int(rotateDistance)) + " " + str(speed))
-        if DEBUG:
-            if wallEndWaitTimeout >= MAX_WALL_END_WAIT_TIMEOUT:
-                print("WAIT: Wall end timeot at distance " + str(distance) + " where delta is " + str(round(delta, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
-            else:
-                print("WAIT: Too close to wall " + str(distance) + " where delta is " + str(round(delta, 1)) + " steering at distance " + str(round(rotateDistance, 1)))
-    else:
-        lastWallDistance = distance
-        if DEBUG:
-            print("WAIT: Got distance " + str(distance) + ", waiting...")
-
-    wallEndWaitTimeout += 1
-
-
-def turning():
-    global doDistance
-    doDistance = turningDistanceHandler
-
-
-def turningDistanceHandler():
+def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
+    global stopCountdown, lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
+    global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
     global turned
-    distance = distance2
-    # distance = distances["-45.0"]
 
-    if abs(distance) < idealDistance * 0.75:
-        if DEBUG:
-            print("TURN: Got distance " + str(distance) + ", back to hugging the wall")
+    def log1(*msg):
+        logArgs(*((formatArgL("  dt", round(dt, 3), 5),
+                   formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
+                   formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
+    # if stopCountdown > 0:
+    #     log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
+    #     drive(0, 0)
+    #     stopCountdown -= 1
+    #     if stopCountdown == 0:
+    #         stop()
+    #
+    if forwardDistance < corridorWidth * 0.8:
+        if turned:
+            log1(" LEFT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
+            turnLeft90()
+        else:
+            log1(" RIGHT90 ", formatArgR("cw", round(corridorWidth * 0.8, 1), 5))
+            turnRight90()
+    elif sideDistance > corridorWidth:
         turned = True
-        setAlgorithm(goForward)
-    else:
-        turnDistance = lastWallDistance
-        if turnDistance < corridorWidth / 2:
-            turnDistance = corridorWidth / 2
-        turnDistance = corridorWidth / 2
+        # turnLeft180()
 
-        if DEBUG:
-            print("TURN: Got distance " + str(distance) + ", turning at distance " + str(-turnDistance))
-        pyroslib.publish("move/steer", str(int(-turnDistance)) + " " + str(speed))
+        log1(" T180 ", formatArgR("cw", round(corridorWidth, 1), 5))
+        followRightWall()
+
+    else:
+        if forwardDistance > 1000:
+            forwardDelta = - MAX_FORWARD_DELTA
+
+        if abs(forwardDelta) > MAX_FORWARD_DELTA:
+            forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
+
+        if abs(forwardDelta) < 20:
+            forwardIntegral += forwardDelta
+        else:
+            forwardIntegral = 0
+
+        # forwardError = forwardDistance - STOP_DISTANCE
+        # forwardSpeed = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + forwardIntegral * forwardGains[KiI] + (forwardDelta / dt) * forwardGains[KdI])
+        # forwardSpeed = normalise(forwardSpeed, MAX_FORWARD_SPEED) * MAX_FORWARD_SPEED
+
+        angle = sideGains[KGAIN_INDEX] * ((sideDistance - idealDistance) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
+        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
+
+        lastActionTime -= deltaTime
+
+        if sideAngleAccumCnt > 0:
+            saa = sideAngleAccum / sideAngleAccumCnt
+        else:
+            saa = sideAngleAccum
+
+        if lastActionTime < 0:
+            if abs(saa) > 12.5:
+                nextAction = ACTION_TURN
+            else:
+                nextAction = ACTION_DRIVE
+
+            lastActionTime = 0.5
+            sideAngleAccum = 0
+            sideAngleAccumCnt = 0
+        else:
+            nextAction = ACTION_DRIVE
+            sideAngleAccum += angle
+            sideAngleAccumCnt += 1
+
+        angle = (sideDistance - idealDistance) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
+        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
+        lastAngle = angle
+        accumSideDelta += sideDelta
+
+        if nextAction == ACTION_DRIVE:
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(speed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
+            drive(angle, speed)
+        else:
+            turnDirection = -1
+            if accumSideDelta < 0:
+                turnDirection = 1
+
+            if forwardDelta == 0:
+                forwardDelta = -MAX_FORWARD_DELTA  # moving forward
+
+            forwardDelta = (lastForwardDelta + forwardDelta) / 2
+
+            angleR = saa / 180
+
+            fudgeFactor = 3
+
+            steerDistance = fudgeFactor * turnDirection * forwardDelta / abs(angleR)
+
+            log1(" TURN ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6))
+            steer(steerDistance, speed)
+
+            accumSideDelta = 0
+
+        # lastForwardSpeed = forwardSpeed
+        lastForwardDelta = forwardDelta
+        lastSideDelta = sideDelta
+
+
+def setupFollowSide():
+    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
+
+    setAlgorithm(doNothing)
+    # resetPid(forwardPid)
+    resetPid(sidePid)
+    forwardIntegral = 0
+    stopCountdown = 0
+    sideAngleAccum = 0
+    sideAngleAccumCnt = 0
+    lastActionTime = 0.5
+    lastForwardSpeed = 0
+    lastForwardDelta = 0
+    accumSideDelta = 0
+
+
+def followLeftWall():
+    global doDistance, doGyro
+
+    def followSideHandleDistance():
+        followSide(distance1, deltaDistance1, distance2, deltaDistance2, 1, deltaTime)
+
+    log(DEBUG_LEVEL_DEBUG, "Following left wall")
+    requestDistanceAtAngle("0")
+    setupFollowSide()
+    doDistance = followSideHandleDistance
+    doGyro = doNothing
+
+
+# follow right wall
+def followRightWall():
+    global doDistance, doGyro
+
+    def followSideHandleDistance():
+        followSide(distance2, deltaDistance2, distance1, deltaDistance1, -1, deltaTime)
+
+    log(DEBUG_LEVEL_DEBUG, "Following right wall")
+    setupFollowSide()
+    requestDistanceAtAngle("90")
+    doDistance = followSideHandleDistance
+    doGyro = doNothing
+
+
+def turnForAngle(angle):
+    global doDistance
+
+    def handleDistance():
+        global doDistance
+
+        if turned:
+            forwardDistance = distance2
+            forwardDelta = deltaDistance2
+            sideDistance = distance1
+            sideDelta = deltaDistance1
+        else:
+            forwardDistance = distance1
+            forwardDelta = deltaDistance1
+            sideDistance = distance2
+            sideDelta = deltaDistance2
+
+        logArgs(*((formatArgL("  dt", round(deltaTime, 3), 5),
+                   formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
+                   formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5))))
+
+        if forwardDistance > corridorWidth * 2:
+            if turned:
+                log(DEBUG_LEVEL_INFO, "Go to following right wall after turn")
+                followRightWall()
+            else:
+                log(DEBUG_LEVEL_INFO, "Go to following left wall")
+                followLeftWall()
+        else:
+            if angle < 0:
+                steer(-idealDistance, speed)
+            else:
+                steer(idealDistance, speed)
+
+    doDistance = handleDistance
+
+
+def turnForAngleX(angle):
+    global gyroAngle, gyroStartAngle, doGyro, gyroIntegral
+
+    def log1(*msg):
+        logArgs(*((formatArgL("  dt", round(gyroDeltaTime, 3), 5),
+                formatArgR("  ga", round(gyroAngle, 3), 5), formatArgR("  gda", round(gyroDeltaAngle, 3), 5)) + msg))
+
+    def handleGyroRorate():
+        global gyroAngle, gyroStartAngle, stopCountdown, gyroIntegral
+
+        gyroError = gyroAngle - angle
+        if (angle < 0 and gyroAngle < angle) or (angle >= 0 and gyroAngle > angle):
+            gyroError = 0
+
+        gyroIntegral = 0
+
+        control = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
+        control = normalise(control, 1)
+
+        if sign(control) != sign(angle):
+            if turned:
+                log(DEBUG_LEVEL_INFO, "Go to following right wall after turn")
+                followRightWall()
+            else:
+                log(DEBUG_LEVEL_INFO, "Go to following left wall")
+                followLeftWall()
+        else:
+            # gyroError = gyroAngle - angle
+            #
+            # if abs(gyroDeltaAngle) < 2.5:
+            #     gyroIntegral += gyroError
+            #     if gyroIntegral > MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime):
+            #         gyroIntegral = MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime)
+            # else:
+            #     gyroIntegral = 0
+            #
+            # speed = - gyroGains[KGAIN_INDEX] * (gyroError * gyroGains[KpI] + gyroIntegral * gyroDeltaTime * gyroGains[KiI] + (gyroDeltaAngle / gyroDeltaTime) * gyroGains[KdI])
+            # speed = normalise(speed, MAX_ROTATE_SPEED) * MAX_ROTATE_SPEED
+
+            log1(formatArgR("c", round(control, 1), 5), formatArgR("i", round(gyroIntegral, 1), 5), formatArgR("s", round(speed, 1), 5))
+            if angle > 0:
+                steer(idealDistance, speed)
+            else:
+                steer(-idealDistance, speed)
+
+    log(DEBUG_LEVEL_DEBUG, "Rotating for " + str(angle))
+    gyroAngle = 0
+    gyroIntegral = 0
+    gyroStartAngle = 0
+    setAlgorithm(doNothing)
+    resetPid(gyroPid)
+    doDistance = doNothing
+    doGyro = handleGyroRorate
+
+
+def turnRight90():
+    turnForAngle(90)
+
+
+def turnLeft90():
+    turnForAngle(-90)
+
+
+def turnLeft180():
+    turnForAngle(-180)
 
 
 def connected():
@@ -496,16 +717,14 @@ def handleMazeSpeed(topic, message, groups):
     global speed
 
     speed = int(message)
-    if DEBUG:
-        print("  Got turning speed of " + str(speed))
+    log(DEBUG_LEVEL_INFO, "  Got turning speed of " + str(speed))
 
 
 def handleMazeGain(topic, message, groups):
     global gain
 
     gain = float(message)
-    if DEBUG:
-        print("  Got turning gain of " + str(gain))
+    log(DEBUG_LEVEL_INFO, "  Got turning gain of " + str(gain))
 
 
 def handleMazeCommand(topic, message, groups):
