@@ -133,7 +133,8 @@ sideAngleAccum = 0
 lastAngle = 0
 lastForwardSpeed = 0
 lastForwardDelta = 0
-accumSideDelta = 0
+accumSideDeltas = []
+ACCUM_SIDE_DETALS_SIZE = 4
 
 foundColours = ""
 cvResults = None
@@ -495,7 +496,7 @@ def findCornerDistanceHandler():
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
     global stopCountdown, lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
-    global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
+    global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDeltas
 
     def log1(*msg):
         logArgs(*((formatArgL("  dt", round(dt, 3), 5),
@@ -512,7 +513,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
     elif forwardDistance < STOP_DISTANCE:
         # stop()
         stopCountdown = 3
-
+        log1("Stopping!")
     else:
         if forwardDistance > 1000:
             forwardDelta = - MAX_FORWARD_DELTA
@@ -540,8 +541,14 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         else:
             saa = sideAngleAccum
 
+        accumSideDeltas.append(sideDelta)
+        while len(accumSideDeltas) > ACCUM_SIDE_DETALS_SIZE:
+            del accumSideDeltas[0]
+
+        accumSideDelta = sum(accumSideDeltas) / len(accumSideDeltas)
+
         if lastActionTime < 0:
-            if abs(saa) > 12.5 and forwardSpeed > 0:
+            if (sign(saa) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(saa) > 9 and forwardSpeed > 0:
                 nextAction = ACTION_TURN
             else:
                 nextAction = ACTION_DRIVE
@@ -557,36 +564,37 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
         angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
         lastAngle = angle
-        accumSideDelta += sideDelta
 
         if nextAction == ACTION_DRIVE:
-            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6))
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6))
             drive(angle, forwardSpeed)
         else:
-            turnDirection = -1
-            if accumSideDelta < 0:
-                turnDirection = 1
+            turnDirection = direction
+            dmsg = "turn to wall td:" + str(turnDirection)
+            if saa < 0:
+                turnDirection = -turnDirection
+                dmsg = "turn away the wall td:" + str(turnDirection)
 
             if forwardSpeed < MINIMUM_FORWARD_SPEED:
                 forwardSpeed = MINIMUM_FORWARD_SPEED
 
             forwardSpeed = (forwardSpeed + lastForwardSpeed) / 2
 
-            if forwardDelta == 0:
+            if forwardDelta < 0.1:
                 forwardDelta = -MAX_FORWARD_DELTA  # moving forward
 
             forwardDelta = (lastForwardDelta + forwardDelta) / 2
 
             angleR = saa / 180
 
-            fudgeFactor = 3
+            fudgeFactor = 0.5
 
-            steerDistance = fudgeFactor * turnDirection * forwardDelta / abs(angleR)
+            steerDistance = fudgeFactor * turnDirection * abs(forwardDelta) / abs(angleR)
 
-            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6))
+            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6), dmsg)
             steer(steerDistance, forwardSpeed)
 
-            accumSideDelta = 0
+            accumSideDeltas = []
 
         lastForwardSpeed = forwardSpeed
         lastForwardDelta = forwardDelta
@@ -594,7 +602,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDelta
+    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDeltas
 
     setAlgorithm(doNothing)
     resetPid(forwardPid)
@@ -606,7 +614,7 @@ def setupFollowSide():
     lastActionTime = 0.5
     lastForwardSpeed = 0
     lastForwardDelta = 0
-    accumSideDelta = 0
+    accumSideDeltas = []
 
 
 def followLeftWall():
@@ -972,42 +980,12 @@ def toPILImage(imageBytes):
 def processImageCV(image):
     global cvResults
 
-    def smooth(ar):
-        p = ar[0]
-        for i in range(0, len(ar) - 1):
-            n = ar[i + 1]
-            np = ar[i]
-            ar[i] = p + n / 2
-            p = np
-
-    def findThreshold(ar, start, cutOff):
-        newArray = []
-        for a in ar:
-            newArray.append(a[0])
-
-        ar = newArray
-
-        log(DEBUG_LEVEL_ALL, "Array is " + str(ar))
-
-        sigma = sum(ar)
-        total = len(ar)
-        average = sigma / total
-        log(DEBUG_LEVEL_ALL, "Average value is " + str(average) + " total " + str(total) + " sigma " + str(sigma))
-
-        smooth(ar)
-
-        limit = start
-        while limit < len(ar) and ar[limit] > average * cutOff:
-            limit += 1
-
-        return limit
-
     def findColourNameHSV(hChannel, contour):
 
         mask = numpy.zeros(hChannel.shape[:2], dtype="uint8")
         cv2.drawContours(mask, [contour], -1, 255, -1)
         mask = cv2.erode(mask, None, iterations=2)
-        mean = cv2.mean(hChannel, mask=mask)
+        # mean = cv2.mean(hChannel, mask=mask)
 
         maskAnd = hChannel.copy()
         cv2.bitwise_and(hChannel, mask, maskAnd)
@@ -1015,16 +993,16 @@ def processImageCV(image):
         pyroslib.publish("overtherainbow/processed", PIL.Image.fromarray(cv2.cvtColor(maskAnd, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
         log(DEBUG_LEVEL_ALL, "Published mask ")
 
-        mean = mean[0]
-
+        # mean = mean[0]
+        #
         hist = cv2.calcHist([hChannel], [0], mask, [255], [0, 255], False)
 
-        histMaxIndex = numpy.argmax(hist)
+        value = numpy.argmax(hist)
         # histMax = hist[histMaxIndex]
+        #
+        # log(DEBUG_LEVEL_ALL, "Got mean as " + str(mean) + " max hist " + str(histMaxIndex))
 
-        log(DEBUG_LEVEL_ALL, "Got mean as " + str(mean) + " max hist " + str(histMaxIndex))
-
-        value = histMaxIndex
+        # value = histMaxIndex
 
         # initialize the minimum distance found thus far
         # red < 36 > 330 - 18/165
@@ -1053,24 +1031,6 @@ def processImageCV(image):
             else:
                 # log(DEBUG_LEVEL_ALL, "Keeping contour " + str(i) + " raduis " + str(radius) + " area " + str(area))
                 pass
-
-    def findContours(sChannel, vChannel):
-        gray = sChannel.copy()
-        cv2.addWeighted(sChannel, 0.4, vChannel, 0.6, 0, gray)
-
-        threshHist = cv2.calcHist([gray], [0], None, [256], [0, 256], False)
-        threshLimit = findThreshold(threshHist, 60, 0.2)
-        log(DEBUG_LEVEL_ALL, "Calculated threshold " + str(threshLimit))
-
-        thresh = cv2.threshold(gray, threshLimit, 255, cv2.THRESH_BINARY)[1]
-
-        # find contours in the thresholded image
-        cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[1]
-
-        sanitiseContours(cnts)
-
-        return cnts, thresh
 
     def adaptiveFindContours(sChannel, vChannel):
         gray = sChannel.copy()

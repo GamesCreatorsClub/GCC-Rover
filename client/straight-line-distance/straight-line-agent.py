@@ -416,7 +416,6 @@ def doDriving():
             mode = "Idle:       "
 
 
-
 def loop():
     global renewContinuous, lastDriverTime, digestTime
 
