@@ -17,7 +17,7 @@ import pyros.pygamehelper
 WHITE = (255, 255, 255)
 MAX_PING_TIMEOUT = 1
 
-INITIAL_SPEED = 40
+INITIAL_SPEED = 50
 INITIAL_GAIN = 1.0
 
 gain = INITIAL_GAIN
