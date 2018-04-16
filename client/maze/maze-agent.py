@@ -17,7 +17,7 @@ DEBUG_LEVEL_DEBUG = 2
 DEBUG_LEVEL_ALL = 3
 DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
-INITIAL_SIDE_GAIN = 0.4
+INITIAL_SIDE_GAIN = 0.5
 INITIAL_FORWARD_GAIN = 1.0
 INITIAL_DISTANCE_GAIN = 2.0
 INITIAL_CORNER_GAIN = 1.7
@@ -464,7 +464,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
     localSpeed = speed
     if forwardDistance > 700 and abs(sideDistance - idealDistance) < 50 and sideDelta < 10:
-        localSpeed = speed * 2.5
+        localSpeed = 250
 
     if forwardDistance > 1000:
         forwardDelta = - int(localSpeed / 2)
