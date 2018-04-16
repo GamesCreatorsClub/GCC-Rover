@@ -473,13 +473,22 @@ def processJoysticks():
     ry = int(joystick.axis_states["ry"])
     rd = math.sqrt(rx * rx + ry * ry)
     ra = math.atan2(rx, -ry) * 180 / math.pi
+    if ld < 0.1 < rd:
+        print("telling it to orbit")
 
-    if ld < 0.1 and rd > 0.1:
-        distance = rd
-        distance = calculateExpo(distance, 0.75)
+        if doOrbit and not prepareToOrbit:
+            distance = sensorDistance
+            if distance > 1000:
+                distance = 1000
+            roverSpeed = calcRoverSpeed(rx)
+            print("telling it to orbit")
+            pyros.publish("move/orbit", str(int(sensorDistance + 70)) + " " + str(roverSpeed))
+        else:
+            distance = rd
+            distance = calculateExpo(distance, 0.75)
 
-        roverSpeed = calcRoverSpeed(distance)
-        pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed)))
+            roverSpeed = calcRoverSpeed(distance)
+            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed)))
     elif ld > 0.1 and rd > 0.1:
 
         ry = calculateExpo(ry, 0.75)
@@ -490,16 +499,9 @@ def processJoysticks():
         roverTurningDistance = calcRoverDistance(lx)
         pyros.publish("move/steer", str(roverTurningDistance) + " " + str(roverSpeed))
     elif ld > 0.1:
-        if doOrbit and not prepareToOrbit:
-            distance = sensorDistance
-            if distance > 1000:
-                distance = 1000
-            roverSpeed = calcRoverSpeed(lx)
-            pyros.publish("move/orbit", str(int(sensorDistance + 70)) + " " + str(roverSpeed))
-        else:
-            lx = calculateExpo(lx, 0.75)
-            roverSpeed = calcRoverSpeed(lx) / 4
-            pyros.publish("move/rotate", int(roverSpeed))
+        lx = calculateExpo(lx, 0.75)
+        roverSpeed = calcRoverSpeed(lx) / 4
+        pyros.publish("move/rotate", int(roverSpeed))
     elif kick > 0:
         pass
     else:

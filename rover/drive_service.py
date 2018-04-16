@@ -11,7 +11,7 @@ import traceback
 import pyroslib
 import math
 
-DEBUG = False
+DEBUG = True
 DEBUG_TIMING = True
 
 WHEEL_CIRCUMFERENCE = 15  # 15mm
