@@ -17,6 +17,10 @@ DEBUG_LEVEL_DEBUG = 2
 DEBUG_LEVEL_ALL = 3
 DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
+INITIAL_SIDE_GAIN = 0.4
+INITIAL_FORWARD_GAIN = 1.0
+INITIAL_DISTANCE_GAIN = 2.0
+INITIAL_CORNER_GAIN = 1.7
 
 MAX_TIMEOUT = 5
 
@@ -44,8 +48,8 @@ rightDistance = 0
 IDEAL_DISTANCE_FACTOR = 0.7
 corridorWidth = 400
 idealDistance = (corridorWidth / 2) * IDEAL_DISTANCE_FACTOR
-distanceGain = 2.0
-cornerGain = 1.7
+distanceGain = INITIAL_DISTANCE_GAIN
+cornerGain = INITIAL_CORNER_GAIN
 
 lastWallDistance = 0
 
@@ -113,8 +117,8 @@ accumForwardDeltas = []
 sideAngleAccums = []
 ACCUM_SIDE_DETALS_SIZE = 4
 
-forwardGains = [1.0, 0.8, 0.0, 0.2]
-sideGains = [0.5, 0.92, 0.0, 0.08]
+forwardGains = [INITIAL_FORWARD_GAIN, 0.8, 0.0, 0.2]
+sideGains = [INITIAL_SIDE_GAIN, 0.88, 0.0, 0.12]
 
 
 def doNothing():
@@ -459,8 +463,8 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                    formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
     localSpeed = speed
-    # if forwardDistance > 700 and abs(sideDistance - idealDistance) < 50 and sideDelta < 10:
-    #     localSpeed = speed * 2.5
+    if forwardDistance > 700 and abs(sideDistance - idealDistance) < 50 and sideDelta < 10:
+        localSpeed = speed * 2.5
 
     if forwardDistance > 1000:
         forwardDelta = - int(localSpeed / 2)
@@ -496,7 +500,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         log1(" T180 ", formatArgR("cw", round(corridorWidth, 1), 5))
         pauseBeforeRightWall()
 
-    elif sideDistance < idealDistance * 2 and forwardControl < idealDistance * distanceGain and forwardDelta <= 0:
+    elif sideDistance < corridorWidth and forwardControl < idealDistance * distanceGain and forwardDelta <= 0:
 
         steerDistance = forwardControl * cornerGain
         if steerDistance < 50:
