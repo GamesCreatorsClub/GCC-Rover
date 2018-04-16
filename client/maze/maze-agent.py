@@ -27,11 +27,8 @@ MIN_DISTANCE = 100
 
 SQRT2 = math.sqrt(2)
 
-INITIAL_SPEED = 50
-INITIAL_GAIN = 1.0
+INITIAL_SPEED = 100
 
-
-gain = INITIAL_GAIN
 speed = INITIAL_SPEED
 
 driveAngle = 0
@@ -43,8 +40,12 @@ justScanWidth = False
 
 leftDistance = 0
 rightDistance = 0
+
+IDEAL_DISTANCE_FACTOR = 0.7
 corridorWidth = 400
-idealDistance = 200
+idealDistance = (corridorWidth / 2) * IDEAL_DISTANCE_FACTOR
+distanceGain = 2.0
+cornerGain = 1.7
 
 lastWallDistance = 0
 
@@ -99,7 +100,6 @@ INTEGRAL_INDEX = 2
 DERIVATIVE_INDEX = 3
 DELTA_TIME_INDEX = 4
 
-MAX_FORWARD_DELTA = 50
 MINIMUM_FORWARD_SPEED = 20
 MAX_ANGLE = 45
 
@@ -113,8 +113,8 @@ accumForwardDeltas = []
 sideAngleAccums = []
 ACCUM_SIDE_DETALS_SIZE = 4
 
-forwardGains = [1, 0.8, 0.0, 0.05]
-sideGains = [1.1, 0.8, 0.3, 0.05]
+forwardGains = [1.0, 0.8, 0.0, 0.2]
+sideGains = [0.5, 0.92, 0.0, 0.08]
 
 
 def doNothing():
@@ -409,7 +409,7 @@ def preStartWarmUp():
 
     corridorWidth = leftDistance + rightDistance
 
-    idealDistance = (corridorWidth / 2)  # * SQRT2
+    idealDistance = (corridorWidth / 2) * IDEAL_DISTANCE_FACTOR # * SQRT2
 
     log(DEBUG_LEVEL_INFO, "Corridor is " + str(corridorWidth) + "mm wide. Ideal distance=" + str(idealDistance))
 
@@ -458,17 +458,24 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                    formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
                    formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
 
-    if forwardDistance > 1000:
-        forwardDelta = - MAX_FORWARD_DELTA
+    localSpeed = speed
+    # if forwardDistance > 700 and abs(sideDistance - idealDistance) < 50 and sideDelta < 10:
+    #     localSpeed = speed * 2.5
 
-    if abs(forwardDelta) > MAX_FORWARD_DELTA:
-        forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
+    if forwardDistance > 1000:
+        forwardDelta = - int(localSpeed / 2)
+
+    if abs(forwardDelta) > (localSpeed / 2) * 1.5:
+        forwardDelta = sign(forwardDelta) * int(localSpeed / 2)
+
+    if abs(forwardDelta) < 0.1:
+        forwardDelta = -int(localSpeed / 2)
 
     accumSideDeltas.append(sideDelta)
     while len(accumSideDeltas) > ACCUM_SIDE_DETALS_SIZE:
         del accumSideDeltas[0]
 
-    accumSideDelta = sum(accumSideDeltas) / len(accumSideDeltas)
+    accumSideDelta = sum(accumSideDeltas)  # / len(accumSideDeltas)
 
     accumForwardDeltas.append(forwardDelta)
     while len(accumForwardDeltas) > ACCUM_SIDE_DETALS_SIZE:
@@ -476,55 +483,39 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
     accumForwardDelta = sum(accumForwardDeltas) / len(accumForwardDeltas)
 
-    overshootFactor = idealDistance - sideDistance
-    if overshootFactor > 0:
-        overshootFactor = 0
-    overshootFactor = 0
-
-    forwardError = forwardDistance + overshootFactor
+    forwardError = forwardDistance
 
     forwardControl = forwardGains[KGAIN_INDEX] * (forwardError * forwardGains[KpI] + (forwardDelta / dt) * forwardGains[KdI])
-    forwardControl = normalise(forwardControl, corridorWidth) * corridorWidth
 
-    if not turned and sideDistance > corridorWidth:  # and forwardDistance > corridorWidth:
+    angle = sideGains[KGAIN_INDEX] * ((sideDistance - idealDistance) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
+    angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
+
+    if not turned and (sideDistance > corridorWidth or sideDelta > 150):  # and forwardDistance > corridorWidth:
         turned = True
 
         log1(" T180 ", formatArgR("cw", round(corridorWidth, 1), 5))
         pauseBeforeRightWall()
 
-    # elif forwardControl < idealDistance * 1.5 * gain and forwardDelta < 0:
-    #
-    #     steerDistance = forwardControl
-    #     if turned:
-    #         steerDistance = -steerDistance
-    #
-    #     log1(" CORNER ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("fwe", round(forwardError), 6), formatArgR("osf", round(corridorWidth * gain), 6))
-    #     steer(steerDistance, speed)
-    #
+    elif sideDistance < idealDistance * 2 and forwardControl < idealDistance * distanceGain and forwardDelta <= 0:
+
+        steerDistance = forwardControl * cornerGain
+        if steerDistance < 50:
+            steerDistance = 50
+        if turned:
+            steerDistance = -steerDistance
+
+        log1(" CORNER ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("fwe", round(forwardError), 6), formatArgR("fc", round(forwardControl), 6), formatArgR("a", round(angle), 6))
+        steer(steerDistance, speed)
+
+        sideAngleAccums = []
+        accumSideDeltas = []
+        accumForwardDeltas = []
+
     else:
-        angle = sideGains[KGAIN_INDEX] * ((sideDistance - idealDistance) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
-        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
-
-        lastActionTime -= deltaTime
-
         if len(sideAngleAccums) > 0:
             sideAngleAccum = sum(sideAngleAccums) / len(sideAngleAccums)
         else:
             sideAngleAccum = 0
-
-        # if lastActionTime < 0:
-        #     if (sign(sideAngleAccum) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(sideAngleAccum) > 9:
-        #         nextAction = ACTION_TURN
-        #     else:
-        #         nextAction = ACTION_DRIVE
-        #
-        #     lastActionTime = 0.5
-        #     sideAngleAccums = []
-        # else:
-        #     nextAction = ACTION_DRIVE
-        #     sideAngleAccums.append(angle)
-        #     while len(sideAngleAccums) > ACCUM_SIDE_DETALS_SIZE:
-        #         del sideAngleAccums[0]
 
         if len(sideAngleAccums) > 2 and (sign(sideAngleAccum) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(sideAngleAccum) > 9:
             nextAction = ACTION_TURN
@@ -535,11 +526,9 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                 del sideAngleAccums[0]
             nextAction = ACTION_DRIVE
 
-        # lastActionTime = 0.5
-
         if nextAction == ACTION_DRIVE:
-            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(speed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("fc", round(forwardControl), 6))
-            drive(angle, speed)
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(localSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("fc", round(forwardControl), 6))
+            drive(angle, localSpeed)
         else:
             turnDirection = direction
             dmsg = "turn to wall td:" + str(turnDirection)
@@ -547,18 +536,13 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
                 turnDirection = -turnDirection
                 dmsg = "turn away the wall td:" + str(turnDirection)
 
-            if forwardDelta < 0.1:
-                forwardDelta = -MAX_FORWARD_DELTA  # moving forward
-
-            # forwardDelta = (lastForwardDelta + forwardDelta) / 2
-
             angleR = sideAngleAccum / 180
 
-            fudgeFactor = 0.5
+            fudgeFactor = 1
 
             steerDistance = fudgeFactor * turnDirection * abs(accumForwardDelta) / abs(angleR)
 
-            log1(" TURN ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6))
+            log1(" TURN ", formatArgR("s", round(speed, 1), 6), formatArgR("sd", round(steerDistance, 1), 6), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6), dmsg)
             steer(steerDistance, speed)
 
             accumSideDeltas = []
@@ -566,12 +550,11 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, lastActionTime, forwardIntegral, accumSideDeltas, sideAngleAccums, accumForwardDeltas
+    global stopCountdown, forwardIntegral, accumSideDeltas, sideAngleAccums, accumForwardDeltas
 
     setAlgorithm(doNothing)
     forwardIntegral = 0
     stopCountdown = 0
-    lastActionTime = 0.5
 
     sideAngleAccums = []
     accumSideDeltas = []
@@ -634,13 +617,30 @@ def handleMazeSpeed(topic, message, groups):
     log(DEBUG_LEVEL_INFO, "  Got turning speed of " + str(speed))
 
 
-def handleMazeGain(topic, message, groups):
-    global gain
-
+def handleMazeForwardGain(topic, message, groups):
     gain = float(message)
     forwardGains[KGAIN_INDEX] = gain
+    log(DEBUG_LEVEL_INFO, "  Got forward gain of " + str(gain))
+
+
+def handleMazeSideGain(topic, message, groups):
+    gain = float(message)
     sideGains[KGAIN_INDEX] = gain
-    log(DEBUG_LEVEL_INFO, "  Got turning gain of " + str(gain))
+    log(DEBUG_LEVEL_INFO, "  Got side gain of " + str(gain))
+
+
+def handleMazeDistanceGain(topic, message, groups):
+    global distanceGain
+    gain = float(message)
+    distanceGain = gain
+    log(DEBUG_LEVEL_INFO, "  Got distance gain of " + str(gain))
+
+
+def handleMazeCornerGain(topic, message, groups):
+    global cornerGain
+    gain = float(message)
+    cornerGain = gain
+    log(DEBUG_LEVEL_INFO, "  Got corner gain of " + str(gain))
 
 
 def handleMazeCommand(topic, message, groups):
@@ -684,11 +684,17 @@ if __name__ == "__main__":
 
         pyroslib.subscribe("maze/command", handleMazeCommand)
         pyroslib.subscribe("maze/speed", handleMazeSpeed)
-        pyroslib.subscribe("maze/gain", handleMazeGain)
+        pyroslib.subscribe("maze/sideGain", handleMazeSideGain)
+        pyroslib.subscribe("maze/forwardGain", handleMazeForwardGain)
+        pyroslib.subscribe("maze/distanceGain", handleMazeDistanceGain)
+        pyroslib.subscribe("maze/cornerGain", handleMazeCornerGain)
 
         pyroslib.init("maze-agent", unique=True)
 
         print("Started maze agent.")
+
+        pyroslib.publish("maze/data/corridor", str(corridorWidth))
+        pyroslib.publish("maze/data/idealDistance", str(idealDistance))
 
         pyroslib.forever(0.02, loop)
 

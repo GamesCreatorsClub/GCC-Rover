@@ -17,10 +17,16 @@ import pyros.pygamehelper
 WHITE = (255, 255, 255)
 MAX_PING_TIMEOUT = 1
 
-INITIAL_SPEED = 50
-INITIAL_GAIN = 1.0
+INITIAL_SPEED = 100
+INITIAL_SIDE_GAIN = 0.5
+INITIAL_FORWARD_GAIN = 1.0
+INITIAL_DISTANCE_GAIN = 2.0
+INITIAL_CORNER_GAIN = 1.7
 
-gain = INITIAL_GAIN
+sideGain = INITIAL_SIDE_GAIN
+forwardGain = INITIAL_FORWARD_GAIN
+distanceGain = INITIAL_DISTANCE_GAIN
+cornerGain = INITIAL_CORNER_GAIN
 speed = INITIAL_SPEED
 
 pingLastTime = 0
@@ -51,7 +57,10 @@ bigFont = pyros.gccui.bigFont
 def connected():
     pyros.agent.init(pyros.client, "maze-agent.py")
     pyros.publish("maze/ping", "")
-    pyros.publish("maze/gain", str(gain))
+    pyros.publish("maze/sideGain", str(sideGain))
+    pyros.publish("maze/forwardGain", str(forwardGain))
+    pyros.publish("maze/distanceGain", str(distanceGain))
+    pyros.publish("maze/cornerGain", str(cornerGain))
     pyros.publish("maze/speed", str(speed))
     stop()
 
@@ -122,7 +131,7 @@ def scanWidth():
 
 
 def onKeyDown(key):
-    global run, angle, speed, gain, gyroAngle
+    global run, angle, speed, gyroAngle, sideGain, forwardGain, distanceGain, cornerGain
 
     if pyros.gcc.handleConnectKeyDown(key):
         pass
@@ -182,16 +191,46 @@ def onKeyDown(key):
             speed = 300
 
         pyros.publish("maze/speed", int(speed))
-    elif key == pygame.K_LEFT:
-        gain -= 0.1
-        if gain < 0.1:
-            gain = 0.1
-        pyros.publish("maze/gain", str(float(round(gain, 1))))
-    elif key == pygame.K_RIGHT:
-        gain += 0.1
-        if gain > 10:
-            gain = 10
-        pyros.publish("maze/gain", str(float(round(gain, 1))))
+    elif key == pygame.K_LEFT and (pyros.gcc.rshift or pyros.gcc.lshift):
+        sideGain -= 0.1
+        if sideGain < 0.1:
+            sideGain = 0.1
+        pyros.publish("maze/sideGain", str(float(round(sideGain, 1))))
+    elif key == pygame.K_RIGHT and (pyros.gcc.rshift or pyros.gcc.lshift):
+        sideGain += 0.1
+        if sideGain > 10:
+            sideGain = 10
+        pyros.publish("maze/sideGain", str(float(round(sideGain, 1))))
+    elif key == pygame.K_LEFT and not pyros.gcc.rshift and not pyros.gcc.lshift:
+        forwardGain -= 0.1
+        if forwardGain < 0.1:
+            forwardGain = 0.1
+        pyros.publish("maze/forwardGain", str(float(round(forwardGain, 1))))
+    elif key == pygame.K_RIGHT and not pyros.gcc.rshift and not pyros.gcc.lshift:
+        forwardGain += 0.1
+        if forwardGain > 10:
+            forwardGain = 10
+        pyros.publish("maze/forwardGain", str(float(round(forwardGain, 1))))
+    elif key == pygame.K_LEFTBRACKET and (pyros.gcc.rshift or pyros.gcc.lshift):
+        distanceGain -= 0.1
+        if distanceGain < 0.1:
+            distanceGain = 0.1
+        pyros.publish("maze/distanceGain", str(float(round(distanceGain, 1))))
+    elif key == pygame.K_RIGHTBRACKET and (pyros.gcc.rshift or pyros.gcc.lshift):
+        distanceGain += 0.1
+        if distanceGain > 10:
+            distanceGain = 10
+        pyros.publish("maze/distanceGain", str(float(round(distanceGain, 1))))
+    elif key == pygame.K_LEFTBRACKET and not pyros.gcc.rshift and not pyros.gcc.lshift:
+        cornerGain -= 0.1
+        if cornerGain < 0.1:
+            cornerGain = 0.1
+        pyros.publish("maze/cornerGain", str(float(round(cornerGain, 1))))
+    elif key == pygame.K_RIGHTBRACKET and not pyros.gcc.rshift and not pyros.gcc.lshift:
+        cornerGain += 0.1
+        if cornerGain > 10:
+            cornerGain = 10
+        pyros.publish("maze/cornerGain", str(float(round(cornerGain, 1))))
     elif key == pygame.K_g:
         pyros.publish("sensor/gyro/continuous", "calibrate,50")
         gyroAngle = 0
@@ -238,7 +277,10 @@ while True:
     hpos +=40
 
     hpos = pyros.gccui.drawKeyValue("Selected", str(driveAngle), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Gain", str(round(gain, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Side Gain", str(round(sideGain, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Fwd Gain", str(round(forwardGain, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Dist Gain", str(round(distanceGain, 1)), 8, hpos)
+    hpos = pyros.gccui.drawKeyValue("Cor Gain", str(round(cornerGain, 1)), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Corridor", str(round(corridorWidth, 1)), 8, hpos)
     hpos = pyros.gccui.drawKeyValue("Ideal dist", str(round(idealDistance, 1)), 8, hpos)
 
