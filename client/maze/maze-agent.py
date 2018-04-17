@@ -17,10 +17,11 @@ DEBUG_LEVEL_DEBUG = 2
 DEBUG_LEVEL_ALL = 3
 DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
-INITIAL_SIDE_GAIN = 0.5
+INITIAL_SPEED = 40
+INITIAL_SIDE_GAIN = 0.4
 INITIAL_FORWARD_GAIN = 1.0
-INITIAL_DISTANCE_GAIN = 2.0
-INITIAL_CORNER_GAIN = 1.7
+INITIAL_DISTANCE_GAIN = 1.7
+INITIAL_CORNER_GAIN = 1.3
 
 MAX_TIMEOUT = 5
 
@@ -30,8 +31,6 @@ MIN_ROTATE_DISTANCE = 0
 MIN_DISTANCE = 100
 
 SQRT2 = math.sqrt(2)
-
-INITIAL_SPEED = 100
 
 speed = INITIAL_SPEED
 
@@ -49,7 +48,6 @@ IDEAL_DISTANCE_FACTOR = 0.7
 corridorWidth = 400
 idealDistance = (corridorWidth / 2) * IDEAL_DISTANCE_FACTOR
 distanceGain = INITIAL_DISTANCE_GAIN
-cornerGain = INITIAL_CORNER_GAIN
 
 lastWallDistance = 0
 
@@ -118,6 +116,7 @@ sideAngleAccums = []
 ACCUM_SIDE_DETALS_SIZE = 4
 
 forwardGains = [INITIAL_FORWARD_GAIN, 0.8, 0.0, 0.2]
+cornerGains = [INITIAL_CORNER_GAIN, 0.7, 0.0, 0.3]
 sideGains = [INITIAL_SIDE_GAIN, 0.88, 0.0, 0.12]
 
 
@@ -502,9 +501,10 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
     elif sideDistance < corridorWidth and forwardControl < idealDistance * distanceGain and forwardDelta <= 0:
 
-        steerDistance = forwardControl * cornerGain
-        if steerDistance < 50:
-            steerDistance = 50
+        steerDistance = cornerGains[KGAIN_INDEX] * (forwardError * cornerGains[KpI] + (forwardDelta / dt) * cornerGains[KdI])
+
+        # if steerDistance < 50:
+        #     steerDistance = 50
         if turned:
             steerDistance = -steerDistance
 
@@ -534,7 +534,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
             log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(localSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("fc", round(forwardControl), 6))
             drive(angle, localSpeed)
         else:
-            turnDirection = direction
+            turnDirection = 1
             dmsg = "turn to wall td:" + str(turnDirection)
             if sideAngleAccum < 0:
                 turnDirection = -turnDirection
@@ -595,7 +595,7 @@ def followRightWall():
 def pauseBeforeRightWall():
     global cnt, doDistance
 
-    cnt = 2
+    cnt = 1
 
     def handleDistance():
         global cnt
@@ -608,6 +608,7 @@ def pauseBeforeRightWall():
 
     doDistance = handleDistance
     requestDistanceAtAngle("90")
+    drive(0, speed)
 
 
 def connected():
@@ -641,9 +642,8 @@ def handleMazeDistanceGain(topic, message, groups):
 
 
 def handleMazeCornerGain(topic, message, groups):
-    global cornerGain
     gain = float(message)
-    cornerGain = gain
+    cornerGains[KGAIN_INDEX] = gain
     log(DEBUG_LEVEL_INFO, "  Got corner gain of " + str(gain))
 
 
