@@ -124,12 +124,13 @@ ACTION_NONE = 0
 ACTION_TURN = 1
 ACTION_DRIVE = 2
 
-lastActionTime = 0
 sideAngleAccum = 0
 lastAngle = 0
 lastForwardSpeed = 0
 lastForwardDelta = 0
 accumSideDeltas = []
+sideAngleAccums = []
+accumForwardDeltas = []
 ACCUM_SIDE_DETALS_SIZE = 4
 
 foundColours = ""
@@ -435,7 +436,7 @@ def formatArgR(label, value, fieldSize):
 
 
 def findCorner():
-    global stopCountdown, lastActionTime, doDistance, forwardIntegral
+    global stopCountdown, doDistance, forwardIntegral
 
     log(DEBUG_LEVEL_DEBUG, "Finding corner")
     requestDistanceAtAngle("45")
@@ -490,8 +491,9 @@ def findCornerDistanceHandler():
 
 
 def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction, dt):
-    global stopCountdown, lastActionTime, sideAngleAccum, sideAngleAccumCnt, lastAngle
-    global forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDeltas
+    global stopCountdown, lastAngle
+    global forwardIntegral, lastForwardSpeed, lastForwardDelta
+    global accumSideDeltas, sideAngleAccums, accumForwardDeltas
 
     def log1(*msg):
         logArgs(*((formatArgL("  dt", round(dt, 3), 5),
@@ -516,6 +518,15 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         if abs(forwardDelta) > MAX_FORWARD_DELTA:
             forwardDelta = sign(forwardDelta) * MAX_FORWARD_DELTA
 
+        # if forwardDistance > 1000:
+        #     forwardDelta = - int(MAX_FORWARD_SPEED / 2)
+        #
+        # if abs(forwardDelta) > (MAX_FORWARD_SPEED / 2) * 1.5:
+        #     forwardDelta = sign(forwardDelta) * int(MAX_FORWARD_SPEED / 2)
+        #
+        # if abs(forwardDelta) < 0.1:
+        #     forwardDelta = -int(MAX_FORWARD_SPEED / 2)
+
         if abs(forwardDelta) < 20:
             forwardIntegral += forwardDelta
         else:
@@ -529,44 +540,39 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         angle = sideGains[KGAIN_INDEX] * ((sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI])
         angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
 
-        lastActionTime -= deltaTime
-
-        if sideAngleAccumCnt > 0:
-            saa = sideAngleAccum / sideAngleAccumCnt
-        else:
-            saa = sideAngleAccum
-
         accumSideDeltas.append(sideDelta)
         while len(accumSideDeltas) > ACCUM_SIDE_DETALS_SIZE:
             del accumSideDeltas[0]
 
         accumSideDelta = sum(accumSideDeltas) / len(accumSideDeltas)
 
-        if lastActionTime < 0:
-            if (sign(saa) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(saa) > 9 and forwardSpeed > 0:
-                nextAction = ACTION_TURN
-            else:
-                nextAction = ACTION_DRIVE
+        accumForwardDeltas.append(forwardDelta)
+        while len(accumForwardDeltas) > ACCUM_SIDE_DETALS_SIZE:
+            del accumForwardDeltas[0]
 
-            lastActionTime = 0.5
-            sideAngleAccum = 0
-            sideAngleAccumCnt = 0
+        accumForwardDelta = sum(accumForwardDeltas) / len(accumForwardDeltas)
+
+        if len(sideAngleAccums) > 0:
+            sideAngleAccum = sum(sideAngleAccums) / len(sideAngleAccums)
         else:
-            nextAction = ACTION_DRIVE
-            sideAngleAccum += angle
-            sideAngleAccumCnt += 1
+            sideAngleAccum = 0
 
-        angle = (sideDistance - SIDE_DISTANCE) * sideGains[KpI] + (sideDelta / dt) * sideGains[KdI]
-        angle = - direction * normalise(angle, MAX_ANGLE) * MAX_ANGLE
-        lastAngle = angle
+        if len(sideAngleAccums) > 2 and (sign(sideAngleAccum) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(sideAngleAccum) > 9:
+            nextAction = ACTION_TURN
+            sideAngleAccums = []
+        else:
+            sideAngleAccums.append(angle)
+            while len(sideAngleAccums) > ACCUM_SIDE_DETALS_SIZE:
+                del sideAngleAccums[0]
+            nextAction = ACTION_DRIVE
 
         if nextAction == ACTION_DRIVE:
-            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6))
+            log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(sideAngleAccum), 6))
             drive(angle, forwardSpeed)
         else:
             turnDirection = 1
             dmsg = "turn to wall td:" + str(turnDirection)
-            if saa < 0:
+            if sideAngleAccum < 0:
                 turnDirection = -turnDirection
                 dmsg = "turn away the wall td:" + str(turnDirection)
 
@@ -575,21 +581,17 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
             forwardSpeed = (forwardSpeed + lastForwardSpeed) / 2
 
-            if forwardDelta < 0.1:
-                forwardDelta = -MAX_FORWARD_DELTA  # moving forward
-
-            forwardDelta = (lastForwardDelta + forwardDelta) / 2
-
-            angleR = saa / 180
+            angleR = sideAngleAccum / 180
 
             fudgeFactor = 0.5
 
-            steerDistance = fudgeFactor * turnDirection * abs(forwardDelta) / abs(angleR)
+            steerDistance = fudgeFactor * turnDirection * abs(accumForwardDelta) / abs(angleR)
 
-            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6), dmsg)
+            log1(" TURN ", formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("sd", round(steerDistance, 1), 6), formatArgR("saa", round(sideAngleAccum), 6), formatArgR("asd", round(accumSideDelta), 6), formatArgR("fwd", round(forwardDelta), 6), dmsg)
             steer(steerDistance, forwardSpeed)
 
             accumSideDeltas = []
+            accumForwardDeltas = []
 
         lastForwardSpeed = forwardSpeed
         lastForwardDelta = forwardDelta
@@ -597,17 +599,19 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDeltas
+    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, forwardIntegral, lastForwardSpeed, lastForwardDelta
+    global accumSideDeltas, sideAngleAccums, accumForwardDeltas
 
     setAlgorithm(doNothing)
     forwardIntegral = 0
     stopCountdown = 0
     sideAngleAccum = 0
     sideAngleAccumCnt = 0
-    lastActionTime = 0.5
     lastForwardSpeed = 0
     lastForwardDelta = 0
     accumSideDeltas = []
+    sideAngleAccums = []
+    accumForwardDeltas = []
 
 
 def followLeftWall():
