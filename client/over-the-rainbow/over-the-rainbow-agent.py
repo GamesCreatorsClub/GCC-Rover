@@ -112,17 +112,13 @@ deltaTime = 0
 lastGyroReceivedTime = time.time()
 gyroDeltaTime = 0
 
-forwardGains = [1, 0.8, 0.4, 0.2]
-forwardPid = [0, 0, 0, 0, 0]
 forwardIntegral = 0
 
+forwardGains = [1, 0.8, 0.6, 0.2]
 sideGains = [1.1, 0.8, 0.3, 0.05]
-sidePid = [0, 0, 0, 0, 0]
+gyroGains = [1.8, 0.8, 1, 0.2]
 
-gyroGains = [1.5, 0.8, 0.8, 0.2]
-gyroPid = [0, 0, 0, 0, 0]
-
-KA = 10
+KA = 15
 
 ACTION_NONE = 0
 ACTION_TURN = 1
@@ -287,7 +283,7 @@ def handleOverTheRainbow(topic, message, groups):
     elif cmd == "alg4":
         setAlgorithm(findColours)
     elif cmd == "alg5":
-        setAlgorithm(rotateLeft90)
+        setAlgorithm(findColoursFast)
     elif cmd == "alg6":
         setAlgorithm(rotateRight90)
     elif cmd == "alg7":
@@ -295,7 +291,7 @@ def handleOverTheRainbow(topic, message, groups):
     elif cmd == "alg8":
         setAlgorithm(rotateRight135)
     elif cmd == "alg9":
-        setAlgorithm(algorithm9Start)
+        setAlgorithm(rotate180)
     elif cmd == "alg10":
         setAlgorithm(moveBack)
 
@@ -445,7 +441,6 @@ def findCorner():
     requestDistanceAtAngle("45")
 
     setAlgorithm(doNothing)
-    resetPid(forwardPid)
     stopCountdown = 0
     forwardIntegral = 0
     doDistance = findCornerDistanceHandler
@@ -569,7 +564,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
             log1(" DRIV ", formatArgR("i", round(forwardIntegral, 1), 6), formatArgR("s", round(forwardSpeed, 1), 6), formatArgR("a", round(angle, 1), 5), formatArgR("saa", round(saa), 6), formatArgR("asd", round(accumSideDelta), 6))
             drive(angle, forwardSpeed)
         else:
-            turnDirection = direction
+            turnDirection = 1
             dmsg = "turn to wall td:" + str(turnDirection)
             if saa < 0:
                 turnDirection = -turnDirection
@@ -605,8 +600,6 @@ def setupFollowSide():
     global stopCountdown, sideAngleAccum, sideAngleAccumCnt, lastActionTime, forwardIntegral, lastForwardSpeed, lastForwardDelta, accumSideDeltas
 
     setAlgorithm(doNothing)
-    resetPid(forwardPid)
-    resetPid(sidePid)
     forwardIntegral = 0
     stopCountdown = 0
     sideAngleAccum = 0
@@ -654,6 +647,22 @@ def findColours():
     algorithmsList[:] = []
 
     algorithmsList.append(rotateLeft45)
+    algorithmsList.append(findColoursLoop)
+
+    setAlgorithm(algorithmsList[0])
+
+
+# corner
+def findColoursFast():
+    global foundColours, algorithmIndex, algorithmsList, askedCamera
+
+    log(DEBUG_LEVEL_DEBUG, "Finding colours")
+
+    askedCamera = 0
+    foundColours = ""
+    algorithmIndex = 0
+    algorithmsList[:] = []
+
     algorithmsList.append(findColoursLoop)
 
     setAlgorithm(algorithmsList[0])
@@ -843,8 +852,8 @@ def rotateForAngle(angle):
 
             if abs(gyroDeltaAngle) < 2.5:
                 gyroIntegral += gyroError
-                if gyroIntegral > MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime):
-                    gyroIntegral = MAX_ROTATE_SPEED / (gyroGains[KiI] * gyroDeltaTime)
+                if gyroIntegral > MAX_ROTATE_SPEED * 2 / (gyroGains[KiI] * gyroDeltaTime):
+                    gyroIntegral = MAX_ROTATE_SPEED * 2 / (gyroGains[KiI] * gyroDeltaTime)
             else:
                 gyroIntegral = 0
 
@@ -859,7 +868,6 @@ def rotateForAngle(angle):
     gyroIntegral = 0
     gyroStartAngle = 0
     setAlgorithm(doNothing)
-    resetPid(gyroPid)
     doGyro = handleGyroRorate
 
 
@@ -897,7 +905,7 @@ def allTogether(stringOfFourLetters):
     if stringOfFourLetters == "RYGB":
         setAlgorithms(findCorner, rotateLeft135, followRightWall, rotateLeft135, findCorner, rotateRight135, followLeftWall)
     elif stringOfFourLetters == "RGBY":
-        setAlgorithms(findCorner, rotate180, rotateRight135, followLeftWall, rotateRight135, findCorner)
+        setAlgorithms(findCorner, rotate180, findCorner, rotateRight135, followLeftWall, rotateRight135, findCorner)
     elif stringOfFourLetters == "RBYG":
         setAlgorithms(findCorner, rotateRight135, followLeftWall, rotateRight90, followLeftWall, rotateRight90, followLeftWall)
     elif stringOfFourLetters == "RYBG":
