@@ -605,6 +605,7 @@ def processButtons():
 
 def calcRoverSpeed(speed):
     global fullSpeed
+    spd = speed
     if boost or lunge_back_time > 0 or fullSpeed:
         # spd = int(speed * topSpeed * 2)
         # if spd > 300:
@@ -614,9 +615,14 @@ def calcRoverSpeed(speed):
             spd = -300
         else:
             spd = 0
-        return spd
     else:
-        return int(speed * topSpeed)
+        spd =  int(speed * topSpeed)
+
+    if spd > 300:
+        spd = 300
+    elif spd < -300:
+        spd = -300
+    return spd
 
 
 def calculateExpo(v, expoPercentage):
@@ -686,6 +692,7 @@ def processJoysticks():
             distance = calculateExpo(distance, EXPO)
 
             roverSpeed = calcRoverSpeed(distance)
+
             pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed / dividerR)))
             if DEBUG_JOYSTICK:
                 print("Driving a:" + str(round(ra, 1)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
@@ -711,11 +718,12 @@ def processJoysticks():
                 orbitDistance = sensorDistance + (ly * 5)
 
                 roverSpeed = calcRoverSpeed(lx) / 1
-                print("od: " + str(orbitDistance))
-                print(str(int(orbitDistance + 70)) + " " + str(int(roverSpeed)))
+                # print("speed: " + str(roverSpeed))
+                # print(str(int(orbitDistance + 70)) + " " + str(int(roverSpeed)))
                 pyros.publish("move/orbit", str(int(orbitDistance + 70)) + " " + str(int(roverSpeed)))
                 if DEBUG_JOYSTICK:
                     print("Orbit sen:" + str(int(orbitDistance + 70)) + " s:" + str(roverSpeed) + " ld:" + str(ld) + " rd:" + str(rd))
+                alreadyStopped = 0
             else:
                 olx = lx
                 lx = calculateExpo(lx, EXPO) / 2
