@@ -34,6 +34,7 @@ dividerR = 1
 gyroAngle = 0
 gyroDeltaAngle = 0
 
+
 class modes(Enum):
     NONE = 0
     NORMAL = 1
@@ -41,6 +42,7 @@ class modes(Enum):
     PINOON = 3
     DUCK_SHOOT = 4
     OBSTICAL_COURSE = 5
+
 
 mode = modes.DUCK_SHOOT
 
@@ -148,7 +150,6 @@ def handleGyroData(topic, message, groups):
 
     lastGyroReceivedTime = time.time()
     # print("gyro angle: " + str(gyroAngle))
-
 
 
 def connectToJoystick(printError):
@@ -348,8 +349,8 @@ last_charge = 0
 
 elevation = 0
 
-
 target_angle = 0
+
 
 def moveServo(servoid, angle):
     # TODO move this out to separate service
@@ -387,6 +388,7 @@ def lockDirectionLoop():
             turn_speed = 150
         print("turning at speed " + str(turn_speed) + " to match the angle " + str(gyroAngle) + " to " + str(target_angle))
         pyros.publish("move/rotate", str(int(turn_speed)))
+
 
 def processButtons():
     global lastX3, lastY3, lastSelect, lastStart
@@ -725,7 +727,6 @@ def processJoysticks():
             # if ra != 0:
             #     print("-> move/drive " + str(ra))
             roverSpeed = 0
-
 
             if alreadyStopped < MAX_STOPPING:
                 pyros.publish("move/stop", "0")
