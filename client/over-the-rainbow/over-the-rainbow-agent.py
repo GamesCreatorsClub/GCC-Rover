@@ -83,7 +83,7 @@ digestTime = time.time()
 size = (320, 256)
 
 stopCountdown = 0
-
+counter = 0
 
 def doNothing():
     pass
@@ -124,7 +124,6 @@ ACTION_NONE = 0
 ACTION_TURN = 1
 ACTION_DRIVE = 2
 
-sideAngleAccum = 0
 lastAngle = 0
 lastForwardSpeed = 0
 lastForwardDelta = 0
@@ -494,11 +493,14 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
     global stopCountdown, lastAngle
     global forwardIntegral, lastForwardSpeed, lastForwardDelta
     global accumSideDeltas, sideAngleAccums, accumForwardDeltas
+    global counter
 
     def log1(*msg):
         logArgs(*((formatArgL("  dt", round(dt, 3), 5),
                    formatArgR("  fd", forwardDistance, 5), formatArgR("  fdd", forwardDelta, 5),
                    formatArgR("  sd", sideDistance, 5), formatArgR("  sdd", sideDelta, 5)) + msg))
+
+    counter += 1
 
     if stopCountdown > 0:
         log1(formatArgR("s", round(0, 1), 4), formatArgR("a", round(0, 1), 3))
@@ -557,7 +559,7 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
         else:
             sideAngleAccum = 0
 
-        if len(sideAngleAccums) > 2 and (sign(sideAngleAccum) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(sideAngleAccum) > 9:
+        if counter > 4 and len(sideAngleAccums) > 2 and (sign(sideAngleAccum) != sign(accumSideDelta) or abs(accumSideDelta) < 5) and abs(sideAngleAccum) > 9:
             nextAction = ACTION_TURN
             sideAngleAccums = []
         else:
@@ -599,19 +601,18 @@ def followSide(forwardDistance, forwardDelta, sideDistance, sideDelta, direction
 
 
 def setupFollowSide():
-    global stopCountdown, sideAngleAccum, sideAngleAccumCnt, forwardIntegral, lastForwardSpeed, lastForwardDelta
-    global accumSideDeltas, sideAngleAccums, accumForwardDeltas
+    global stopCountdown, forwardIntegral, lastForwardSpeed, lastForwardDelta
+    global accumSideDeltas, sideAngleAccums, accumForwardDeltas, counter
 
     setAlgorithm(doNothing)
     forwardIntegral = 0
     stopCountdown = 0
-    sideAngleAccum = 0
-    sideAngleAccumCnt = 0
     lastForwardSpeed = 0
     lastForwardDelta = 0
     accumSideDeltas = []
     sideAngleAccums = []
     accumForwardDeltas = []
+    counter = 0
 
 
 def followLeftWall():
