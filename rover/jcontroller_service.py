@@ -41,10 +41,16 @@ class modes(Enum):
     GOLF = 2
     PINOON = 3
     DUCK_SHOOT = 4
-    OBSTICAL_COURSE = 5
-
+    OBSTICLE_COURSE = 5
 
 mode = modes.DUCK_SHOOT
+speeds = [25, 50, 100, 150, 300]
+speed_index = 2
+
+mode = modes.PINOON
+
+wobble = False
+wobble_alpha = 0
 
 # We'll store the states here.
 axis_states = {}
@@ -395,8 +401,8 @@ def processButtons():
     global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY, lastDividerL, lastDividerR, target_charge
     global lastLButton, lastRButton, dividerL, dividerR, directionLock
 
-    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked, charge, mode, elevation, fullSpeed, target_angle
-
+    global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked, charge, mode, elevation, fullSpeed, target_angle, speed_index, speeds
+    global wobble
     # print("Axis states: " + str(axis_states))
 
     # 4 ly up: "TopBtn2", lx r 5: "PinkieBtn", ly down 6: "BaseBtn", lx left 7:"BaseBtn2"
@@ -446,19 +452,13 @@ def processButtons():
 
         if y3 != lastY3:
             if y3 < 0:
-                if topSpeed >= 20:
-                    topSpeed += 10
-                    if topSpeed > 300:
-                        topSpeed = 300
-                else:
-                    topSpeed += 1
+                if speed_index < len(speeds) :
+                    speed_index += 1
+                    topSpeed = speeds[speed_index]
             elif y3 > 0:
-                if topSpeed <= 20:
-                    topSpeed -= 1
-                    if topSpeed < 1:
-                        topSpeed = 1
-                else:
-                    topSpeed -= 10
+                if speed_index > 0:
+                    speed_index -= 1
+                    topSpeed = speeds[speed_index]
 
         if x3 != lastX3:
             if x3 > 0:
@@ -472,11 +472,14 @@ def processButtons():
                         topSpeed = 30
                 elif topSpeed > 50:
                     topSpeed = 50
-
+        if mode != modes.PINOON:
+            wobble = False
         if mode == modes.PINOON:
             fullSpeed = tl
             lastBoost = boost
             boost = tr
+
+            wobble = tr2
             if not boost:
                 if tl2 and not lastTL2:
                     print("prepared to do orbit")
@@ -508,7 +511,7 @@ def processButtons():
             if balLocked:
                 moveServo(9, 220)
 
-            if tl:
+            if tr:
                 moveServo(9, 100)
 
                 balLocked = False
@@ -639,13 +642,17 @@ def calcRoverDistance(distance):
 
 
 def processJoysticks():
-    global kick, dividerR, dividerL, lastDividerR, lastDividerL, boost, lunge_back_time, alreadyStopped, orbitDistance, directionLock, target_angle
+    global kick, dividerR, dividerL, lastDividerR, lastDividerL, boost, lunge_back_time, alreadyStopped, orbitDistance, directionLock, target_angle, wobble, wobble_alpha
 
     lx = float(axis_states["x"])
     ly = float(axis_states["y"])
 
     rx = float(axis_states["rx"])
     ry = float(axis_states["ry"])
+    if wobble:
+        print("wobble")
+        rx = float(math.sin(wobble_alpha * 0.9))
+
 
     if ry < 0.1 and ry > -0.1 and rx < 0.1 and rx > -0.1:
         if boost:
@@ -669,8 +676,10 @@ def processJoysticks():
     ld = math.sqrt(lx * lx + ly * ly)
     rd = math.sqrt(rx * rx + ry * ry)
     ra = math.atan2(rx, -ry) * 180 / math.pi
-    if not directionLock:
 
+
+
+    if not directionLock:
         if ld < 0.1 < rd:
 
             distance = rd
@@ -758,6 +767,8 @@ def handleDistance(topic, message, groups):
 
 # Main event loop
 def loop():
+    global wobble_alpha
+    wobble_alpha += 1
     processButtons()
     if haveJoystickEvent:
         processJoysticks()
