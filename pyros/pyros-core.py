@@ -18,7 +18,7 @@ import paho.mqtt.client as mqtt
 startedInDir = os.getcwd()
 
 AGENTS_CHECK_TIMEOUT = 1.0
-AGENT_KILL_TIMEOT = 20
+AGENT_KILL_TIMEOT = 180
 
 DEBUG_LEVEL = 1
 
