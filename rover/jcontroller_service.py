@@ -21,6 +21,7 @@ import pyroslib as pyros
 DEBUG_AXES = False
 DEBUG_BUTTONS = False
 DEBUG_JOYSTICK = False
+DEBUG_UDP = False
 EXPO = 0.5
 MAX_STOPPING = 10
 
@@ -273,12 +274,15 @@ def readUDPEvents():
             p = str(data, 'utf-8')
 
             if p.startswith("J#"):
+                if DEBUG_UDP:
+                    print("       received " + p)
+
                 kvps = p[2:].split(";")
                 for kvp in kvps:
                     kv = kvp.split("=")
-                    if len(kvp) == 2:
-                        key = kvp[0]
-                        value = kvp[1]
+                    if len(kv) == 2:
+                        key = kv[0]
+                        value = kv[1]
 
                         if key in axis_states:
                             axis_states[key] = float(value)
@@ -344,6 +348,9 @@ axis_states["x"] = 0
 axis_states["y"] = 0
 axis_states["rx"] = 0
 axis_states["ry"] = 0
+
+for button_name in button_names:
+    button_states[button_names[button_name]] = 0
 
 lastBoost = False
 
@@ -659,7 +666,6 @@ def processJoysticks():
         print("wobble")
         rx = float(math.sin(wobble_alpha * 0.9))
 
-
     if ry < 0.1 and ry > -0.1 and rx < 0.1 and rx > -0.1:
         if boost:
             lunge_back_time += 1
@@ -682,8 +688,6 @@ def processJoysticks():
     ld = math.sqrt(lx * lx + ly * ly)
     rd = math.sqrt(rx * rx + ry * ry)
     ra = math.atan2(rx, -ry) * 180 / math.pi
-
-
 
     if not directionLock:
         if ld < 0.1 < rd:
