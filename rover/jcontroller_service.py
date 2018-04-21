@@ -498,7 +498,7 @@ def processButtons():
                 #     pyros.publish("sensor/distance/read", "0")
             else:
                 doOrbit = False
-        elif mode == modes.OBSTICAL_COURSE:
+        if mode == modes.OBSTICAL_COURSE:
             fullSpeed = tl
             pyros.publish("sensor/gyro/continuous", "continue")
 
@@ -510,29 +510,38 @@ def processButtons():
                 pyros.publish("move/stop", "0")
 
             lockDirectionLoop()
-        elif mode == modes.GOLF:
+        if mode == modes.GOLF:
+            print("golf")
+
             fullSpeed = tl
+            print("tr2: " + str(tr2))
             if tr2 and not lastTR2:
                 balLocked = not balLocked
 
             if balLocked:
                 moveServo(9, 220)
+                print("locke")
+
 
             if tr:
                 moveServo(9, 100)
+                print("tr")
 
                 balLocked = False
             else:
                 if not balLocked:
+                    print("not locked")
+
                     moveServo(9, 150)
 
             if bx and bx != lastBX:
                 kick = 1
+                print("kick")
                 pyros.publish("move/drive", "0 300")
                 pyros.sleep(1)
                 pyros.publish("move/drive", "0 0")
 
-        elif mode == modes.DUCK_SHOOT:
+        if mode == modes.DUCK_SHOOT:
             # print("shooting ducks")
 
             if tr:
@@ -580,6 +589,7 @@ def processButtons():
             elevation = 0
         elif bx:
             mode = modes.GOLF
+            print("golf")
         elif by:
             mode = modes.PINOON
 
