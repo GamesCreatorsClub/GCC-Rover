@@ -376,6 +376,56 @@ def handleLift(topic, message, groups):
             print("Cannot move until reset!")
 
 
+def handlePan(topic, message, groups):
+    global direction, stage, s1_pos
+    if DEBUG:
+        print(message)
+
+    if message == "reset":
+        reset()
+        direction = RESET
+    elif message == "resetdown":
+        resetDown()
+        direction = IDLE
+    elif message == "stop":
+        direction = IDLE
+    else:
+        if didReset:
+            if message == "left":
+                s1_pos += 1
+                pyroslib.publish("servo/11", str(s1_pos))
+            elif message == "right":
+                s1_pos -= 1
+                pyroslib.publish("servo/11", str(s1_pos))
+        else:
+            print("Cannot move until reset!")
+
+
+def handleTilt(topic, message, groups):
+    global direction, stage, s2_pos
+    if DEBUG:
+        print(message)
+
+    if message == "reset":
+        reset()
+        direction = RESET
+    elif message == "resetdown":
+        resetDown()
+        direction = IDLE
+    elif message == "stop":
+        direction = IDLE
+    else:
+        if didReset:
+            if message == "up":
+                s2_pos += 1
+                pyroslib.publish("servo/10", str(s2_pos))
+            elif message == "down":
+                s2_pos -= 1
+                pyroslib.publish("servo/10", str(s2_pos))
+        else:
+            print("Cannot move until reset!")
+
+
 def resetDown():
     global direction, stage, s1_pos, s2_pos, timer, didReset
 
@@ -526,6 +576,8 @@ if __name__ == "__main__":
         pyroslib.subscribe("camera/continuous", handleContinuousMode)
         pyroslib.subscribe("camera/format", handleFormat)
         pyroslib.subscribe("camera/lift", handleLift)
+        pyroslib.subscribe("camera/pan", handlePan)
+        pyroslib.subscribe("camera/tilt", handleTilt)
         pyroslib.init("camera-service")
 
         print("  Loading storage details...")
