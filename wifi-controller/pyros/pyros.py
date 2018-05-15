@@ -35,6 +35,10 @@ def isConnected():
     return _connected
 
 
+def host():
+    return _host
+
+
 def publish(topic, message):
     if _connected:
         client.publish(topic, message)
