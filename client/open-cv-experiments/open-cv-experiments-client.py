@@ -64,7 +64,7 @@ imgNo = 0
 ptr = -1
 size = (320, 256)
 
-record = False
+record = True
 sequence = False
 continuous = False
 
@@ -85,7 +85,7 @@ gyroAngle = 0
 
 def connected():
     print("Starting agent... ", end="")
-    pyros.agent.init(pyros.client, "over-the-rainbow-agent.py")
+    pyros.agent.init(pyros.client, "open-cv-experiments-agent.py")
     print("Done.")
 
     pyros.publish("camera/processed/fetch", "")
@@ -471,6 +471,16 @@ def onKeyDown(key):
         pyros.publish("camera/lift", "up")
     elif key == pygame.K_d:
         pyros.publish("camera/lift", "down")
+    elif key == pygame.K_LEFTBRACKET:
+        if pyros.gcc.lshift or pyros.gcc.rshift:
+            pyros.publish("camera/tilt", "up")
+        else:
+            pyros.publish("camera/pan", "left")
+    elif key == pygame.K_RIGHTBRACKET:
+        if pyros.gcc.lshift or pyros.gcc.rshift:
+            pyros.publish("camera/tilt", "down")
+        else:
+            pyros.publish("camera/pan", "right")
     elif key == pygame.K_SLASH:
         pyros.publish("camera/lift", "reset")
     elif key == pygame.K_LEFT:
@@ -501,7 +511,7 @@ pyros.subscribe("overtherainbow/gyro", handleGyro)
 pyros.subscribe("overtherainbow/imagedetails", handleImageDetails)
 pyros.subscribeBinary("overtherainbow/processed", handleCameraProcessed)
 
-pyros.init("over-the-rainbow-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.init("open-cv-experiments-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 
 while True:
