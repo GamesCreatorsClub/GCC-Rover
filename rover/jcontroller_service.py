@@ -38,7 +38,7 @@ gyroDeltaAngle = 0
 
 class modes(Enum):
     NONE = 0
-    NORMAL = 1
+    NORMAL = ' X'
     GOLF = 2
     PINOON = 3
     DUCK_SHOOT = 4
@@ -48,7 +48,7 @@ mode = modes.DUCK_SHOOT
 speeds = [25, 50, 100, 150, 300]
 speed_index = 2
 
-mode = modes.PINOON
+mode = modes.GOLF
 
 wobble = False
 wobble_alpha = 0
@@ -349,8 +349,8 @@ axis_states["y"] = 0
 axis_states["rx"] = 0
 axis_states["ry"] = 0
 
-for button_name in button_names:
-    button_states[button_names[button_name]] = 0
+# for button_name in button_names:
+#     button_states[button_names[button_name]] = 0
 
 lastBoost = False
 
@@ -380,7 +380,9 @@ def setCharge(value):
     if not charge == lastCharge:
         motorSpeed = int(85 + charge * (105 - 85) / 100)
         print("DUCK motor speed: " + str(motorSpeed) + " charge:" + str(charge))
-        moveServo(13, motorSpeed)
+        # moveServo(13, motorSpeed)
+        pyros.publish("servo/13", str(motorSpeed))
+
 
 
 def addCharge(ammount):
@@ -410,6 +412,7 @@ def processButtons():
 
     global topSpeed, prepareToOrbit, continueToReadDistance, doOrbit, boost, kick, lastBoost, lastTL, balLocked, charge, mode, elevation, fullSpeed, target_angle, speed_index, speeds
     global wobble
+    global lup
     # print("Axis states: " + str(axis_states))
 
     # 4 ly up: "TopBtn2", lx r 5: "PinkieBtn", ly down 6: "BaseBtn", lx left 7:"BaseBtn2"
@@ -479,105 +482,114 @@ def processButtons():
                         topSpeed = 30
                 elif topSpeed > 50:
                     topSpeed = 50
-        if mode != modes.PINOON:
-            wobble = False
-        if mode == modes.PINOON:
-            fullSpeed = tl
-            lastBoost = boost
-            boost = tr
+        wobble = False
 
-            wobble = tr2
-            if not boost:
-                if tl2 and not lastTL2:
-                    print("prepared to do orbit")
-                    doOrbit = True
-                    pyros.publish("sensor/distance/read", "0")
+        # print("mode: " + str(mode))
 
-                doOrbit = tl2
-                # if tl2:
-                #     pyros.publish("sensor/distance/read", "0")
-            else:
-                doOrbit = False
-        if mode == modes.OBSTICAL_COURSE:
-            fullSpeed = tl
-            pyros.publish("sensor/gyro/continuous", "continue")
+        # if mode == modes.PINOON:
+        #     fullSpeed = tl
+        #     lastBoost = boost
+        #     boost = tr
+        #
+        #     wobble = tr2
+        #     if not boost:
+        #         if tl2 and not lastTL2:
+        #             print("prepared to do orbit")
+        #             doOrbit = True
+        #             pyros.publish("sensor/distance/read", "0")
+        #
+        #         doOrbit = tl2
+        #         # if tl2:
+        #         #     pyros.publish("sensor/distance/read", "0")
+        #     else:
+        #         doOrbit = False
+        # if mode == modes.OBSTICAL_COURSE:
+        fullSpeed = tl
+        pyros.publish("sensor/gyro/continuous", "continue")
 
-            if tr2 and not lastTR2:
-                directionLock = True
-                target_angle = gyroAngle
-            elif not tr2 and lastTR2:
-                directionLock = False
-                pyros.publish("move/stop", "0")
+        if tr2 and not lastTR2:
+            directionLock = True
+            target_angle = gyroAngle
+        elif not tr2 and lastTR2:
+            directionLock = False
+            pyros.publish("move/stop", "0")
 
-            lockDirectionLoop()
-        if mode == modes.GOLF:
-            print("golf")
+        lockDirectionLoop()
+        # if mode == modes.GOLF:
+        #     print("golf")
+        #
+        #     fullSpeed = tl
+        #     print("tr2: " + str(tr2))
+        #     if tr2 and not lastTR2:
+        #         balLocked = not balLocked
+        #
+        #     if balLocked:
+        #         # moveServo(9, 220)
+        #         moveServo(9, 217)
+        #
+        #         print("locke")
+        #
+        #
+        #     if tr:
+        #         moveServo(9, 100)
+        #         print("tr")
+        #
+        #         balLocked = False
+        #     else:
+        #         if not balLocked:
+        #             print("not locked")
+        #
+        #             moveServo(9, 150)
+        #
+        #     if bx and bx != lastBX:
+        #         kick = 1
+        #         print("kick")
+        #         pyros.publish("move/drive", "0 300")
+        #         pyros.sleep(1)
+        #         pyros.publish("move/drive", "0 0")
 
-            fullSpeed = tl
-            print("tr2: " + str(tr2))
-            if tr2 and not lastTR2:
-                balLocked = not balLocked
-
-            if balLocked:
-                moveServo(9, 220)
-                print("locke")
-
-
-            if tr:
-                moveServo(9, 100)
-                print("tr")
-
-                balLocked = False
-            else:
-                if not balLocked:
-                    print("not locked")
-
-                    moveServo(9, 150)
-
-            if bx and bx != lastBX:
-                kick = 1
-                print("kick")
-                pyros.publish("move/drive", "0 300")
-                pyros.sleep(1)
-                pyros.publish("move/drive", "0 0")
-
-        if mode == modes.DUCK_SHOOT:
+        # if mode == modes.DUCK_SHOOT:
             # print("shooting ducks")
 
-            if tr:
-                pyros.publish("servo/9", "115")
-            else:
-                pyros.publish("servo/9", "175")
+        # if tr:
+        #     pyros.publish("servo/9", "115")
+        # else:
+        #     pyros.publish("servo/9", "175")
+        #
+        # if tl and not lastTL:
+        #     target_charge = 100
+        #     print("charging")
+        # elif not tl and lastTL:
+        #     target_charge = 65
+        #     print("decharging")
+        #
+        #
+        # if charge > target_charge:
+        #     addCharge(-1)
+        # elif charge < target_charge:
+        #     addCharge(1)
+        # setCharge(charge)
+        #
+        # if tr2:
+        #     if elevation > -25:
+        #         print("waaaa")
+        #         elevation -= 1
+        # if tl2:
+        #     if elevation < 25:
+        #         print("weeeee")
+        #         elevation += 1
+        #
+        # servoValue = 150 + elevation
+        # # print("elevation: " + str(elevation) + " servo: " + str(servoValue))
+        # print("targetcharge: " + str(target_charge) + " charge: " + str(charge))
 
-            if tl and not lastTL:
-                target_charge = 100
-            elif not tl and lastTL:
-                target_charge = 65
+        # pyros.publish("servo/12", str(servoValue))
+        # else:
+        #     fullSpeed = tl
 
-            if charge > target_charge:
-                addCharge(-1)
-            elif charge < target_charge:
-                addCharge(1)
-            setCharge(charge)
-
-            if tr2:
-                if elevation > -25:
-                    print("waaaa")
-                    elevation -= 1
-            if tl2:
-                if elevation < 25:
-                    print("weeeee")
-                    elevation += 1
-
-            servoValue = 150 + elevation
-            print("elevation: " + str(elevation) + " servo: " + str(servoValue))
-            pyros.publish("servo/12", str(servoValue))
-        else:
-            fullSpeed = tl
-
-        if mode != modes.DUCK_SHOOT:
-            target_charge = 0
-            setCharge(0)
+        # if mode != modes.DUCK_SHOOT:
+        #     target_charge = 0
+        #     setCharge(0)
 
         if a:
             mode = modes.OBSTICAL_COURSE
