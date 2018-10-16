@@ -19,8 +19,9 @@ import math
 
 import pyros
 import pyros.gcc
-import threading
+import socket
 
+JCONTROLLER_UDP_PORT = 1880
 
 rovers = {
     "2": {
@@ -52,8 +53,6 @@ def connect():
     pyros.connect(rovers[selectedRover]["address"], rovers[selectedRover]["port"], waitToConnect=False)
 
 
-
-javaProcess = None
 textStream = None
 
 GPIO.setwarnings(False)
@@ -63,9 +62,8 @@ GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 SCREEN_MONITOR = 1
 SCREEN_ROVER = 2
-JAVA_PROGRAM = 3
 
-LAST_SCREEN_MODE = JAVA_PROGRAM
+LAST_SCREEN_MODE = SCREEN_ROVER
 
 screenMode = SCREEN_MONITOR
 
@@ -106,8 +104,6 @@ continueToReadDistance = False
 boost = False
 global kick
 kick = 0
-
-javaCntr = 0
 
 joystick.axis_states["x"] = 0
 joystick.axis_states["y"] = 0
@@ -234,14 +230,6 @@ def drawConnection(x, y):
         draw.text((x, y), s, font=font, fill=1)
 
 
-def drawTopSpeed(x, y):
-    spd = calcRoverSpeed(1)
-
-    if pyros.isConnected():
-        x = x - draw.textsize(str(spd), font)[0]
-        draw.text((x, y), str(spd), font=font, fill=1)
-
-
 def doShutdown():
     print("Shutting down now!")
     try:
@@ -275,255 +263,88 @@ def countDownToShutdown():
         sleep(0.5)
 
 
-def stopJavaCode():
-    global javaProcess
+def processJoysticks():
+    global kick
+    global lastSelect, lastStart, screenMode, s
 
-    try:
-        print("Sending kill to java...")
-        if javaProcess.returncode is None:
-            javaProcess.kill()
-            print("Sent kill to java...")
-
-        sleep(0.01)
-        # Just in case - we really need that process killed!!!
-        subprocess.call(["/usr/bin/pkill", "-9", "/usr/bin/java -jar /home/pi/RPIcontroller.jar"])
-    except:
-        pass
-
-    print("Finished killing java...")
-    joystick.disabled = False
-    javaProcess = None
-
-
-def startJavaCode():
-    global javaProcess, textStream
-    print("Starting java...")
-    joystick.disabled = True
-
-    javaProcess = subprocess.Popen(["/usr/bin/java", "-jar", "/home/pi/RPIcontroller.jar"],
-                               bufsize=0,
-                               stdout=subprocess.PIPE,
-                               shell=False,
-                               universal_newlines=True)
-
-
-    textStream = javaProcess.stdout
-    print("Started java.")
-
-
-def processKeys():
-    global lastX3, lastY3, lastSelect, lastStart
-    global lastTL, lastTL2, lastTR, lastTR2, lastA, lastB, lastBX, lastBY
-
-    global screenMode, topSpeed
-
-    global prepareToOrbit, continueToReadDistance, doOrbit, boost, kick
-
-    x3 = int(joystick.axis_states["hat0x"])
-    y3 = int(joystick.axis_states["hat0y"])
-
-    tl = joystick.button_states["tl"]
-    tl2 = joystick.button_states["tl2"]
-    tr = joystick.button_states["tr"]
-    tr2 = joystick.button_states["tr2"]
-    a = joystick.button_states["a"]
-    bb = joystick.button_states["b"]
-    bx = joystick.button_states["x"]
-    by = joystick.button_states["y"]
     start = joystick.button_states["start"]
 
     select = joystick.button_states["select"]
-    if select and select != lastSelect:
-        if screenMode == JAVA_PROGRAM:
-            print("Stopping java...")
-            stopJavaCode()
-            joystick.disabled = False
-            print("Stopped java.")
 
+    if select and select != lastSelect:
         screenMode += 1
-        if screenMode == JAVA_PROGRAM:
-            startJavaCode()
 
         if screenMode > LAST_SCREEN_MODE:
             screenMode = SCREEN_MONITOR
 
-    if screenMode != JAVA_PROGRAM:
-        if start and start != lastStart:
-            sr = int(pyros.gcc.selectedRover)
-            sr += 1
-            if sr > 4:
-                sr = 2
+    if start and start != lastStart:
+        sr = int(pyros.gcc.selectedRover)
+        sr += 1
+        if sr > 4:
+            sr = 2
 
-            pyros.gcc.selectedRover = str(sr)
+        pyros.gcc.selectedRover = str(sr)
 
-            pyros.gcc.connect()
+        pyros.gcc.connect()
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        if y3 != lastY3:
-            if y3 < 0:
-                if topSpeed >= 20:
-                    topSpeed += 10
-                    if topSpeed > 300:
-                        topSpeed = 300
-                else:
-                    topSpeed += 1
-            elif y3 > 0:
-                if topSpeed <= 20:
-                    topSpeed -= 1
-                    if topSpeed < 1:
-                        topSpeed = 1
-                else:
-                    topSpeed -= 10
-
-        if x3 != lastX3:
-            if x3 > 0:
-                topSpeed += 50
-                if topSpeed > 300:
-                    topSpeed = 300
-            elif x3 < 0:
-                if topSpeed >= 100:
-                    topSpeed -= 50
-                    if topSpeed < 30:
-                        topSpeed = 30
-                elif topSpeed > 50:
-                    topSpeed = 50
-
-        if tl and tl != lastTL:
-            prepareToOrbit = True
-            pyros.publish("sensor/distance/read", "0")
-
-        doOrbit = tl
-
-        continueToReadDistance = tl2
-        if tl2 != lastTL2:
-            if tl:
-                pyros.publish("sensor/distance/continuous", "start")
-            else:
-                pyros.publish("sensor/distance/continuous", "stop")
-
-        boost = tr
-
-
-        ## kick
-        if lastTR2 != tr2:
-            if tr2:
-                pyros.publish("servo/9", "90")
-            else:
-                pyros.publish("servo/9", "165")
-
-        if bx and bx != lastBX:
-            kick = 1
-            # pyros.publish("move/drive", "0 300")
-            # pyros.sleep(1)
-            # pyros.publish("move/drive", "0 0")
-
-    lastX3 = x3
-    lastY3 = y3
     lastStart = start
-    lastTL = tl
-    lastTL2 = tl2
-    lastTR = tr
-    lastTR2 = tr2
-    lastA = a
-    lastB = bb
-    lastBX = bx
-    lastBY = by
     lastSelect = select
 
-
-def calcRoverSpeed(speed):
-    if boost:
-        spd = int(speed * topSpeed * 2)
-        if spd > 300:
-            spd = 300
-        return spd
-    else:
-        return int(speed * topSpeed)
-
-
-def calculateExpo(v, expoPercentage):
-    if v >= 0:
-        return v * v * expoPercentage + v * (1.0 - expoPercentage)
-    else:
-        return - v * v * expoPercentage + v * (1.0 - expoPercentage)
-
-
-def calcRoverDistance(distance):
-    if distance >= 0:
-        distance = abs(distance)
-        distance = 1.0 - distance
-        distance += 0.2
-        distance *= 500
-    else:
-        distance = abs(distance)
-        distance = 1.0 - distance
-        distance += 0.2
-        distance = - distance * 500
-
-    return int(distance)
-
-
-def processJoysticks():
-    global kick
-
-    lx = int(joystick.axis_states["x"])
-    ly = int(joystick.axis_states["y"])
-    ld = math.sqrt(lx * lx + ly * ly)
-
-    rx = int(joystick.axis_states["rx"])
-    ry = int(joystick.axis_states["ry"])
-    rd = math.sqrt(rx * rx + ry * ry)
-    ra = math.atan2(rx, -ry) * 180 / math.pi
-    if ld < 0.1 < rd:
-        print("telling it to orbit")
-
-        if doOrbit and not prepareToOrbit:
-            distance = sensorDistance
-            if distance > 1000:
-                distance = 1000
-            roverSpeed = calcRoverSpeed(rx)
-            print("telling it to orbit")
-            pyros.publish("move/orbit", str(int(sensorDistance + 70)) + " " + str(roverSpeed))
+    if pyros.isConnected():
+        x3 = int(joystick.axis_states["hat0x"])
+        y3 = int(joystick.axis_states["hat0y"])
+        if x3 < 0:
+            lleft = 1
+            lright = 0
+        elif x3 > 0:
+            lleft = 0
+            lright = 1
         else:
-            distance = rd
-            distance = calculateExpo(distance, 0.75)
+            lleft = 0
+            lright = 0
 
-            roverSpeed = calcRoverSpeed(distance)
-            pyros.publish("move/drive", str(round(ra, 1)) + " " + str(int(roverSpeed)))
-    elif ld > 0.1 and rd > 0.1:
+        if y3 < 0:
+            lup = 1
+            ldown = 0
+        elif y3 > 0:
+            lup = 0
+            ldown = 1
+        else:
+            lup = 0
+            ldown = 0
 
-        ry = calculateExpo(ry, 0.75)
+        tl = joystick.button_states["tl"]
+        tl2 = joystick.button_states["tl2"]
+        tr = joystick.button_states["tr"]
+        tr2 = joystick.button_states["tr2"]
+        a = joystick.button_states["a"]
+        bb = joystick.button_states["b"]
+        bx = joystick.button_states["x"]
+        by = joystick.button_states["y"]
+        # start = joystick.button_states["start"]
+        #
+        # select = joystick.button_states["select"]
 
-        lx = calculateExpo(lx, 0.75)
+        lx = round(float(joystick.axis_states["x"]), 2)
+        ly = round(float(joystick.axis_states["y"]), 2)
 
-        roverSpeed = -calcRoverSpeed(ry)
-        roverTurningDistance = calcRoverDistance(lx)
-        pyros.publish("move/steer", str(roverTurningDistance) + " " + str(roverSpeed))
-    elif ld > 0.1:
-        lx = calculateExpo(lx, 0.75)
-        roverSpeed = calcRoverSpeed(lx) / 4
-        pyros.publish("move/rotate", int(roverSpeed))
-    elif kick > 0:
-        pass
-    else:
-        pyros.publish("move/drive", str(ra) + " 0")
-        roverSpeed = 0
-        pyros.publish("move/stop", "0")
+        rx = round(float(joystick.axis_states["rx"]), 2)
+        ry = round(float(joystick.axis_states["ry"]), 2)
 
+        msg = "J#"
+        msg += "x=" + str(lx) + ";y=" + str(ly)
+        msg += ";rx=" + str(rx) + ";ry=" + str(ry)
+        msg += ";tl1=" + str(tl2) + ";tl2=" + str(tl)
+        msg += ";tr1=" + str(tr2) + ";tr2=" + str(tr)
+        msg += ";ba=" + str(a) + ";bb=" + str(bb)
+        msg += ";bx=" + str(bx) + ";by=" + str(by)
+        msg += ";lleft=" + str(lleft) + ";lright=" + str(lright)
+        msg += ";lup=" + str(lup) + ";ldown=" + str(ldown)
 
-def handleDistance(topic, message, groups):
-    global sensorDistance, prepareToOrbit
-
-    # print("** distance = " + message)
-    if "," in message:
-        pass
-    else:
-        split = message.split(":")
-        d = float(split[1])
-        if d >= 0:
-            sensorDistance = d
-
-        if prepareToOrbit:
-            prepareToOrbit = False
+        # s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.sendto(bytes(msg, 'utf-8'), (pyros.host(), JCONTROLLER_UDP_PORT))
+        #print("sending to " + str(pyros.host()) + ": " + msg + "     x=" + str(joystick.axis_states["x"]))
 
 
 # Main event loop
@@ -536,44 +357,21 @@ def loop():
 
         drawBattery(106, 58, 21)
         drawConnection(40, 50)
-        drawTopSpeed(105, 50)
+        # drawTopSpeed(105, 50)
         if screenMode == SCREEN_MONITOR:
             drawJoysticks()
         elif screenMode == SCREEN_ROVER:
             drawRover()
-        elif screenMode == JAVA_PROGRAM:
-            if javaCntr == 0:
-                drawText((0, 0), "java.")
-                javaCntr = 1
-            elif javaCntr == 1:
-                drawText((0, 0), "java..")
-                javaCntr = 2
-            elif javaCntr == 2:
-                drawText((0, 0), "java...")
-                javaCntr = 0
 
         oled.display()
 
         screenTick = 0
 
-    processKeys()
-    if screenMode != JAVA_PROGRAM:
-        processJoysticks()
-    else:
-        if javaProcess is not None and javaProcess.returncode is None:
-            line = textStream.readline()
-            print("<< " + str(line))
-            if "kill me" in line:
-                lastSelect = True
-                screenMode += 1
-                if screenMode > LAST_SCREEN_MODE:
-                    screenMode = SCREEN_MONITOR
-                stopJavaCode()
+    processJoysticks()
 
     if joystick.button_states["select"] and joystick.button_states["start"]:
         countDownToShutdown()
 
 
-pyros.subscribe("sensor/distance", handleDistance)
 pyros.init("gcc-controller-#", unique=False, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 pyros.forever(0.02, loop)
