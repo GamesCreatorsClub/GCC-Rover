@@ -28,7 +28,7 @@ pyros $1 restart   storage
 
 echo ""
 echo Uploading     wheels
-pyros $1 upload -s wheels       wheels_service.py
+pyros $1 upload -s wheels       type-ab/wheels_service.py
 echo Restarting    wheels
 pyros $1 restart   wheels
 
