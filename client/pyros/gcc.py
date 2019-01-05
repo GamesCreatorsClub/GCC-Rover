@@ -14,6 +14,8 @@ import socket
 import netifaces
 import sys
 
+DEBUG = False
+
 rovers = []
 doDiscovery = True
 showRovers = False
@@ -205,7 +207,8 @@ else:
 def getHost():
     if len(rovers) == 0:
         return None
-    print("Selected rover " + str(rovers[selectedRover]))
+    if DEBUG:
+        print("Selected rover " + str(rovers[selectedRover]))
     return rovers[selectedRover]["IP"]
 
 
