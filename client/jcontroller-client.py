@@ -120,6 +120,18 @@ button_names = {
     0x2c1: 'dpad_right',
     0x2c2: 'dpad_up',
     0x2c3: 'dpad_down',
+    0xff1: 'lup',
+    0xff2: 'ldown',
+    0xff3: 'lleft',
+    0xff4: 'lright',
+    0xff5: 'lbutton',
+    0xff6: 'rbutton',
+    0xff7: 'tl1',
+    0xff8: 'tr1',
+    0xff9: 'ba',
+    0xffa: 'bb',
+    0xffb: 'bx',
+    0xffc: 'by',
 }
 
 axis_map = []
