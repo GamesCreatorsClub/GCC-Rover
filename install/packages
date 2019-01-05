@@ -47,3 +47,7 @@ PATH=$PATH:/home/pi/pyros/bin
 disable w1 interface
 
 
+network interfaces:
+-------------------
+
+sudo pip3 install netifaces
