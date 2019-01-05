@@ -15,16 +15,19 @@ import pyroscommon as pc
 
 hasHelpSwitch = False
 verboseFlag = True
+debugFlag = False
 
 
 def processSwitches(arguments):
-    global hasHelpSwitch, timeout, verboseFlag
+    global hasHelpSwitch, timeout, verboseFlag, debugFlag
 
     while len(arguments) > 0 and arguments[0].startswith("-"):
         if arguments[0] == "-h":
             helpSwitch = True
         elif arguments[0] == "-v":
             verboseFlag = True
+        elif arguments[0] == "-vv":
+            debugFlag = True
         elif arguments[0] == "-t":
             if len(arguments) > 1:
                 del arguments[0]
@@ -42,6 +45,8 @@ def processSwitches(arguments):
 
 
 args = processSwitches(pc.args)
+
+pc.debug = debugFlag
 
 
 def displayHelp(rc):

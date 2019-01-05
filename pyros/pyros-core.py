@@ -346,6 +346,12 @@ def storeExtraCode(processId, name, payload):
 
     filename = processDir(processId) + "/" + name
 
+    filedir = os.path.split(filename)[0]
+    print("  making file dir " + str(filedir))
+    os.makedirs(filedir, exist_ok=True)
+
+    print("  storing extra file " + str(filename))
+
     try:
         with open(filename, "wb") as textFile:
             textFile.write(payload)
@@ -612,7 +618,7 @@ def onConnect(mqttClient, data, flags, rc):
             mqttClient.subscribe("system/+", 0)
             mqttClient.subscribe("exec/+", 0)
             mqttClient.subscribe("exec/+/process", 0)
-            mqttClient.subscribe("exec/+/process/+", 0)
+            mqttClient.subscribe("exec/+/process/#", 0)
         else:
             important("ERROR: Connection returned error result: " + str(rc))
             sys.exit(rc)
@@ -638,9 +644,9 @@ def onMessage(mqttClient, data, msg):
                     processCommand(processId, payload)
                 else:
                     output(processId, "No such process '" + processId + "'")
-            elif len(split) == 3 and split[1] == "process":
+            elif len(split) >= 3 and split[1] == "process":
                 processId = split[0]
-                name = split[2]
+                name = "/".join(split[2:])
                 storeExtraCode(processId, name, msg.payload)
         elif topic.startswith("system/"):
             commandId = topic[7:]

@@ -101,6 +101,21 @@ hadStart = False
 def executeCommand(client):
     global pyrosClient
 
+    def sendFile(dest_path, filename):
+        with open(filename, "rb") as file:
+            fileContent = file.read()
+
+            extraName = os.path.join(dest_path, os.path.split(filename)[1])
+
+            client.publish("exec/" + processId + "/process/" + extraName, fileContent)
+
+    def processDir(dest_path, dir):
+        for file in os.listdir(dir):
+            if os.path.isdir(file):
+                processDir(os.path.join(dest_path, file), os.path.join(dir, file))
+            else:
+                sendFile(dest_path, os.path.join(dir, file))
+
     pyrosClient = client
 
     with open(filename) as file:
@@ -112,13 +127,11 @@ def executeCommand(client):
         client.publish("exec/" + processId, "make-service")
         client.publish("exec/" + processId, "enable-service")
 
-    for extra in extra_files:
-        with open(extra, "rb") as file:
-            fileContent = file.read()
-
-        extraName = os.path.split(extra)[1]
-
-        client.publish("exec/" + processId + "/process/" + extraName, fileContent)
+    for extra_file in extra_files:
+        if os.path.isdir(extra_file):
+            processDir(os.path.split(extra_file)[1], extra_file)
+        else:
+            sendFile("", extra_file)
 
     return True
 

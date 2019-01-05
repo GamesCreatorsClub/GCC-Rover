@@ -63,9 +63,9 @@ def processOut(line, pid):
         line = line[:len(line) - 1]
 
     if everything:
-        print(processId + ": " + line)
+        print(processId + ": " + line, flush=True)
     else:
-        print(line)
+        print(line, flush=True)
     return True
 
 

@@ -3,8 +3,11 @@ import os
 import time
 import paho.mqtt.client as mqtt
 import socket
+import netifaces
 
 DEFAULT_TIMEOUT = 10
+
+debug = False
 
 args = sys.argv
 binDir = os.path.dirname(args[0])
@@ -114,16 +117,36 @@ def setupListening():
     # sockets.append(listeningSocket)
     # ips.append('255.255.255.255')
 
-    for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
-        sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sck.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sck.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sck.setblocking(0)
-        sck.settimeout(DISCOVERY_TIMEOUT)
+    if debug:
+        print("  Discovered network adapters:")
 
-        # sck.bind((ip, 0))
-        discoverySockets.append(sck)
-        discoveryIPs.append(ip)
+    ifaceNames = netifaces.interfaces()
+
+    for ifaceName in ifaceNames:
+        iface = netifaces.ifaddresses(ifaceName)
+        if netifaces.AF_INET in iface:
+            addrs = iface[netifaces.AF_INET]
+
+            for addr in addrs:
+                if 'broadcast' in addr or ('addr' in addr and addr['addr'] == '127.0.0.1'):
+                    if 'broadcast' in addr:
+                        ip = addr['broadcast']
+                    else:
+                        ip = addr['addr']
+                        i = ip.rfind('.')
+                        ip = ip[:i] + ".255"
+
+                    sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sck.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sck.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    sck.setblocking(0)
+                    sck.settimeout(DISCOVERY_TIMEOUT)
+
+                    # sck.bind((ip, 0))
+                    discoverySockets.append(sck)
+                    discoveryIPs.append(ip)
+                    if debug:
+                        print("    " + str(ip))
 
 
 def sendDiscoveryPacket(packet):
@@ -135,6 +158,8 @@ def sendDiscoveryPacket(packet):
         sendIp = ".".join(ipSplit)
         updated_packet = packet + "IP=" + discoveryIPs[i] + ";PORT=" + str(listeningSocket.getsockname()[1])
         s.sendto(bytes(updated_packet, 'utf-8'), (sendIp, 0xd15c))
+        if debug:
+            print("  send discovery packet to " + str(sendIp) + ":0xd15c, packet=" + str(updated_packet))
         # print("Sent packet " + updated_packet + " to  " + sendIp)
 
 

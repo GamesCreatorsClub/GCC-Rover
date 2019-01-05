@@ -1,0 +1,20 @@
+[Unit]
+Description=PyROS daemon service
+Wants=network-online.target
+After=rsyslog.service
+After=network-online.target
+
+[Service]
+Restart=no
+ExecStart=/home/pi/pyros/linux-service/start-pyros
+ExecStop=/bin/kill -INT $MAINPID
+OOMScoreAdjust=-100
+TimeoutStopSec=10s
+User=pi
+WorkingDirectory=/home/pi/pyros
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty2
+
+[Install]
+WantedBy=multi-user.target

@@ -16,7 +16,7 @@ import threading
 if len(pc.args) == 0:
     sys.exit(os.system(pc.binDir + "/pyros-help"))
 
-localCommands = ["alias", "help"]
+localCommands = ["alias", "discover", "help"]
 commandAlias = {
     "kill": "stop",
     "rm": "remove"
@@ -49,8 +49,8 @@ def readDiscovery():
             for line in lines:
                 split = line.split("=")
                 if len(split) == 2:
-                    key = split[0]
-                    value = split[1]
+                    key = split[0].strip()
+                    value = split[1].strip()
                     res[key] = value
     except BaseException as e:
         print(e)

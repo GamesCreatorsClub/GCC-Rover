@@ -1,0 +1,14 @@
+#!/bin/bash
+
+BINARY=/home/pi/pyros/pyros-core.py
+test -x $BINARY || { echo "$BINARY not avaible";
+        if [ "$1" = "stop" ]; then exit 0;
+        else exit 5; fi; }
+
+echo -n "Starting PyROS daemon... "
+mkdir -p /home/pi/pyros/code
+mkdir -p /home/pi/pyros/logs
+chown pi /home/pi/pyros/code
+chown pi /home/pi/pyros/logs
+cd /home/pi/pyros
+python3 -u 2>&1 >/home/pi/pyros/logs/pyros.log $BINARY
