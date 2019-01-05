@@ -85,6 +85,7 @@ def _handleValues(topic, message, groups):
 def subscribeToPath(path):
     topic = "storage/write/" + path
     pyroslib.subscribe(topic, _handleValues)
+
     _firstValues[path] = None
 
     topic = "storage/read/" + path
