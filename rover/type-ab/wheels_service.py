@@ -140,7 +140,7 @@ def subscribeWheels():
 
 def ensureWheelData(name, motorServo, steerServo):
     calMap = copy.deepcopy(PROTOTYPE_WHEEL_CALIBRATION)
-    calMap["speed"]["servo"] = str(moveServo)
+    calMap["speed"]["servo"] = str(motorServo)
     calMap["deg"]["servo"] = str(steerServo)
     storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calMap)
 
