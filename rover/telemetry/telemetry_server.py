@@ -4,8 +4,7 @@
 # MIT License
 #
 
-from telemetry import streamFromJSON
-from telemetry.telemetry_storage import *
+from telemetry import *
 
 import functools
 import os

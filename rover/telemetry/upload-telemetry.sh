@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo ""
-echo Uploading     vl53l0x
-pyros $1 upload -s vl53l0x vl53l0x_service.py -e vl53l0xWrapper.py vl53l0x_python.so vl53l0xPython.py
-echo Restarting    vl53l0x
-pyros $1 restart   vl53l0x
+echo Uploading     telemetry
+pyros $1 upload -s telemetry telemetry_service.py -e telemetry_logger.py telemetry_server.py telemetry_storage.py telemetry_stream.py telemetry_pyros_logger.py __init__.py
+echo Restarting    telemetry
+pyros $1 restart   telemetry
 
 echo ""
 echo "Currently running processes:"

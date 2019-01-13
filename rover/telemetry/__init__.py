@@ -8,4 +8,5 @@
 from telemetry.telemetry_stream import *
 from telemetry.telemetry_storage import *
 from telemetry.telemetry_logger import *
-from telemetry.telemetry_client import *
+from telemetry.telemetry_server import *
+from telemetry.telemetry_pyros_logger import *

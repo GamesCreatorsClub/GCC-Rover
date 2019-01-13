@@ -36,9 +36,10 @@ class TelemetryStorage:
 
 
 class MemoryTelemetryStorage(TelemetryStorage):
-    def __init__(self):
+    def __init__(self, max_records=100000):
         super(MemoryTelemetryStorage, self).__init__()
         self.streams = {}
+        self.max_records = max_records
 
     def _values(self, stream):
         if stream.name not in self.streams:
@@ -47,13 +48,16 @@ class MemoryTelemetryStorage(TelemetryStorage):
         return self.streams[stream.name]
 
     def store(self, stream, time_stamp, record):
-        self._values(stream).append([time_stamp, record])
+        stream_array = self._values(stream)
+        stream_array.append([time_stamp, record])
+        if len(stream_array) > self.max_records:
+            del stream_array[0:self.max_records//10]
 
     def trim(self, stream, to_timestamp):
         values = self._values(stream)
         if len(values) > 0:
             i = _findTimeIndex(values, to_timestamp)
-            values = values[0:]
+            values = values[i:]
             self.streams[stream.name] = values
 
     def retrieve(self, stream, from_timestamp, to_timestmap, callback):

@@ -176,10 +176,10 @@ class TelemetryStreamStringField(TelemetryStreamField):
         return ptr + self.field_size
 
     def packFormat(self):
-        return str(self.field_size) + 'p'
+        return str(self.field_size) + 's'
 
     def toJSON(self):
-        return super(TelemetryStreamStringField, self).toJSON() + ", \"size\" : " + self.field_size
+        return super(TelemetryStreamStringField, self).toJSON() + ", \"size\" : " + str(self.field_size)
 
     def __eq__(self, other):
         if isinstance(other, TelemetryStreamStringField):
@@ -197,10 +197,10 @@ class TelemetryStreamBytesField(TelemetryStreamField):
         return ptr + self.field_size
 
     def packFormat(self):
-        return str(self.field_size) + 's'
+        return str(self.field_size) + 'p'
 
     def toJSON(self):
-        return super(TelemetryStreamBytesField, self).toJSON() + ", \"size\" : " + self.field_size
+        return super(TelemetryStreamBytesField, self).toJSON() + ", \"size\" : " + str(self.field_size)
 
     def __eq__(self, other):
         if isinstance(other, TelemetryStreamBytesField):
@@ -316,6 +316,15 @@ class TelemetryStreamDefinition:
         record = struct.pack(self.pack_string, time_stamp, *args)
         self.storage.store(self, self, time_stamp, record)
 
+    def rawRecord(self, *args):
+        if self.fixed_length is None:
+            raise NotImplemented("Variable record size len is not yet implemented")
+
+        if self.storage is None:
+            raise NotImplemented("Stream storage is not set")
+
+        return struct.pack(self.pack_string, *args)
+
     def retrieve(self, from_timestamp, to_timestmap):
         if self.storage is None:
             raise NotImplemented("Stream storage is not set")
@@ -339,6 +348,12 @@ class TelemetryStreamDefinition:
 
 
 def streamFromJSON(json):
+    top = {'_key_order': []}
+    stack = [top]
+
+    def addToTop(name, value):
+        stack[len(stack) - 1][name] = value
+        stack[len(stack) - 1]['_key_order'].append(name)
 
     def constToObject(v):
         return False if v == 'false' else True
@@ -356,8 +371,6 @@ def streamFromJSON(json):
     STATE_FLOAT_VALUE = 8
     STATE_STR_VALUE = 9
     STATE_CONST_VALUE = 10
-    top = {}
-    stack = [top]
     i = 0
     length = len(json)
     state = STATE_TOP
@@ -402,8 +415,8 @@ def streamFromJSON(json):
 
         elif state == STATE_BEFORE_VALUE:
             if c == '{':
-                d = {}
-                stack[len(stack) - 1][name] = d
+                d = { '_key_order' : [] }
+                addToTop(name, d)
                 stack.append(d)
                 state = STATE_OBJECT
             elif c == ' ':
@@ -436,13 +449,13 @@ def streamFromJSON(json):
                 state = STATE_FLOAT_VALUE
                 value += c
             elif c == ' ':
-                stack[len(stack) - 1][name] = int(value) * negative
+                addToTop(name, int(value) * negative)
                 state = STATE_AFTER_VALUE
             elif c == ',':
-                stack[len(stack) - 1][name] = int(value) * negative
+                addToTop(name, int(value) * negative)
                 state = STATE_OBJECT
             elif c == '}':
-                stack[len(stack) - 1][name] = int(value) * negative
+                addToTop(name, int(value) * negative)
                 del stack[len(stack) - 1]
                 state = STATE_AFTER_VALUE
             else:
@@ -452,13 +465,13 @@ def streamFromJSON(json):
             if '0' <= c <= '9':
                 value += c
             elif c == ' ':
-                stack[len(stack) - 1][name] = float(value) * negative
+                addToTop(name, float(value) * negative)
                 state = STATE_AFTER_VALUE
             elif c == ',':
-                stack[len(stack) - 1][name] = float(value) * negative
+                addToTop(name, float(value) * negative)
                 state = STATE_OBJECT
             elif c == '}':
-                stack[len(stack) - 1][name] = float(value) * negative
+                addToTop(name, float(value) * negative)
                 del stack[len(stack) - 1]
                 state = STATE_AFTER_VALUE
             else:
@@ -468,13 +481,13 @@ def streamFromJSON(json):
             if 'A' <= c <= 'Z' or 'a' <= c <= 'z' or c == '_':
                 value += c
             elif c == ' ':
-                stack[len(stack) - 1][name] = constToObject(value)
+                addToTop(name, constToObject(value))
                 state = STATE_AFTER_VALUE
             elif c == ',':
-                stack[len(stack) - 1][name] = constToObject(value)
+                addToTop(name, constToObject(value))
                 state = STATE_OBJECT
             elif c == '}':
-                stack[len(stack) - 1][name] = constToObject(value)
+                addToTop(name, constToObject(value))
                 del stack[len(stack) - 1]
                 state = STATE_AFTER_VALUE
             else:
@@ -482,7 +495,7 @@ def streamFromJSON(json):
 
         elif state == STATE_STR_VALUE:
             if c == '"':
-                stack[len(stack) - 1][name] = decodeString(value)
+                addToTop(name, decodeString(value))
                 state = STATE_AFTER_VALUE
             else:
                 value += c
@@ -512,7 +525,7 @@ def streamFromJSON(json):
     stream = TelemetryStreamDefinition(top['name'])
     stream.stream_id = int(top['id'])
     fields = top['fields']
-    for fieldName in fields:
+    for fieldName in fields['_key_order']:
         field = fields[fieldName]
         if 'type' not in field:
             raise SyntaxError("Missing 'type' value for field " + str(fieldName))

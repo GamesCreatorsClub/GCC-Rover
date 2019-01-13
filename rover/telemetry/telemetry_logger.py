@@ -8,7 +8,7 @@ import os
 import struct
 import uuid
 
-from telemetry.telemetry_stream import TelemetryStreamDefinition
+from telemetry import TelemetryStreamDefinition
 
 
 class TelemetryLoggerDestination:
