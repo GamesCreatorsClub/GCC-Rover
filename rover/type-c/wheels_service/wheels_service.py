@@ -65,7 +65,8 @@ i2cBus = smbus.SMBus(I2C_BUS)
 
 shutdown = False
 
-logger = None
+steer_logger = None
+drive_logger = None
 
 kp = 0.7
 ki = 0.29
@@ -116,10 +117,9 @@ wheelCalibrationMap = {}
 wheelMap["servos"] = {}
 
 
-STOP_1 = bytes('S1', 'ASCII')
-STOP_2 = bytes('S2', 'ASCII')
-STOP_3 = bytes('S3', 'ASCII')
-STOP_4 = bytes('S4', 'ASCII')
+STOP_OVERHEAT = bytes('SO', 'ASCII')
+STOP_NO_DATA = bytes('SN', 'ASCII')
+STOP_REACHED_POSITION = bytes('SK', 'ASCII')
 FORWARD = bytes('FO', 'ASCII')
 BACK = bytes('BA', 'ASCII')
 
@@ -185,10 +185,12 @@ class PID:
             delta_time = now - self.last_time
 
             self.p = error
-            if abs(error) > 0.1:
-                self.i += error * delta_time
-            else:
+            if (self.last_error < 0 and error > 0) or (self.last_error > 0 and error < 0):
                 self.i = 0.0
+            elif abs(error) <= 0.1:
+                self.i = 0.0
+            else:
+                self.i += error * delta_time
 
             if delta_time > 0:
                 self.d = (error - self.last_error) / delta_time
@@ -399,7 +401,7 @@ def interpolate(value, zerostr, maxstr):
     return (maxValue - zero) * value + zero
 
 
-def driveWheel(wheelName, curDeg):
+def driveWheel(wheelName, curDeg, status):
 
     def stopAll():
         GPIO.output(enPin, GPIO.LOW)
@@ -430,12 +432,12 @@ def driveWheel(wheelName, curDeg):
                 del wheel['overheat']
             else:
                 stopAll()
-                logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_1, curDeg, 0, 0, 0, 0, 0, 0, 0)
+                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
                 return
 
         if curDeg is None or deg is None:
             stopAll()
-            logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_2, curDeg, 0, 0, 0, 0, 0, 0, 0)
+            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_NO_DATA, curDeg, status, 0, 0, 0, 0, 0, 0, 0)
         else:
 
             pid = wheel['pid']
@@ -453,7 +455,7 @@ def driveWheel(wheelName, curDeg):
             elif speed < 1:
                 speed = 0.0
                 stopAll()
-                logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_3, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_REACHED_POSITION, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 return
 
             if speed > 50:
@@ -464,7 +466,7 @@ def driveWheel(wheelName, curDeg):
                         del wheel['termal']
                         wheel['overheat'] = now
                         stopAll()
-                        logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_4, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+                        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                         return
                 else:
                     wheel['termal'] = now
@@ -474,13 +476,13 @@ def driveWheel(wheelName, curDeg):
             if forward:
                 GPIO.output(enPin, GPIO.LOW)
                 motor_pwm.ChangeDutyCycle(speed)
-                logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 if DEBUG_TURN:
                     print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
             else:
                 GPIO.output(enPin, GPIO.HIGH)
                 motor_pwm.ChangeDutyCycle(100.0 - speed)
-                logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 if DEBUG_TURN:
                     print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
 
@@ -531,7 +533,7 @@ def prepareAndSteerWheel(wheelName):
     if angle < 0:
         angle += 360
 
-    driveWheel(wheelName, angle)
+    driveWheel(wheelName, angle, status)
 
     if 'overheat' in wheel:
         status |= STATUS_ERROR_MOTOR_OVERHEAT
@@ -545,6 +547,7 @@ def prepareAndDriveWheel(wheelName):
 
     address = wheelSpeedCalMap['nrf']
 
+    started_time = time.time()
     nRF2401.setReadPipeAddress(0, address)
     nRF2401.setWritePipeAddress(address)
 
@@ -556,11 +559,11 @@ def prepareAndDriveWheel(wheelName):
         speed = None
 
     if speed is not None:
-        speed = int(127 - (speed * 127 / 100))
+        send_speed = int(127 - (speed * 127 / 100))
 
-        data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, speed, speed], NRF_PACKET_SIZE)
+        data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
         nRF2401.swithToTX()
-        done = nRF2401.sendData(data)
+        done = nRF2401.sendData(data, 0.015)
         if done:
             nRF2401.swithToRX()
             nRF2401.startListening()
@@ -580,10 +583,16 @@ def prepareAndDriveWheel(wheelName):
                 i2c_status = p[10]
                 pwm_reg = p[11]
 
+                now = time.time()
+                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos_deg, 0, (now- started_time), speed)
                 return wheel_pos_deg, 0
             else:
+                now = time.time()
+                drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_RX_FAILED, (now - started_time), speed)
                 return 0, STATUS_ERROR_RX_FAILED
         else:
+            now = time.time()
+            drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_TX_FAILED, (now - started_time), speed)
             return 0, STATUS_ERROR_TX_FAILED
 
 
@@ -697,20 +706,29 @@ if __name__ == "__main__":
         print("  Initialising radio...")
         nRF2401.initNRF(0, 0, NRF_PACKET_SIZE, NRF_DEFAULT_ADDRESS, NRF_CHANNEL)
 
-        logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-steer')
-        logger.addFixedString('wheel', 2)
-        logger.addFixedString('action', 2)
-        logger.addDouble('current')
-        logger.addDouble('speed')
-        logger.addDouble('pid_last_output')
-        logger.addDouble('pid_last_delta')
-        logger.addDouble('pid_set_point')
-        logger.addDouble('pid_i')
-        logger.addDouble('pid_d')
-        logger.addDouble('pid_last_error')
+        steer_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-steer')
+        steer_logger.addFixedString('wheel', 2)
+        steer_logger.addFixedString('action', 2)
+        steer_logger.addDouble('current')
+        steer_logger.addByte('status')
+        steer_logger.addDouble('speed')
+        steer_logger.addDouble('pid_last_output')
+        steer_logger.addDouble('pid_last_delta')
+        steer_logger.addDouble('pid_set_point')
+        steer_logger.addDouble('pid_i')
+        steer_logger.addDouble('pid_d')
+        steer_logger.addDouble('pid_last_error')
+
+        drive_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-drive')
+        drive_logger.addFixedString('wheel', 2)
+        drive_logger.addDouble('pos')
+        drive_logger.addByte('status')
+        drive_logger.addTimestamp('time')
+        drive_logger.addByte('speed', signed=True)
 
         print("  Initialising telemetry logging...")
-        logger.init()
+        steer_logger.init()
+        drive_logger.init()
         print("  Telemetry logging initialised.")
 
         print("Started wheels service.")

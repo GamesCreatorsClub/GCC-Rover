@@ -201,7 +201,7 @@ def sendString(data):
     sendString(_stringToBytes(data))
 
 
-def sendData(buf):
+def sendData(buf, timeout=1):
     writeFlushTX()
     _clearInterrupts()
 
@@ -216,7 +216,7 @@ def sendData(buf):
     _clearCE()
 
     now = time.time()
-    while time.time() - now < 1:
+    while time.time() - now < timeout:
         s = _readRegister(_STATUS) & 0x20
         if s > 0:
             return True
