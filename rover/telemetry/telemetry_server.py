@@ -24,10 +24,15 @@ class TelemetryServer:
         stream = streamFromJSON(stream_definition)
         if stream.name in self.streams:
 
-            old_stream = self.streams[stream.stream.name]
-
-            if stream != old_stream:
+            old_stream = self.streams[stream.name]
+            stream.stream_id = old_stream.stream_id
+            if stream.toJSON() != old_stream.toJSON():
+                print("ERROR: Someone tried to register different streams: " + stream.name)
+                print("old_stream=" + old_stream.toJSON())
+                print("new_stream=" + stream.toJSON())
                 return -1
+            else:
+                return old_stream.stream_id
 
         else:
             self.streams[stream.name] = stream

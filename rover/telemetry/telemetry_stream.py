@@ -166,6 +166,18 @@ class TelemetryStreamDoubleField(TelemetryStreamField):
         return 'd'
 
 
+class TelemetryStreamTimestampField(TelemetryStreamField):
+    def __init__(self, name):
+        super(TelemetryStreamTimestampField, self).__init__(name, TYPE_DOUBLE, 8)
+
+    def _store(self, buffer, ptr, value):
+        buffer[ptr:ptr+8] = struct.pack('d', value)
+        return ptr + self.field_size
+
+    def packFormat(self):
+        return 'd'
+
+
 class TelemetryStreamStringField(TelemetryStreamField):
     def __init__(self, name, size):
         super(TelemetryStreamStringField, self).__init__(name, TYPE_STRING, size)
@@ -229,11 +241,11 @@ class TelemetryStreamDefinition:
         self.fields.append(TelemetryStreamWordField(name, signed))
         return self
 
-    def addInt(self, name, signed=False):
+    def addInt(self, name, signed=True):
         self.fields.append(TelemetryStreamIntField(name, signed))
         return self
 
-    def addLong(self, name, signed=False):
+    def addLong(self, name, signed=True):
         self.fields.append(TelemetryStreamLongField(name, signed))
         return self
 
@@ -242,6 +254,10 @@ class TelemetryStreamDefinition:
         return self
 
     def addDouble(self, name):
+        self.fields.append(TelemetryStreamDoubleField(name))
+        return self
+
+    def addTimestamp(self, name):
         self.fields.append(TelemetryStreamDoubleField(name))
         return self
 
