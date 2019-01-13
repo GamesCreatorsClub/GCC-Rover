@@ -724,7 +724,7 @@ if __name__ == "__main__":
         drive_logger.addDouble('pos')
         drive_logger.addByte('status')
         drive_logger.addTimestamp('time')
-        drive_logger.addByte('speed', signed=True)
+        drive_logger.addWord('speed', signed=True)
 
         print("  Initialising telemetry logging...")
         steer_logger.init()
