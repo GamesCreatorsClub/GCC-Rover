@@ -34,7 +34,7 @@ pyros $1 restart   wheels
 
 echo ""
 echo Uploading     drive
-pyros $1 upload -s drive        drive_service.py
+pyros $1 upload -s drive        type-ab/drive_service.py
 echo Restarting    drive
 pyros $1 restart   drive
 
