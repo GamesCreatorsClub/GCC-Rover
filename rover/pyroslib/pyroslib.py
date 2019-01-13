@@ -19,6 +19,7 @@ _name = "undefined"
 _host = None
 _port = 1883
 
+DEBUG_SUBSCRIBE = False
 
 def doNothing():
     pass
@@ -63,7 +64,15 @@ def subscribe(topic, method):
     _subscribers.append(topic)
     regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
     regex = re.compile(regexString)
-    _regexTextToLambda[regex] = method
+
+    has_self = hasattr(method, '__self__')
+    all_args_count = (3 + (1 if has_self else 0))
+
+    has_groups = method.__code__.co_argcount == all_args_count
+    _regexTextToLambda[regex] = (has_groups, method)
+
+    if DEBUG_SUBSCRIBE:
+        print("*** stored method " + str(method) + " with has group " + str(has_groups) + " and it self is " + str(has_self) + ", expected arg no " + str(all_args_count))
 
     if _connected:
         client.subscribe(topic, 0)
@@ -73,7 +82,16 @@ def subscribeBinary(topic, method):
     _subscribers.append(topic)
     regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
     regex = re.compile(regexString)
-    _regexBinaryToLambda[regex] = method
+
+    has_self = hasattr(method, '__self__')
+    all_args_count = (3 + (1 if has_self else 0))
+
+    has_groups = method.__code__.co_argcount == all_args_count
+
+    _regexBinaryToLambda[regex] = (has_groups, method)
+
+    if DEBUG_SUBSCRIBE:
+        print("*** stored method " + str(method) + " with has group " + str(has_groups) + " and it self is " + str(has_self) + ", expected arg no " + str(all_args_count))
 
     if _connected:
         client.subscribe(topic, 0)
@@ -130,18 +148,26 @@ def _onMessage(mqttClient, data, msg):
         for regex in _regexTextToLambda:
             matching = regex.match(topic)
             if matching:
-                method = _regexTextToLambda[regex]
-
                 payload = str(msg.payload, 'utf-8')
-                method(topic, payload, matching.groups())
+
+                (has_groups, method) = _regexTextToLambda[regex]
+
+                if has_groups:
+                    method(topic, payload, matching.groups())
+                else:
+                    method(topic, payload)
+
                 return
 
         for regex in _regexBinaryToLambda:
             matching = regex.match(topic)
             if matching:
-                method = _regexBinaryToLambda[regex]
+                (has_groups, method) = _regexBinaryToLambda[regex]
 
-                method(topic, msg.payload, matching.groups())
+                if has_groups:
+                    method(topic, msg.payload, matching.groups())
+                else:
+                    method(topic, msg.payload)
                 return
 
     except Exception as ex:
