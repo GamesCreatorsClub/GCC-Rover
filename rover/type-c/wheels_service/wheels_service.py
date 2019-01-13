@@ -6,14 +6,17 @@
 # MIT License
 #
 
-import traceback
-import time
-import re
-import copy
-import pyroslib
-import storagelib
-import smbus
 import RPi.GPIO as GPIO
+
+import copy
+import nRF2401
+import pyroslib
+import re
+import smbus
+import storagelib
+import telemetry
+import time
+import traceback
 
 #
 # wheels service
@@ -25,6 +28,10 @@ import RPi.GPIO as GPIO
 #     - storage map
 #
 
+NRF_CHANNEL = 1
+NRF_PACKET_SIZE = 17
+NRF_DEFAULT_ADDRESS = [ord('W'), ord('H'), ord('L'), ord('0'), ord('0')]
+
 DEBUG = False
 DEBUG_SPEED = False
 DEBUG_SPEED_VERBOSE = False
@@ -34,7 +41,21 @@ DEBUG_TURN = False
 OVERHEAT_PROTECTION = 2.5
 OVERHEAT_COOLDOWN = 2.5
 
-DEG_RAMP_UP = 2
+MSG_TYPE_STOP_ALL = 0
+MSG_TYPE_READ_ONLY = 1
+MSG_TYPE_SET_POSITION = 2
+MSG_TYPE_SET_SPEED = 3
+MSG_TYPE_SET_PID = 4
+MSG_TYPE_SET_RAW_BR = 101
+
+STATUS_ERROR_I2C_WRITE = 1
+STATUS_ERROR_I2C_READ = 2
+STATUS_ERROR_MOTOR_OVERHEAT = 4
+STATUS_ERROR_MAGNET_HIGH = 8
+STATUS_ERROR_MAGNET_LOW = 16
+STATUS_ERROR_MAGNET_NOT_DETECTED = 32
+STATUS_ERROR_RX_FAILED = 64
+STATUS_ERROR_TX_FAILED = 128
 
 I2C_BUS = 1
 I2C_MULTIPLEXER_ADDRESS = 0x70
@@ -44,10 +65,13 @@ i2cBus = smbus.SMBus(I2C_BUS)
 
 shutdown = False
 
+logger = None
+
 kp = 0.7
 ki = 0.29
 kd = 0.01
 kg = 1.0
+
 deadband = 1
 
 PWM = [
@@ -90,6 +114,14 @@ pwmIndex = 0
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
+
+
+STOP_1 = bytes('S1', 'ASCII')
+STOP_2 = bytes('S2', 'ASCII')
+STOP_3 = bytes('S3', 'ASCII')
+STOP_4 = bytes('S4', 'ASCII')
+FORWARD = bytes('FO', 'ASCII')
+BACK = bytes('BA', 'ASCII')
 
 
 def normaiseAngle(a):
@@ -165,6 +197,7 @@ class PID:
 
             output *= self.kg
 
+            self.set_point = set_point
             self.last_output = output
             self.last_error = error
             self.last_time = now
@@ -245,10 +278,10 @@ def subscribeWheels():
 
 def ensureWheelData(name, motorEnablePin, motorPWMPin, i2cAddress, nrfAddress):
     calMap = copy.deepcopy(PROTOTYPE_WHEEL_CALIBRATION)
-    calMap["steer"]["en_pin"] = str(motorEnablePin)
-    calMap["steer"]["pwm_pin"] = str(motorPWMPin)
-    calMap['speed']["addr"] = str(nrfAddress)
-    calMap['deg']["i2c"] = str(i2cAddress)
+    calMap['steer']['en_pin'] = str(motorEnablePin)
+    calMap['steer']['pwm_pin'] = str(motorPWMPin)
+    calMap['speed']['addr'] = str(nrfAddress)
+    calMap['deg']['i2c'] = str(i2cAddress)
     storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calMap)
 
 
@@ -280,15 +313,19 @@ def printPidCal():
 
 def setupWheelWithCal(wheelName):
     wheel = wheelMap[wheelName]
+    wheelCalMap = wheelCalibrationMap[wheelName]
 
-    enPin = int(wheelCalibrationMap[wheelName]["steer"]["en_pin"])
+    enPin = int(wheelCalMap['steer']['en_pin'])
     GPIO.setup(enPin, GPIO.OUT)
 
-    pwm_pin = int(wheelCalibrationMap[wheelName]["steer"]["pwm_pin"])
+    pwm_pin = int(wheelCalMap['steer']['pwm_pin'])
     GPIO.setup(pwm_pin, GPIO.OUT)
     motor_pwm = GPIO.PWM(pwm_pin, 1000)
     motor_pwm.start(0)
-    wheelCalibrationMap[wheelName]["steer"]["pwm"] = motor_pwm
+    wheelCalMap['steer']['pwm'] = motor_pwm
+
+    address = wheelCalMap['speed']['addr']
+    wheelCalMap['speed']['nrf'] = [ord(address[0]), ord(address[1]), ord(address[2]), ord(address[3]), ord(address[4])]
 
 
 def loadStorage():
@@ -371,7 +408,7 @@ def driveWheel(wheelName, curDeg):
     wheel = wheelMap[wheelName]
     enPin = int(wheelCalibrationMap[wheelName]['steer']['en_pin'])
     steerDir = int(wheelCalibrationMap[wheelName]['steer']['dir'])
-    if "pwm" not in wheelCalibrationMap[wheelName]["steer"]:
+    if "pwm" not in wheelCalibrationMap[wheelName]['steer']:
         pwm_pin = int(wheelCalibrationMap[wheelName]['steer']['pwm_pin'])
         GPIO.setup(pwm_pin, GPIO.OUT)
         motor_pwm = GPIO.PWM(pwm_pin, 1000)
@@ -393,10 +430,12 @@ def driveWheel(wheelName, curDeg):
                 del wheel['overheat']
             else:
                 stopAll()
+                logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_1, curDeg, 0, 0, 0, 0, 0, 0, 0)
                 return
 
         if curDeg is None or deg is None:
             stopAll()
+            logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_2, curDeg, 0, 0, 0, 0, 0, 0, 0)
         else:
 
             pid = wheel['pid']
@@ -414,6 +453,7 @@ def driveWheel(wheelName, curDeg):
             elif speed < 1:
                 speed = 0.0
                 stopAll()
+                logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_3, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 return
 
             if speed > 50:
@@ -424,6 +464,7 @@ def driveWheel(wheelName, curDeg):
                         del wheel['termal']
                         wheel['overheat'] = now
                         stopAll()
+                        logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_4, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                         return
                 else:
                     wheel['termal'] = now
@@ -433,11 +474,13 @@ def driveWheel(wheelName, curDeg):
             if forward:
                 GPIO.output(enPin, GPIO.LOW)
                 motor_pwm.ChangeDutyCycle(speed)
+                logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 if DEBUG_TURN:
                     print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
             else:
                 GPIO.output(enPin, GPIO.HIGH)
                 motor_pwm.ChangeDutyCycle(100.0 - speed)
+                logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
                 if DEBUG_TURN:
                     print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
 
@@ -447,22 +490,29 @@ def readPosition(wheelName):
     i2cAddress = int(wheelCalibrationMap[wheelName]['deg']["i2c"])
     try:
         i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2cAddress)
-        pos = i2cBus.read_i2c_block_data(I2C_AS5600_ADDRESS, 0x0B, 5)
-        angle = (pos[3] * 256 + pos[4]) * 360 // 4096
-        status = pos[0] & 0b00111000
+        try:
+            pos = i2cBus.read_i2c_block_data(I2C_AS5600_ADDRESS, 0x0B, 5)
+            angle = (pos[3] * 256 + pos[4]) * 360 // 4096
+            status = pos[0] & 0b00111000 | STATUS_ERROR_MAGNET_NOT_DETECTED
 
-        if DEBUG_READ:
-            print("Read wheel " + wheelName + " @ address " + str(i2cAddress) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
+            if DEBUG_READ:
+                print("Read wheel " + wheelName + " @ address " + str(i2cAddress) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
 
-        return angle, status
+            return angle, status
+        except:
+            if DEBUG_READ:
+                print("Failed to read " + wheelName + " @ address " + str(i2cAddress))
+
+        return 0, STATUS_ERROR_I2C_READ
+
     except:
         if DEBUG_READ:
-            print("Failed to read " + wheelName + " @ address " + str(i2cAddress))
+            print("Failed to select " + wheelName + " @ address " + str(i2cAddress))
 
-        return 0, 1
+        return 0, STATUS_ERROR_I2C_WRITE
 
 
-def prepareAndDriveWheel(wheelName):
+def prepareAndSteerWheel(wheelName):
     angle, status = readPosition(wheelName)
     if status & 24:
         print(wheelName + ": position (raw) " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
@@ -484,9 +534,57 @@ def prepareAndDriveWheel(wheelName):
     driveWheel(wheelName, angle)
 
     if 'overheat' in wheel:
-        status |= 2
+        status |= STATUS_ERROR_MOTOR_OVERHEAT
 
     return angle, status
+
+
+def prepareAndDriveWheel(wheelName):
+    wheel = wheelMap[wheelName]
+    wheelSpeedCalMap = wheelCalibrationMap[wheelName]['speed']
+
+    address = wheelSpeedCalMap['nrf']
+
+    nRF2401.setReadPipeAddress(0, address)
+    nRF2401.setWritePipeAddress(address)
+
+    speedStr = wheel['speed']
+
+    try:
+        speed = int(speedStr)
+    except:
+        speed = None
+
+    if speed is not None:
+        speed = int(127 - (speed * 127 / 100))
+
+        data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, speed, speed], NRF_PACKET_SIZE)
+        nRF2401.swithToTX()
+        done = nRF2401.sendData(data)
+        if done:
+            nRF2401.swithToRX()
+            nRF2401.startListening()
+            if nRF2401.poolData(0.0025):  # 1 sec / 50 times a second / 4 wheels / 2 max half of time needed for wheel
+                p = nRF2401.receiveData(NRF_PACKET_SIZE)
+                nRF2401.stopListening()
+
+                drive_mode = p[0]
+                drive_speed = p[1]
+                wheel_speed = p[2]
+                wheel_pos = p[3] + 256 * p[4]
+                wheel_pos_deg = int(wheel_pos * 360 / 4096)
+                wheel_r_pos = p[5] + 256 * p[6]
+                pid_p = p[7]
+                pid_i = p[8]
+                pid_d = p[9]
+                i2c_status = p[10]
+                pwm_reg = p[11]
+
+                return wheel_pos_deg, 0
+            else:
+                return 0, STATUS_ERROR_RX_FAILED
+        else:
+            return 0, STATUS_ERROR_TX_FAILED
 
 
 def driveWheels():
@@ -495,13 +593,23 @@ def driveWheels():
     if not shutdown:
         checkPidsChanged()
 
-        angleFl, statusFl = prepareAndDriveWheel("fl")
-        angleFr, statusFr = prepareAndDriveWheel("fr")
-        angleBl, statusBl = prepareAndDriveWheel("bl")
-        angleBr, statusBr = prepareAndDriveWheel("br")
+        angleFl, statusSteerFl = prepareAndSteerWheel("fl")
+        angleFr, statusSteerFr = prepareAndSteerWheel("fr")
+        angleBl, statusSteerBl = prepareAndSteerWheel("bl")
+        angleBr, statusSteerBr = prepareAndSteerWheel("br")
 
-        message = ",".join([str(f) for f in [angleFl, statusFl, angleFr, statusFr, angleBl, statusBl, angleBr, statusBr]])
-        pyroslib.publish("wheel/status/pos", message)
+        odoFl, statusSpeedFl = prepareAndDriveWheel("fl")
+        odoFr, statusSpeedFr = prepareAndDriveWheel("fr")
+        odoBl, statusSpeedBl = prepareAndDriveWheel("bl")
+        odoBr, statusSpeedBr = prepareAndDriveWheel("br")
+
+        statusFl = statusSteerFl | statusSpeedFl
+        statusFr = statusSteerFr | statusSpeedFr
+        statusBl = statusSteerBl | statusSpeedBl
+        statusBr = statusSteerBr | statusSpeedBr
+
+        message = ",".join([str(f) for f in [angleFl, odoFl, statusFl, angleFr, odoFr, statusFr, angleBl, odoBl, statusBl, angleBr, odoBr, statusBr]])
+        pyroslib.publish("wheel/status", message)
 
         pwmIndex += 1
         if pwmIndex >= len(PWM[0]):
@@ -585,6 +693,25 @@ if __name__ == "__main__":
         print("  Loading storage details...")
         loadStorage()
         updateWheelsPid()
+
+        print("  Initialising radio...")
+        nRF2401.initNRF(0, 0, NRF_PACKET_SIZE, NRF_DEFAULT_ADDRESS, NRF_CHANNEL)
+
+        logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-steer')
+        logger.addFixedString('wheel', 2)
+        logger.addFixedString('action', 2)
+        logger.addDouble('current')
+        logger.addDouble('speed')
+        logger.addDouble('pid_last_output')
+        logger.addDouble('pid_last_delta')
+        logger.addDouble('pid_set_point')
+        logger.addDouble('pid_i')
+        logger.addDouble('pid_d')
+        logger.addDouble('pid_last_error')
+
+        print("  Initialising telemetry logging...")
+        logger.init()
+        print("  Telemetry logging initialised.")
 
         print("Started wheels service.")
 
