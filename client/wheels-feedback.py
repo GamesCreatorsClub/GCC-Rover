@@ -30,6 +30,15 @@ MODE_CALIBRATE_PID = 4
 
 mode = MODE_STATUS
 
+STATUS_ERROR_I2C_WRITE = 1
+STATUS_ERROR_I2C_READ = 2
+STATUS_ERROR_MOTOR_OVERHEAT = 4
+STATUS_ERROR_MAGNET_HIGH = 8
+STATUS_ERROR_MAGNET_LOW = 16
+STATUS_ERROR_MAGNET_NOT_DETECTED = 32
+STATUS_ERROR_RX_FAILED = 64
+STATUS_ERROR_TX_FAILED = 128
+
 wheelImage = None
 wheelGreenImage = None
 wheelOrangeImage = None
@@ -57,8 +66,6 @@ calibrateCancelButton = []
 def createTemplateWheel():
     return {
         'angle': 0,
-        'max': 0,
-        'min': 0,
         'status': 0,
         'cal': {}
     }
@@ -375,27 +382,25 @@ def handleWheelPositions(topic, message, groups):
     def updateWheel(wheelName, values, index):
         wheel = wheelsMap[wheelName]
         angleStr = values[index]
+        odoStr = values[index + 1]
+        statusStr = values[index + 2]
+        wheel['status'] = int(statusStr)
+        wheel['odo'] = int(odoStr)
         if angleStr != '-':
             angle = int(angleStr)
             wheel['angle'] = angle
-            wheel['status'] = int(values[index + 1])
             if 'wanted' not in wheel or mode != MODE_CALIBRATE_WHEEL:
                 wheel['wanted'] = angle
-            if angle < wheel['min']:
-                wheel['min'] = angle
-            if angle > wheel['max']:
-                wheel['max'] = angle
-        else:
-            wheel['status'] = int(values[index + 1])
+
 
     received = True
     # print("** wheel positions = " + message)
 
     values = message.split(",")
     updateWheel('fl', values, 0)
-    updateWheel('fr', values, 2)
-    updateWheel('bl', values, 4)
-    updateWheel('br', values, 6)
+    updateWheel('fr', values, 3)
+    updateWheel('bl', values, 6)
+    updateWheel('br', values, 9)
 
 
 def handleStorageWrite(topic, message, groups):
@@ -478,10 +483,14 @@ def drawTextInCentre(text, colour, rect):
 def drawAngle(wheel, wheelRect):
 
     def wheelStatusToString(status):
-        if status == 1:
-            return "ERR"
-        else:
-            return ("O" if status & 2 else "") + ("H" if status & 8 else "") + ("L" if status & 16 else "") + ("D" if status & 32 else "")
+        return " ".join([f for f in [("i2c_W" if status & STATUS_ERROR_I2C_WRITE else ""),
+               ("i2c_R" if status & STATUS_ERROR_I2C_READ else ""),
+               ("O" if status & STATUS_ERROR_MOTOR_OVERHEAT else ""),
+               ("MH" if status & STATUS_ERROR_MAGNET_HIGH else ""),
+               ("ML" if status & STATUS_ERROR_MAGNET_LOW else ""),
+               ("MND" if status & STATUS_ERROR_MAGNET_NOT_DETECTED else ""),
+               ("RX" if status & STATUS_ERROR_RX_FAILED else ""),
+               ("TX" if status & STATUS_ERROR_TX_FAILED else "")] if f != ""])
 
     status = wheel['status']
     text = font.render(str(wheel['angle']), 20, BLACK)
@@ -617,7 +626,7 @@ def onKeyUp(key):
         pass
 
 
-pyros.subscribe("wheel/status/pos", handleWheelPositions)
+pyros.subscribe("wheel/status", handleWheelPositions)
 pyros.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
