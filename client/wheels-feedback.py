@@ -47,6 +47,7 @@ wheelRects = {'fl': None, 'fr': None, 'bl': None, 'br': None}
 
 screen = pyros.gccui.initAll((480, 320), True)
 font = pyros.gccui.font
+smallFont = pyros.gccui.smallFont
 
 received = False
 
@@ -66,7 +67,9 @@ calibrateCancelButton = []
 def createTemplateWheel():
     return {
         'angle': 0,
-        'status': 0,
+        'deg_status': 0,
+        'speed_status': 0,
+        'odo': 0,
         'cal': {}
     }
 
@@ -268,7 +271,7 @@ def initGui():
 
         button['drawSelected'] = drawSelected
         button['draw'] = draw
-        button['text'] = font.render(text, 20, WHITE)
+        button['text'] = font.render(text, 0, WHITE)
         return button
 
     def makeBorderButton(rect, onClick):
@@ -381,26 +384,43 @@ def handleWheelPositions(topic, message, groups):
 
     def updateWheel(wheelName, values, index):
         wheel = wheelsMap[wheelName]
-        angleStr = values[index]
-        odoStr = values[index + 1]
-        statusStr = values[index + 2]
-        wheel['status'] = int(statusStr)
+        odoStr = values[index]
+        statusStr = values[index + 1]
         wheel['odo'] = int(odoStr)
+        wheel['speed_status'] = int(statusStr)
+
+    received = True
+    # print("** wheel positions = " + message)
+
+    values = message.split(",")
+    updateWheel('fl', values, 1)
+    updateWheel('fr', values, 3)
+    updateWheel('bl', values, 5)
+    updateWheel('br', values, 7)
+
+
+def handleWheelOrientations(topic, message, groups):
+    global received  # , angle
+
+    def updateWheel(wheelName, values, index):
+        wheel = wheelsMap[wheelName]
+        angleStr = values[index]
+        statusStr = values[index + 1]
+        wheel['deg_status'] = int(statusStr)
         if angleStr != '-':
             angle = int(angleStr)
             wheel['angle'] = angle
             if 'wanted' not in wheel or mode != MODE_CALIBRATE_WHEEL:
                 wheel['wanted'] = angle
 
-
     received = True
     # print("** wheel positions = " + message)
 
     values = message.split(",")
-    updateWheel('fl', values, 0)
+    updateWheel('fl', values, 1)
     updateWheel('fr', values, 3)
-    updateWheel('bl', values, 6)
-    updateWheel('br', values, 9)
+    updateWheel('bl', values, 5)
+    updateWheel('br', values, 7)
 
 
 def handleStorageWrite(topic, message, groups):
@@ -476,7 +496,7 @@ def processButtons(buttons):
 
 
 def drawTextInCentre(text, colour, rect):
-    text = font.render(str(text), 20, colour)
+    text = font.render(str(text), 0, colour)
     screen.blit(text, (rect.centerx - text.get_width() // 2, rect.centery - text.get_height() // 2))
 
 
@@ -492,17 +512,19 @@ def drawAngle(wheel, wheelRect):
                ("RX" if status & STATUS_ERROR_RX_FAILED else ""),
                ("TX" if status & STATUS_ERROR_TX_FAILED else "")] if f != ""])
 
-    status = wheel['status']
-    text = font.render(str(wheel['angle']), 20, BLACK)
-    screen.blit(text, (wheelRect.centerx - text.get_width() // 2, wheelRect.centery - text.get_height() // 2))
+    status = wheel['deg_status'] | wheel['speed_status']
+    angle_text = font.render(str(wheel['angle']), 0, BLACK)
+    screen.blit(angle_text, (wheelRect.centerx - angle_text.get_width() // 2, wheelRect.centery - angle_text.get_height() // 2))
+    odo_text = smallFont.render(str(wheel['odo']), 0, BLACK)
+    screen.blit(odo_text, (wheelRect.centerx - odo_text.get_width() // 2, wheelRect.centery - odo_text.get_height() // 2 + angle_text.get_height() + 3))
 
     if status != 32:
         font.set_bold(True)
         statusText = font.render(wheelStatusToString(status), 24, WHITE)
         font.set_bold(False)
-        # statusText = font.render(str(status), 20, BLACK)
+        # statusText = font.render(str(status), 0, BLACK)
 
-        screen.blit(statusText, (wheelRect.centerx - statusText.get_width() // 2, wheelRect.centery - statusText.get_height() // 2 + text.get_height() + 2))
+        screen.blit(statusText, (wheelRect.centerx - statusText.get_width() // 2, wheelRect.centery - statusText.get_height() // 2 + 16))
 
 
 def drawCalibration(wheel, wheelRect):
@@ -515,7 +537,7 @@ def drawCalibration(wheel, wheelRect):
     if value >= 360:
         value -= 360
 
-    text = font.render(str(value), 20, BLACK)
+    text = font.render(str(value), 0, BLACK)
     screen.blit(text, (wheelRect.centerx - text.get_width() // 2, wheelRect.centery - text.get_height() // 2))
 
 
@@ -524,7 +546,7 @@ def drawWheel(wheelName, middleTextCallback, rect):
     wheel = wheelsMap[wheelName]
 
     selectedWheelImage = wheelImage
-    status = wheel['status']
+    status = wheel['deg_status'] | wheel['speed_status']
     if status == 32:
         selectedWheelImage = wheelGreenImage
     elif not status & 1 and not status & 2 and status & 32 and (status & 8 or status & 16):
@@ -571,7 +593,7 @@ def drawCalibrateWheel():
 
 def drawCalibratePID():
     def renderPID(label, name, y):
-        screen.blit(font.render(label, 20, WHITE), (204, y))
+        screen.blit(font.render(label, 0, WHITE), (204, y))
 
         value = wheelsMap['pid'][name]
 
@@ -580,8 +602,8 @@ def drawCalibratePID():
         left = s[0:i+1]
         right = s[i+1:]
 
-        leftSurface = font.render(left, 20, WHITE)
-        rightSurface = font.render(right, 20, WHITE)
+        leftSurface = font.render(left, 0, WHITE)
+        rightSurface = font.render(right, 0, WHITE)
         screen.blit(leftSurface, (256 - leftSurface.get_width(), y))
         screen.blit(rightSurface, (256, y))
 
@@ -626,7 +648,8 @@ def onKeyUp(key):
         pass
 
 
-pyros.subscribe("wheel/status", handleWheelPositions)
+pyros.subscribe("wheel/deg/status", handleWheelOrientations)
+pyros.subscribe("wheel/speed/status", handleWheelPositions)
 pyros.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
