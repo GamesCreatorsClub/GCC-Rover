@@ -8,7 +8,8 @@
 
 class SMBus:
     def __init__(self, busNo):
-        raise NotImplemented()
+        #raise NotImplemented()
+        pass
 
     def write_byte(self, i2cAddress, byte):
         raise NotImplemented()
