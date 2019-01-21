@@ -27,6 +27,9 @@ CODE_DIR_NAME = "code"
 host = "localhost"
 port = 1883
 timeout = 60
+thisClusterId = None
+clientName = None
+client = None
 
 scriptName = None
 
@@ -52,36 +55,20 @@ def trace(line):
         print(line)
 
 
-important("Starting PyROS...")
-
-
-client = mqtt.Client("PyROS")
-
-args = sys.argv
-
-i = 0
-while i < len(args):
-    if args[i] == "-v":
-        DEBUG_LEVEL = 1
-        del args[i]
-    elif args[i] == "-vv":
-        DEBUG_LEVEL = 2
-        del args[i]
-    elif args[i] == "-vvv":
-        DEBUG_LEVEL = 3
-        del args[i]
-    else:
-        i += 1
-
-
 def processCommonHostSwitches(arguments):
-    global timeout, host, port, scriptName
+    global timeout, host, port, scriptName, DEBUG_LEVEL
 
     scriptName = arguments[0]
     del arguments[0]
 
     while len(arguments) > 0 and arguments[0].startswith("-"):
-        if arguments[0] == "-t":
+        if arguments[0] == "-v":
+            DEBUG_LEVEL = 1
+        elif arguments[0] == "-vv":
+            DEBUG_LEVEL = 2
+        elif arguments[0] == "-vvv":
+            DEBUG_LEVEL = 3
+        elif arguments[0] == "-t":
             del arguments[0]
             if len(arguments) == 0:
                 important("ERROR: -t option must be followed with a number.")
@@ -97,7 +84,8 @@ def processCommonHostSwitches(arguments):
         del arguments[0]
 
     if len(arguments) > 0:
-        hostSplit = arguments[0].split(":")
+        hostStr = arguments[0]
+        hostSplit = hostStr.split(":")
         if len(hostSplit) == 1:
             host = hostSplit[0]
         elif len(hostSplit) == 2:
@@ -108,12 +96,40 @@ def processCommonHostSwitches(arguments):
                 important("ERROR: Port must be a number. '" + hostSplit[1] + "' is not a number.")
                 sys.exit(1)
         else:
-            important("ERROR: Host and port should in host:port format not '" + arguments[0] + "'.")
+            important("ERROR: Host and port should in host:port format not '" + hostStr + "'.")
             sys.exit(1)
         del arguments[0]
 
     return arguments
 
+
+def processEnv():
+    global host, port, thisClusterId
+
+    if 'PYROS_MQTT' in os.environ:
+        hostStr = os.environ['PYROS_MQTT']
+        hostSplit = hostStr.split(":")
+        if len(hostSplit) == 1:
+            host = hostSplit[0]
+        elif len(hostSplit) == 2:
+            host = hostSplit[0]
+            try:
+                port = int(hostSplit[1])
+            except:
+                important("ERROR: Port must be a number. '" + hostSplit[1] + "' is not a number.")
+                sys.exit(1)
+        else:
+            important("ERROR: Host and port should in host:port format not '" + hostStr + "'.")
+            sys.exit(1)
+
+    if 'PYROS_CLUSTER_ID' in os.environ:
+        thisClusterId = os.environ['PYROS_CLUSTER_ID']
+
+
+def complexProcessId(processId):
+    if thisClusterId is not None:
+        return thisClusterId + ":" + processId
+    return processId
 
 def processDir(processId):
     return CODE_DIR_NAME + "/" + processId
@@ -183,12 +199,12 @@ def isRunning(processId):
 
 
 def _output(processId, line):
-    client.publish("exec/" + processId + "/out", line)
+    client.publish("exec/" + complexProcessId(processId) + "/out", line)
     if DEBUG_LEVEL > 2:
         if line.endswith("\n"):
-            trace("exec/" + processId + "/out > " + line[:len(line) - 1])
+            trace("exec/" + complexProcessId(processId) + "/out > " + line[:len(line) - 1])
         else:
-            trace("exec/" + processId + "/out > " + line)
+            trace("exec/" + complexProcessId(processId) + "/out > " + line)
 
 
 def output(processId, line):
@@ -206,9 +222,9 @@ def output(processId, line):
 
 
 def outputStatus(processId, status):
-    client.publish("exec/" + processId + "/status", status)
+    client.publish("exec/" + complexProcessId(processId) + "/status", status)
     if DEBUG_LEVEL > 2:
-        trace("exec/" + processId + "/status > " + status)
+        trace("exec/" + complexProcessId(processId) + "/status > " + status)
 
 
 def systemOutput(commandId, line):
@@ -553,7 +569,7 @@ def psComamnd(commandId, arguments):
 
         systemOutput(commandId,
                      "{0} {1} {2} {3} {4} {5} {6}".format(
-                         processId,
+                         complexProcessId(processId),
                          getProcessTypeName(processId),
                          status,
                          returnCode,
@@ -601,7 +617,7 @@ def processSystemCommand(commandId, commandLine):
     command = arguments[0]
     del arguments[0]
 
-    trace("Processing received system comamnd " + command + ", args=" + str(arguments))
+    trace("Processing received system command " + command + ", args=" + str(arguments))
     if command == "ps":
         psComamnd(commandId, arguments)
     elif command == "services":
@@ -627,27 +643,47 @@ def onConnect(mqttClient, data, flags, rc):
 
 
 def onMessage(mqttClient, data, msg):
+
+    def splitProcessId(processId):
+        split = processId.split(":")
+        if len(split) == 1:
+            return "master", processId
+
+        return split[0], split[1]
+
+    def checkClusterId(clusterId):
+        if thisClusterId is None:
+            return clusterId == 'master'
+        else:
+            return thisClusterId == clusterId
+
     try:
         # payload = str(msg.payload, 'utf-8')
         topic = msg.topic
 
         if topic.startswith("exec/") and topic.endswith("/process"):
             processId = topic[5:len(topic) - 8]
-            payload = str(msg.payload, 'utf-8')
-            storeCode(processId, payload)
+            clusterId, processId = splitProcessId(processId)
+            if checkClusterId(clusterId):
+                payload = str(msg.payload, 'utf-8')
+                storeCode(processId, payload)
         elif topic.startswith("exec/"):
             split = topic[5:].split("/")
             if len(split) == 1:
                 processId = topic[5:]
-                if processId in processes:
-                    payload = str(msg.payload, 'utf-8')
-                    processCommand(processId, payload)
-                else:
-                    output(processId, "No such process '" + processId + "'")
+                clusterId, processId = splitProcessId(processId)
+                if checkClusterId(clusterId):
+                    if processId in processes:
+                        payload = str(msg.payload, 'utf-8')
+                        processCommand(processId, payload)
+                    else:
+                        output(processId, "No such process '" + processId + "'")
             elif len(split) >= 3 and split[1] == "process":
                 processId = split[0]
-                name = "/".join(split[2:])
-                storeExtraCode(processId, name, msg.payload)
+                clusterId, processId = splitProcessId(processId)
+                if checkClusterId(clusterId):
+                    name = "/".join(split[2:])
+                    storeExtraCode(processId, name, msg.payload)
         elif topic.startswith("system/"):
             commandId = topic[7:]
             payload = str(msg.payload, 'utf-8')
@@ -687,10 +723,20 @@ def testForAgents(currentTime):
                 stopProcess(processId)
 
 
+processEnv()
+args = processCommonHostSwitches(sys.argv)
+
+important("Starting PyROS...")
+
+clientName = "PyROS"
+if thisClusterId is not None:
+    clientName += ":" + thisClusterId
+
+client = mqtt.Client(clientName)
+
 client.on_connect = onConnect
 client.on_message = onMessage
 
-args = processCommonHostSwitches(sys.argv)
 
 important("    Connecting to " + str(host) + ":" + str(port) + " (timeout " + str(timeout) + ").")
 client.connect(host, port, timeout)

@@ -5,6 +5,7 @@
 # MIT License
 #
 
+import os
 import sys
 import re
 import time
@@ -203,7 +204,7 @@ def onDisconnect(mqttClient, data, rc):
     _connect()
 
 
-def init(name, unique=False, host="localhost", port=1883, onConnected=None, waitToConnect=True):
+def init(name, unique=False, onConnected=None, waitToConnect=True):
     global client, _connected, _onConnected, _name, _processId
 
     _onConnected = onConnected
@@ -217,6 +218,23 @@ def init(name, unique=False, host="localhost", port=1883, onConnected=None, wait
     client.on_disconnect = _onDisconnect
     client.on_connect = _onConnect
     client.on_message = _onMessage
+
+    host = 'localhost'
+    port = 1883
+
+    if 'PYROS_MQTT' in os.environ:
+        hostStr = os.environ['PYROS_MQTT']
+        hostSplit = hostStr.split(":")
+        if len(hostSplit) == 1:
+            host = hostSplit[0]
+        elif len(hostSplit) == 2:
+            host = hostSplit[0]
+            try:
+                port = int(hostSplit[1])
+            except:
+                pass
+        else:
+            pass
 
     if host is not None:
         connect(host, port, waitToConnect)
