@@ -112,7 +112,7 @@ if __name__ == "__main__":
     try:
         print("Starting shutdown service...")
 
-        pyroslib.init("shutdown-service")
+        pyroslib.init("shutdown-service", unique=False)
 
         pyroslib.subscribe("system/shutdown", checkIfSecretMessage)
         print("  Loading storage details...")
