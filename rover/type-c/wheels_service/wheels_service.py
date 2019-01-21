@@ -16,6 +16,7 @@ import smbus
 import storagelib
 import telemetry
 import time
+import threading
 import traceback
 
 #
@@ -37,6 +38,7 @@ DEBUG_SPEED = False
 DEBUG_SPEED_VERBOSE = False
 DEBUG_READ = False
 DEBUG_TURN = False
+DBEUG_ERRORS = False
 
 OVERHEAT_PROTECTION = 2.5
 OVERHEAT_COOLDOWN = 2.5
@@ -75,16 +77,6 @@ kg = 1.0
 
 deadband = 1
 
-PWM = [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-
-    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-    [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0],
-
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-]
-
 PROTOTYPE_WHEEL_CALIBRATION = {
     'deg': {
         '0': "160",
@@ -110,8 +102,6 @@ PROTOTYPE_PID_CALIBRATION = {
     'deadband': 1.0
 }
 
-pwmIndex = 0
-
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
@@ -129,7 +119,6 @@ def normaiseAngle(a):
         a += 360
     if a >= 360:
         a -= 360
-
     return a
 
 
@@ -149,6 +138,27 @@ def addAngles(a1, a2):
 
 def subAngles(a1, a2):
     return normaiseAngle(a1 - a2)
+
+
+def oppositeAngle(a, mod):
+    if mod >= 0:
+        return a
+    return normaiseAngle(a + 180)
+
+
+def smallestAngleChange(old_angle, mod, new_angle):
+    real_old_angle = oppositeAngle(old_angle, mod)
+    angle_diff = angleDiference(real_old_angle, new_angle)
+    if angle_diff > 90:
+        new_diff = angle_diff - 180
+        return normaiseAngle(old_angle + new_diff), -mod
+    elif angle_diff < -90:
+        new_diff = 180 - angle_diff
+        return normaiseAngle(old_angle + new_diff), -mod
+    elif mod < 0:
+        return normaiseAngle(old_angle + angle_diff), mod
+    else:
+        return new_angle, mod
 
 
 class PID:
@@ -214,8 +224,9 @@ class PID:
 def initWheel(wheelName):
     wheelMap[wheelName] = {
         'deg': 0,
-        'curDeg': 0,
+        'deg_stop': False,
         'speed': 0,
+        's_mod': 1,
         'gen': None,
         'name': wheelName,
         'pid': PID(0.7, 0.29, 0.01, 1.0, 1)
@@ -370,8 +381,23 @@ def stopAllWheels():
     stopWheel('bl')
 
 
-def handleDeg(wheel, wheelCal, degrees):
-    wheel['deg'] = degrees
+def handleDeg(wheel, wheelCal, new_angle):
+
+    try:
+        new_angle = float(new_angle)
+
+        old_angle = wheel['deg']
+        old_mod = wheel['s_mod']
+
+        new_angle, mod = smallestAngleChange(old_angle, wheel['s_mod'], new_angle)
+
+        wheel['old'] = old_angle
+        wheel['deg'] = new_angle
+        wheel['s_mod'] = mod
+
+        wheel['deg_stop'] = False
+    except:
+        wheel['deg_stop'] = True
 
 
 def handleSpeed(wheel, wheelCal, speedStr):
@@ -401,7 +427,7 @@ def interpolate(value, zerostr, maxstr):
     return (maxValue - zero) * value + zero
 
 
-def driveWheel(wheelName, curDeg, status):
+def steerWheel(wheelName, curDeg, status):
 
     def stopAll():
         GPIO.output(enPin, GPIO.LOW)
@@ -420,10 +446,7 @@ def driveWheel(wheelName, curDeg, status):
 
     if motor_pwm is not None:
 
-        try:
-            deg = int(wheel['deg'])
-        except:
-            deg = None
+        deg = int(wheel['deg'])
 
         if 'overheat' in wheel:
             overheat = wheel['overheat']
@@ -435,7 +458,9 @@ def driveWheel(wheelName, curDeg, status):
                 steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
                 return
 
-        if curDeg is None or deg is None:
+        deg_stop = wheel['deg_stop']
+
+        if deg_stop or curDeg is None or deg is None:
             stopAll()
             steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_NO_DATA, curDeg, status, 0, 0, 0, 0, 0, 0, 0)
         else:
@@ -516,14 +541,13 @@ def readPosition(wheelName):
 
 def prepareAndSteerWheel(wheelName):
     angle, status = readPosition(wheelName)
-    if status & 24:
+    if DBEUG_ERRORS and status & 24 != 0:
         print(wheelName + ": position (raw) " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
 
     wheel = wheelMap[wheelName]
     posDir = int(wheelCalibrationMap[wheelName]['deg']['dir'])
     if posDir < 0:
         angle = 360 - angle
-    wheel['curDeg'] = angle
 
     if status == 1:
         return 0, status
@@ -533,7 +557,7 @@ def prepareAndSteerWheel(wheelName):
     if angle < 0:
         angle += 360
 
-    driveWheel(wheelName, angle, status)
+    steerWheel(wheelName, angle, status)
 
     if 'overheat' in wheel:
         status |= STATUS_ERROR_MOTOR_OVERHEAT
@@ -552,14 +576,15 @@ def prepareAndDriveWheel(wheelName):
     nRF2401.setWritePipeAddress(address)
 
     speedStr = wheel['speed']
+    speedModStr = wheel['s_mod']
 
     try:
-        speed = int(speedStr)
+        speed = int(float(speedStr)) * int(speedModStr)
     except:
         speed = None
 
     if speed is not None:
-        send_speed = int(127 - (speed * 127 / 100))
+        send_speed = int(127 - (speed * 127 / 300))
 
         data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
         nRF2401.swithToTX()
@@ -596,9 +621,7 @@ def prepareAndDriveWheel(wheelName):
             return 0, STATUS_ERROR_TX_FAILED
 
 
-def driveWheels():
-    global pwmIndex
-
+def driveAllWheels():
     if not shutdown:
         checkPidsChanged()
 
@@ -620,9 +643,46 @@ def driveWheels():
         message = ",".join([str(f) for f in [angleFl, odoFl, statusFl, angleFr, odoFr, statusFr, angleBl, odoBl, statusBl, angleBr, odoBr, statusBr]])
         pyroslib.publish("wheel/status", message)
 
-        pwmIndex += 1
-        if pwmIndex >= len(PWM[0]):
-            pwmIndex = 0
+
+def driveWheels():
+    if not shutdown:
+
+        odoFl, statusSpeedFl = prepareAndDriveWheel("fl")
+        odoFr, statusSpeedFr = prepareAndDriveWheel("fr")
+        odoBl, statusSpeedBl = prepareAndDriveWheel("bl")
+        odoBr, statusSpeedBr = prepareAndDriveWheel("br")
+
+        message = ",".join([str(f) for f in [time.time(), odoFl, statusSpeedFl, odoFr, statusSpeedFr, odoBl, statusSpeedBl, odoBr, statusSpeedBr]])
+        pyroslib.publish("wheel/speed/status", message)
+
+
+def steerWheels():
+    if not shutdown:
+        checkPidsChanged()
+
+        angleFl, statusSteerFl = prepareAndSteerWheel("fl")
+        angleFr, statusSteerFr = prepareAndSteerWheel("fr")
+        angleBl, statusSteerBl = prepareAndSteerWheel("bl")
+        angleBr, statusSteerBr = prepareAndSteerWheel("br")
+
+        message = ",".join([str(f) for f in [time.time(), angleFl, statusSteerFl, angleFr, statusSteerFr, angleBl, statusSteerBl, angleBr, statusSteerBr]])
+        pyroslib.publish("wheel/deg/status", message)
+
+
+def driveThreadMain():
+    while not shutdown:
+        try:
+            starting = time.time()
+            driveWheels()
+            now = time.time()
+            if now - starting < 0.02:
+                time.sleep(now - starting)
+            else:
+                time.sleep(0.01)
+        except BaseException as e:
+            print("ERROR: drive.thread: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
+    print("drive.thread: Shutdown detected.")
 
 
 def wheelDegTopic(topic, payload, groups):
@@ -733,7 +793,11 @@ if __name__ == "__main__":
 
         print("Started wheels service.")
 
-        pyroslib.forever(0.02, driveWheels)
+        driveThread = threading.Thread(target=driveThreadMain)
+        driveThread.daemon = True
+        driveThread.start()
+
+        pyroslib.forever(0.02, steerWheels)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
