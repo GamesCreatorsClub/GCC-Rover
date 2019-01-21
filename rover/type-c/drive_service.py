@@ -184,11 +184,7 @@ def straightenWheels():
 def slantWheels():
     global wheelPosition, DELAY, SLANT
 
-    allWheelsDeg(60.0, -60.0, -60.0, 60.0)
-    # wheelDeg("fl", 60.0)
-    # wheelDeg("fr", -60.0)
-    # wheelDeg("bl", -60.0)
-    # wheelDeg("br", 60.0)
+    allWheelsDeg(45.0, 135.0, 315.0, 225.0)
 
     if wheelPosition != SLANT:
         time.sleep(DELAY)
@@ -210,7 +206,7 @@ def sidewaysWheels():
 
 
 def setRotationSpeed(speed):
-    allWheelsSpeed(speed, -speed, speed, -speed)
+    allWheelsSpeed(speed, speed, speed, speed)
     # wheelSpeed("fl", speed)
     # wheelSpeed("fr", -speed)
     # wheelSpeed("bl", speed)
@@ -511,7 +507,7 @@ def steer():
         # wheelDeg("fr", str(frontAngle))
         # wheelDeg("br", str(-frontAngle))
         if speed != 0:
-            allWheels(backAngle, frontAngle, -backAngle, -frontAngle, outerSpeed, innerSpeed, outerSpeed, innerSpeed)
+            allWheels(backAngle, frontAngle, -backAngle, -frontAngle, int(outerSpeed), int(innerSpeed), int(outerSpeed), int(innerSpeed))
             # wheelSpeed("fl", str(outerSpeed))
             # wheelSpeed("fr", str(innerSpeed))
             # wheelSpeed("bl", str(outerSpeed))
