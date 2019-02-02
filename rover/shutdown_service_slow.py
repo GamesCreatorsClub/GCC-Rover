@@ -27,6 +27,10 @@ switchPin = None
 
 lightsState = False
 useLights = True
+doPrepareToShutdown = False
+timeToShutDown = False
+wheelPyrosStopped = False
+masterPyrosStopped = False
 
 
 def setLights(state):
@@ -71,10 +75,56 @@ def prepareToShutdown():
         doShutdown()
 
 
+def wheelsSystemOut(topic, payload, groups):
+    global wheelPyrosStopped
+    if payload.strip() == "stopped":
+        wheelPyrosStopped = True
+
+
+def masterSystemOut(topic, payload, groups):
+    global masterPyrosStopped
+    if payload.strip() == "stopped":
+        masterPyrosStopped = True
+
+
 def doShutdown():
-    print("Shutting down now!")
+    global wheelPyrosStopped, masterPyrosStopped
+
+    print("Shutting down...")
+
     pyroslib.publish("shutdown/announce", "now")
-    pyroslib.loop(2.0)
+
+    _now = time.time()
+    while time.time() - _now < 15 and not wheelPyrosStopped:
+        pyroslib.loop(0.1)
+
+    if wheelPyrosStopped:
+        print("Wheels PyROS stopped")
+        _now = time.time()
+        while time.time() - _now < 5:
+            pyroslib.loop(0.1)
+    else:
+        print("Wheels PyROS didn't respond in 15 minutes. Stopping now.")
+
+    print("Allowing wheels to stop...")
+
+    now = time.time()
+    while not masterPyrosStopped and time.time() - now < 30.0:
+        pyroslib.loop(0.1)
+
+    print("Stopping PyROS...")
+
+    pyroslib.publish("system/pyros:master", "stop shutdown")
+
+    now = time.time()
+    while not masterPyrosStopped and time.time() - now < 1.0:
+        pyroslib.loop(0.1)
+
+    print("Shutting down now!")
+
+    # with open("/home/pi/shutdown", "w") as f:
+    #     f.write("shutdown")
+
     try:
         subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
     except Exception as exception:
@@ -82,10 +132,11 @@ def doShutdown():
 
 
 def checkIfSecretMessage(topic, payload, groups):
+    global doPrepareToShutdown, timeToShutDown
     if payload == "secret_message":
-        prepareToShutdown()
+        doPrepareToShutdown = True
     elif payload == "secret_message_now":
-        doShutdown()
+        timeToShutDown = True
 
 
 def loadStorage():
@@ -115,6 +166,9 @@ if __name__ == "__main__":
         pyroslib.init("shutdown-service", unique=False)
 
         pyroslib.subscribe("system/shutdown", checkIfSecretMessage)
+        pyroslib.subscribe("system/pyros:wheels/out", wheelsSystemOut)
+        pyroslib.subscribe("system/pyros:master/out", masterSystemOut)
+
         print("  Loading storage details...")
         loadStorage()
 
@@ -133,8 +187,10 @@ if __name__ == "__main__":
         print("Started shutdown service.")
 
         def checkSwitch():
-            if switchPin is not None and GPIO.input(switchPin) == 0:
+            if doPrepareToShutdown or (switchPin is not None and GPIO.input(switchPin) == 0):
                 prepareToShutdown()
+            elif timeToShutDown:
+                doShutdown()
 
         pyroslib.forever(0.5, checkSwitch)
 

@@ -49,8 +49,9 @@ if __name__ == "__main__":
 
         pyroslib.init("telemetry-service", unique=True)
 
-        if pyroslib.clusterId is not None:
-            telemetryTopic = pyroslib.clusterId + ":telemetry"
+        clusterId = pyroslib.getClusterId()
+        if clusterId is not "master":
+            telemetryTopic = clusterId + ":telemetry"
         else:
             telemetryTopic = "telemetry"
 

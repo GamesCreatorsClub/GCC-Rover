@@ -15,7 +15,12 @@ import traceback
 
 import paho.mqtt.client as mqtt
 
+
+do_exit = False
+
 startedInDir = os.getcwd()
+
+THREAD_KILL_TIMEOUT = 1.0
 
 AGENTS_CHECK_TIMEOUT = 1.0
 AGENT_KILL_TIMEOT = 180
@@ -28,7 +33,6 @@ host = "localhost"
 port = 1883
 timeout = 60
 thisClusterId = None
-clientName = None
 client = None
 
 scriptName = None
@@ -380,25 +384,52 @@ def storeExtraCode(processId, name, payload):
 
 
 def stopProcess(processId):
+
+    def finalProcessKill(processIdToKill):
+        time.sleep(0.01)
+        # Just in case - we really need that process killed!!!
+        cmdAndArgs = ["/usr/bin/pkill -9 -f 'python3 -u " + processIdToKill + ".py " + processIdToKill + "'"]
+        res = subprocess.call(cmdAndArgs, shell=True)
+        if res != -9 and res != 0:
+            info("Tried to kill " + processIdToKill + " but got result " + str(res) + "; command: " + str(cmdAndArgs))
+
+    def waitForProcessStop(processIdStop):
+        _now = time.time()
+        while time.time() - _now < THREAD_KILL_TIMEOUT and 'stop_response' not in processes[processIdStop]:
+            time.sleep(0.05)
+
+        _process = getProcessProcess(processIdStop)
+        if 'stop_response' in processes[processIdStop]:
+            while time.time() - _now < THREAD_KILL_TIMEOUT and _process.returncode is None:
+                time.sleep(0.05)
+            if _process.returncode is None:
+                _process.kill()
+                output(processIdStop, "PyROS: responded with stopping but didn't stop. Killed now " + getProcessTypeName(processIdStop))
+            else:
+                output(processIdStop, "PyROS: stopped " + getProcessTypeName(processIdStop))
+        else:
+            _process.kill()
+            output(processIdStop, "PyROS: didn't respond so killed " + getProcessTypeName(processIdStop))
+
+        finalProcessKill(processIdStop)
+
     if processId in processes:
         process = getProcessProcess(processId)
         if process is not None:
             if process.returncode is None:
-                process.kill()
-                output(processId, "PyROS: killed " + getProcessTypeName(processId))
+                client.publish("exec/" + processId + "/system", "stop")
+                thread = threading.Thread(target=waitForProcessStop, args=(processId,))
+                thread.daemon = True
+                thread.start()
             else:
                 output(processId, "PyROS INFO: already finished " + getProcessTypeName(processId) + " return code " + str(process.returncode))
+                finalProcessKill(processId)
         else:
             output(processId, "PyROS INFO: process " + processId + " is not running.")
+            finalProcessKill(processId)
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
-
-    time.sleep(0.01)
-    # Just in case - we really need that process killed!!!
-    cmdAndArgs = ["/usr/bin/pkill -9 -f 'python3 -u " + processId + ".py " + processId + "'"]
-    res = subprocess.call(cmdAndArgs, shell=True)
-    if res != -9 and res != 0:
-        info("Tried to kill " + processId + " but got result " + str(res) + "; command: " + str(cmdAndArgs))
+        finalProcessKill(processId)
 
 
 def restartProcess(processId):
@@ -585,6 +616,50 @@ def servicesCommand(commandId, arguments):
             systemOutput(commandId, serviceId)
 
 
+def stopPyrosCommand(commandId, arguments):
+    global do_exit
+
+    def stopAllProcesses(_commandId, excludes):
+        global do_exit
+
+        def areAllStopped():
+            for _pId in processes:
+                if _pId not in excludes and isRunning(_pId):
+                    return False
+            return True
+
+        for processId in processes:
+            if processId not in excludes and isRunning(processId):
+                important("    Stopping process " + processId)
+                stopProcess(processId)
+
+        important("Stopping PyROS...")
+        important("    excluding processes " + ", ".join(excludes))
+        _now = time.time()
+        while not areAllStopped() and time.time() - _now < THREAD_KILL_TIMEOUT * 2:
+            time.sleep(0.02)
+
+        not_stopped = []
+        for _processId in processes:
+            if _processId not in excludes and isRunning(_processId):
+                not_stopped.append(_processId)
+
+        if len(not_stopped) > 0:
+            important("    Not all processes stopped; " + ", ".join(not_stopped))
+
+        important("    sending feedback that we will stop (topic system/" + _commandId + ")")
+
+        systemOutput(_commandId, "stopped")
+
+        time.sleep(2)
+        do_exit = True
+
+    if commandId == "pyros:" + (thisClusterId if thisClusterId is not None else "master"):
+        thread = threading.Thread(target=stopAllProcesses, args=(commandId, arguments))
+        thread.daemon = True
+        thread.start()
+
+
 def processCommand(processId, command):
     trace("Processing received comamnd " + command)
     if "stop" == command:
@@ -623,6 +698,8 @@ def processSystemCommand(commandId, commandLine):
         psComamnd(commandId, arguments)
     elif command == "services":
         servicesCommand(commandId, arguments)
+    elif command == "stop":
+        stopPyrosCommand(commandId, arguments)
     else:
         systemOutput(commandId, "Command " + commandLine + " is not implemented")
 
@@ -645,18 +722,18 @@ def onConnect(mqttClient, data, flags, rc):
 
 def onMessage(mqttClient, data, msg):
 
-    def splitProcessId(processId):
-        split = processId.split(":")
-        if len(split) == 1:
-            return "master", processId
+    def splitProcessId(_processId):
+        _split = _processId.split(":")
+        if len(_split) == 1:
+            return "master", _processId
 
-        return split[0], split[1]
+        return _split[0], _split[1]
 
-    def checkClusterId(clusterId):
+    def checkClusterId(_clusterId):
         if thisClusterId is None:
-            return clusterId == 'master'
+            return _clusterId == 'master'
         else:
-            return thisClusterId == clusterId
+            return thisClusterId == _clusterId
 
     try:
         # payload = str(msg.payload, 'utf-8')
@@ -724,20 +801,20 @@ def testForAgents(currentTime):
                 stopProcess(processId)
 
 
-
 def _connect_mqtt():
     _connect_retries = 0
     _connected_successfully = False
     while not _connected_successfully:
         _try_lasted = 0
+        _now = time.time()
         try:
             important("    Connecting to " + str(host) + ":" + str(port) + " (timeout " + str(timeout) + ").")
             _now = time.time()
             client.connect(host, port, timeout)
             _connected_successfully = True
-        except BaseException as e:
+        except BaseException as _e:
             _try_lasted = time.time() - _now
-            important("    Failed to connect, retrying; error " + str(e))
+            important("    Failed to connect, retrying; error " + str(_e))
             _connect_retries += 1
             if _try_lasted < 1:
                 time.sleep(1)
@@ -750,7 +827,7 @@ important("Starting PyROS...")
 
 clientName = "PyROS"
 if thisClusterId is not None:
-    clientName += ":" + thisClusterId
+    clientName += ":" + str(thisClusterId)
 
 client = mqtt.Client(clientName)
 
@@ -765,15 +842,19 @@ startupServices()
 
 lastCheckedAgents = time.time()
 
-while True:
+while not do_exit:
     try:
         for it in range(0, 10):
-            time.sleep(0.0015)
-            client.loop(0.0005)
+            time.sleep(0.009)
+            client.loop(0.001)
         now = time.time()
         if now - lastCheckedAgents > AGENTS_CHECK_TIMEOUT:
             lastCheckedAgents = now
             testForAgents(now)
 
+    except SystemExit:
+        do_exit = True
     except Exception as e:
         important("ERROR: Got exception in main loop; " + str(e))
+
+important("PyROS stopped.")

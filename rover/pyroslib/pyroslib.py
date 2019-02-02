@@ -19,7 +19,7 @@ client = None
 _name = "undefined"
 _host = None
 _port = 1883
-clusterId = None
+_clusterId = None
 
 DEBUG_SUBSCRIBE = False
 
@@ -40,6 +40,19 @@ _collectStats = False
 
 _stats = [[0, 0, 0]]
 _received = False
+
+
+def _setClusterId(cId):
+    global _clusterId
+
+    _clusterId = cId
+
+
+def getClusterId():
+    if _clusterId is not None:
+        return _clusterId
+    else:
+        return "master"
 
 
 def _addSendMessage():
@@ -207,7 +220,7 @@ def onDisconnect(mqttClient, data, rc):
 
 
 def init(name, unique=False, onConnected=None, waitToConnect=True, host='localhost', port=1883):
-    global client, _connected, _onConnected, _name, _processId, clusterId
+    global client, _connected, _onConnected, _name, _processId, _host, _port
 
     _onConnected = onConnected
 
@@ -236,20 +249,25 @@ def init(name, unique=False, onConnected=None, waitToConnect=True, host='localho
             pass
 
     if 'PYROS_CLUSTER_ID' in os.environ:
-        clusterId = os.environ['PYROS_CLUSTER_ID']
+        _setClusterId(os.environ['PYROS_CLUSTER_ID'])
 
     if host is not None:
         connect(host, port, waitToConnect)
 
     if len(sys.argv) > 1:
         _processId = sys.argv[1]
-        print("Started " + _processId + " process. Setting up pyros.")
+        cId = getClusterId()
+        if cId == "master":
+            print("Started " + _processId + " process on master pyros. Setting up pyroslib...")
+        else:
+            print("Started " + _processId + " process on " + getClusterId() + " clustered pyros. Setting up pyroslib...")
         subscribe("exec/" + _processId + "/stats", _handleStats)
     else:
         print("No processId argument supplied.")
 
     _host = host
     _port = port
+
 
 def connect(host, port=1883, waitToConnect=True):
     global _host, _port
