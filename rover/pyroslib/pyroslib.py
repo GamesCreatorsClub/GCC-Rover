@@ -13,6 +13,7 @@ import random
 import traceback
 import threading
 import paho.mqtt.client as mqtt
+import multiprocessing
 
 client = None
 
@@ -20,6 +21,9 @@ _name = "undefined"
 _host = None
 _port = 1883
 _clusterId = None
+
+_client_loop = 0.0005
+_loop_sleep = 0.002
 
 DEBUG_SUBSCRIBE = False
 
@@ -30,6 +34,7 @@ def doNothing():
 
 _processId = "unknown"
 _onConnected = doNothing
+_onStop = doNothing
 _connected = False
 
 _subscribers = []
@@ -132,6 +137,25 @@ def _handleStats(topic, payload, groups):
         _sendStats()
 
 
+def _handleSystem(topic, payload, groups):
+    def waitForProcessStop():
+        print("Confirming stop for service " + _processId)
+        publish("exec/" + _processId + "/system/stop", "stopped")
+        client.loop(0.001)
+        if _onStop is not None:
+            print("Invoking stop callback for service " + _processId)
+            _onStop()
+
+        loop(0.5)
+
+        print("Stopping service " + _processId)
+        os._exit(0)
+
+    if payload.strip() == "stop":
+        thread = threading.Thread(target=waitForProcessStop, daemon=True)
+        thread.start()
+
+
 def _onDisconnect(mqttClient, data, rc):
     _connect()
 
@@ -219,10 +243,11 @@ def onDisconnect(mqttClient, data, rc):
     _connect()
 
 
-def init(name, unique=False, onConnected=None, waitToConnect=True, host='localhost', port=1883):
-    global client, _connected, _onConnected, _name, _processId, _host, _port
+def init(name, unique=False, onConnected=None, onStop=None, waitToConnect=True, host='localhost', port=1883):
+    global client, _connected, _onConnected, _onStop, _name, _processId, _host, _port, _loop_sleep, _client_loop
 
     _onConnected = onConnected
+    _onStop = onStop
 
     if unique:
         name += "-" + str(random.randint(10000, 99999))
@@ -262,11 +287,19 @@ def init(name, unique=False, onConnected=None, waitToConnect=True, host='localho
         else:
             print("Started " + _processId + " process on " + getClusterId() + " clustered pyros. Setting up pyroslib...")
         subscribe("exec/" + _processId + "/stats", _handleStats)
+        subscribe("exec/" + _processId + "/system", _handleSystem)
     else:
         print("No processId argument supplied.")
 
     _host = host
     _port = port
+
+    if multiprocessing.cpu_count() == 1:
+        _loop_sleep = 0.004
+        _client_loop = 0.001
+    else:
+        _loop_sleep = 0.002
+        _client_loop = 0.0005
 
 
 def connect(host, port=1883, waitToConnect=True):
@@ -294,19 +327,19 @@ def loop(deltaTime, inner=None):
     currentTime = time.time()
 
     _received = False
-    client.loop(0.0005)  # wait for 0.5 ms
+    client.loop(_client_loop)  # wait for 0.5 ms
 
     until = currentTime + deltaTime
     while currentTime < until:
         if _received:
             _received = False
-            client.loop(0.0005)  # wait for 0.1 ms
+            client.loop(_client_loop)  # wait for 0.1 ms
             currentTime = time.time()
         else:
-            time.sleep(0.002)  # wait for 2 ms
+            time.sleep(_loop_sleep)  # wait for 2 ms
             currentTime = time.time()
-            if currentTime + 0.0005 < until:
-                client.loop(0.0005)  # wait for 0.1 ms
+            if currentTime + _client_loop < until:
+                client.loop(_client_loop)  # wait for 0.1 ms
                 currentTime = time.time()
 
 
@@ -332,16 +365,16 @@ def forever(deltaTime, outer=None, inner=None):
         currentTime = time.time()
 
         sleepTime = nextTime - currentTime
-        if sleepTime < 0.002:
+        if sleepTime < _loop_sleep:
             nextTime = currentTime
 
             _received = False
-            client.loop(0.0005)  # wait for 0.1 ms
-            count = 10 # allow at least 5 messages
+            client.loop(_client_loop)  # wait for 0.1 ms
+            count = 10  # allow at least 5 messages
             while count > 0 and _received:
                 _received = True
                 count -= 1
-                client.loop(0.0005)  # wait for 0.1 ms
+                client.loop(_client_loop)  # wait for 0.1 ms
 
         else:
             loop(sleepTime, inner=inner)

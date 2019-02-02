@@ -328,8 +328,7 @@ def getProcessProcess(processId):
 
 def startProcess(processId):
     if processId in processes:
-        thread = threading.Thread(target=runProcess, args=(processId,))
-        thread.daemon = True
+        thread = threading.Thread(target=runProcess, args=(processId,), daemon=True)
         thread.start()
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
@@ -383,7 +382,14 @@ def storeExtraCode(processId, name, payload):
         outputStatus(processId, "stored error")
 
 
-def stopProcess(processId):
+def stopProcess(processId, restart=False):
+
+    def startItAgain(processIdToStart):
+        startProcess(processIdToStart)
+        if isService(processIdToStart):
+            output(processIdToStart, "PyROS: Restarted service " + processIdToStart)
+        else:
+            output(processIdToStart, "PyROS: Restarted process " + processIdToStart)
 
     def finalProcessKill(processIdToKill):
         time.sleep(0.01)
@@ -392,6 +398,8 @@ def stopProcess(processId):
         res = subprocess.call(cmdAndArgs, shell=True)
         if res != -9 and res != 0:
             info("Tried to kill " + processIdToKill + " but got result " + str(res) + "; command: " + str(cmdAndArgs))
+        if restart:
+            startItAgain(processIdToKill)
 
     def waitForProcessStop(processIdStop):
         _now = time.time()
@@ -400,15 +408,19 @@ def stopProcess(processId):
 
         _process = getProcessProcess(processIdStop)
         if 'stop_response' in processes[processIdStop]:
+            del processes[processIdStop]['stop_response']
             while time.time() - _now < THREAD_KILL_TIMEOUT and _process.returncode is None:
                 time.sleep(0.05)
             if _process.returncode is None:
                 _process.kill()
+                info("PyROS: responded with stopping but didn't stop. Killed now " + getProcessTypeName(processIdStop))
                 output(processIdStop, "PyROS: responded with stopping but didn't stop. Killed now " + getProcessTypeName(processIdStop))
             else:
+                info("PyROS: stopped " + getProcessTypeName(processIdStop))
                 output(processIdStop, "PyROS: stopped " + getProcessTypeName(processIdStop))
         else:
             _process.kill()
+            info("PyROS: didn't respond so killed " + getProcessTypeName(processIdStop))
             output(processIdStop, "PyROS: didn't respond so killed " + getProcessTypeName(processIdStop))
 
         finalProcessKill(processIdStop)
@@ -418,28 +430,32 @@ def stopProcess(processId):
         if process is not None:
             if process.returncode is None:
                 client.publish("exec/" + processId + "/system", "stop")
-                thread = threading.Thread(target=waitForProcessStop, args=(processId,))
-                thread.daemon = True
+                thread = threading.Thread(target=waitForProcessStop, args=(processId,), daemon=True)
                 thread.start()
             else:
+                info("PyROS INFO: already finished " + getProcessTypeName(processId) + " return code " + str(process.returncode))
                 output(processId, "PyROS INFO: already finished " + getProcessTypeName(processId) + " return code " + str(process.returncode))
                 finalProcessKill(processId)
         else:
+            info("PyROS INFO: process " + processId + " is not running.")
             output(processId, "PyROS INFO: process " + processId + " is not running.")
             finalProcessKill(processId)
     else:
+        info("PyROS ERROR: process " + processId + " does not exist.")
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
         finalProcessKill(processId)
+        if restart:
+            startItAgain(processId)
 
 
 def restartProcess(processId):
     if processId in processes:
-        stopProcess(processId)
-        startProcess(processId)
-        if isService(processId):
-            output(processId, "PyROS: Restarted service " + processId)
-        else:
-            output(processId, "PyROS: Restarted process " + processId)
+        stopProcess(processId, restart=True)
+        # startProcess(processId)
+        # if isService(processId):
+        #     output(processId, "PyROS: Restarted service " + processId)
+        # else:
+        #     output(processId, "PyROS: Restarted process " + processId)
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
 
@@ -655,8 +671,7 @@ def stopPyrosCommand(commandId, arguments):
         do_exit = True
 
     if commandId == "pyros:" + (thisClusterId if thisClusterId is not None else "master"):
-        thread = threading.Thread(target=stopAllProcesses, args=(commandId, arguments))
-        thread.daemon = True
+        thread = threading.Thread(target=stopAllProcesses, args=(commandId, arguments), daemon=True)
         thread.start()
 
 
@@ -713,9 +728,10 @@ def onConnect(mqttClient, data, flags, rc):
             mqttClient.subscribe("exec/+", 0)
             mqttClient.subscribe("exec/+/process", 0)
             mqttClient.subscribe("exec/+/process/#", 0)
+            mqttClient.subscribe("exec/+/system/stop", 0)
         else:
             important("ERROR: Connection returned error result: " + str(rc))
-            sys.exit(rc)
+            os._exit(rc)
     except Exception as exception:
         important("ERROR: Got exception on connect; " + str(exception))
 
@@ -762,6 +778,14 @@ def onMessage(mqttClient, data, msg):
                 if checkClusterId(clusterId):
                     name = "/".join(split[2:])
                     storeExtraCode(processId, name, msg.payload)
+            elif len(split) == 3 and split[1] == "system" and split[2] == "stop":
+                processId = split[0]
+                clusterId, processId = splitProcessId(processId)
+                if checkClusterId(clusterId):
+                    payload = str(msg.payload, 'utf-8')
+                    if payload == "stopped":
+                        processes[processId]['stop_response'] = True
+
         elif topic.startswith("system/"):
             commandId = topic[7:]
             payload = str(msg.payload, 'utf-8')

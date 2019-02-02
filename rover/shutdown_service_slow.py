@@ -90,6 +90,11 @@ def masterSystemOut(topic, payload, groups):
 def doShutdown():
     global wheelPyrosStopped, masterPyrosStopped
 
+    def testUSB():
+        p = subprocess.Popen(["/sbin/ifconfig", "-s"], stdout=subprocess.PIPE)
+        lines = str(p.communicate()[0]).split("\\n")
+        return len([x for x in lines if x.startswith("usb")]) > 0
+
     print("Shutting down...")
 
     pyroslib.publish("shutdown/announce", "now")
@@ -106,10 +111,16 @@ def doShutdown():
     else:
         print("Wheels PyROS didn't respond in 15 minutes. Stopping now.")
 
-    print("Allowing wheels to stop...")
+    print("Waiting usb interfaces to disappear... (up to 30s)")
 
     now = time.time()
-    while not masterPyrosStopped and time.time() - now < 30.0:
+    while not masterPyrosStopped and time.time() - now < 30.0 and testUSB():
+        pyroslib.loop(0.1)
+
+    print("Allowing wheels pi to stop... (2s)")
+
+    now = time.time()
+    while not masterPyrosStopped and time.time() - now < 2.0:
         pyroslib.loop(0.1)
 
     print("Stopping PyROS...")
