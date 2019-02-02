@@ -19,8 +19,10 @@ client = None
 _name = "undefined"
 _host = None
 _port = 1883
+clusterId = None
 
 DEBUG_SUBSCRIBE = False
+
 
 def doNothing():
     pass
@@ -204,8 +206,8 @@ def onDisconnect(mqttClient, data, rc):
     _connect()
 
 
-def init(name, unique=False, onConnected=None, waitToConnect=True):
-    global client, _connected, _onConnected, _name, _processId
+def init(name, unique=False, onConnected=None, waitToConnect=True, host='localhost', port=1883):
+    global client, _connected, _onConnected, _name, _processId, clusterId
 
     _onConnected = onConnected
 
@@ -218,9 +220,6 @@ def init(name, unique=False, onConnected=None, waitToConnect=True):
     client.on_disconnect = _onDisconnect
     client.on_connect = _onConnect
     client.on_message = _onMessage
-
-    host = 'localhost'
-    port = 1883
 
     if 'PYROS_MQTT' in os.environ:
         hostStr = os.environ['PYROS_MQTT']
@@ -236,6 +235,9 @@ def init(name, unique=False, onConnected=None, waitToConnect=True):
         else:
             pass
 
+    if 'PYROS_CLUSTER_ID' in os.environ:
+        clusterId = os.environ['PYROS_CLUSTER_ID']
+
     if host is not None:
         connect(host, port, waitToConnect)
 
@@ -246,6 +248,8 @@ def init(name, unique=False, onConnected=None, waitToConnect=True):
     else:
         print("No processId argument supplied.")
 
+    _host = host
+    _port = port
 
 def connect(host, port=1883, waitToConnect=True):
     global _host, _port
