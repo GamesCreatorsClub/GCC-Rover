@@ -396,13 +396,13 @@ def turnOnSpot():
 
 
 def faceAngleFront(dist):
-    x = math.atan2(36.5, dist - 69)
+    x = math.atan2(53, dist - 53)
 
     return math.degrees(x) - 90.0
 
 
 def faceAngleBack(dist):
-    x = math.atan2(36.5, dist + 69)
+    x = math.atan2(53, dist + 53)
 
     return math.degrees(x) - 90.0
 
@@ -449,26 +449,26 @@ def orbit():
 
 
 def sideAngleFront(dist):
-    x = math.atan2(69, dist - 36.5)
+    x = math.atan2(53, dist - 53)
 
     return math.degrees(x)
 
 
 def sideAngleBack(dist):
-    x = math.atan2(69, dist + 36.5)
+    x = math.atan2(53, dist + 53)
 
     return math.degrees(x)
 
 
 def calcInnerSpeed(spd, dist):
     midc = 2 * math.pi * dist
-    inc = 2 * math.pi * (dist - 36.5)
+    inc = 2 * math.pi * (dist - 53)
     return spd * (inc / midc)
 
 
 def calcOuterSpeed(spd, dist):
     midc = 2 * math.pi * dist
-    outc = 2 * math.pi * (dist + 36.5)
+    outc = 2 * math.pi * (dist + 53)
     return spd * (outc / midc)
 
 

@@ -26,12 +26,6 @@ pyros $1 upload -s wifi         wifi_service.py
 echo Restarting    wifi
 pyros $1 restart   wifi
 
-#echo ""
-#echo Uploading     wheels
-#pyros $1 upload -s wheels       type-c/wheels_service.py
-#echo Restarting    wheels
-#pyros $1 restart   wheels
-
 echo ""
 echo Uploading     drive
 pyros $1 upload -s drive        type-c/drive_service.py
@@ -44,35 +38,15 @@ pyros $1 upload -s shutdown     shutdown_service.py
 echo Restarting    shutdown
 pyros $1 restart   shutdown
 
-#echo ""
-#echo Uploading     lights
-#pyros $1 upload -s lights       lights_service.py
-#echo Restarting    lights
-#pyros $1 restart   lights
+cd telemetry
 
-#echo ""
-#echo Uploading     camera
-#pyros $1 upload -s camera       camera_service.py
-#echo Restarting    camera
-#pyros $1 restart   camera
+./upload-telemetry.sh $1
+./upload-telemetry-wheels.sh $1
 
-#echo ""
-#echo Uploading     9dofsensor
-#pyros $1 upload -s 9dofsensor  mpu9250_service.py
-#echo Restarting    9dofsensor
-#pyros $1 restart   9dofsensor
+cd wheels_service
+./upload-wheels.sh $1
 
-#echo ""
-#echo Uploading     sonarsensor
-#pyros $1 upload -s sonarsensor sonarsensor_service.py
-#echo Restarting    sonarsensor
-#pyros $1 stop      sonarsensor
-
-#echo ""
-#echo Uploading     vl53l0x
-#pyros $1 upload -s vl53l0x vl53l0x_service.py
-#echo Restarting    vl53l0x
-#pyros $1 restart   vl53l0x
+cd ../..
 
 echo ""
 echo "Currently running processes:"

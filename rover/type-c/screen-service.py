@@ -51,6 +51,7 @@ shutdownText = None
 confirmText = None
 showConfirm = False
 
+
 def doNothing():
     pass
 
@@ -153,9 +154,21 @@ def startPyGame():
     else:
         print("No surface at this moment")
 
-    screen = pygame.display.set_mode((480, 320), pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.FULLSCREEN)
+    try:
+        # screen = pygame.display.set_mode((480, 320), pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.FULLSCREEN)
+        screen = pygame.display.set_mode((320, 480))
+    except BaseException as e:
+        print("Got exception trying to set display mode " + str(e))
+        print("Retrying...")
+        try:
+            # screen = pygame.display.set_mode((320, 480), pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.FULLSCREEN)
+            screen = pygame.display.set_mode((320, 480))
+        except BaseException as e:
+            print("Got exception again while trying to set display mode " + str(e))
 
     print("New surface size " + str(screen.get_size()))
+
+    pygame.mouse.set_visible(False)
 
     # screen = pygame.display.set_mode((480, 320), pygame.HWSURFACE | pygame.DOUBLEBUF)
     # screen = pygame.display.set_mode((480, 320), pygame.FULLSCREEN)
@@ -220,12 +233,17 @@ def mainLoop():
         # data = spi.xfer([0xD0, 0, 0])
         # spi.close()
 
-        touchX = readReg(0x90, 200, 3900, 480)
-        touchY = readReg(0xD0, 200, 3900, 320)
+        touchY = 480 - readReg(0x90, 200, 3900, 480)
+        touchX = readReg(0xD0, 200, 3900, 320)
 
-        if not touchDown:
-            touchChanged = True
-        touchDown = True
+        if touchY > 0 and touchY < 480 and touchX > 0 and touchX < 320:
+            if not touchDown:
+                touchChanged = True
+            touchDown = True
+        else:
+            if touchDown:
+                touchChanged = True
+            touchDown = False
     else:
         if touchDown:
             touchChanged = True
@@ -245,13 +263,13 @@ def mainLoop():
 
             if touchChanged:
                 if showConfirm:
-                    if 300 <= touchX <= 480 and 240 <= touchY <= 320:
+                    if 140 <= touchX <= 320 and 400 <= touchY <= 480:
                         print("Shutting down")
                         pyroslib.publish("system/shutdown", "secret_message_now")
                     else:
                         showConfirm = False
                 else:
-                    if 300 <= touchX <= 480 and 0 <= touchY <= 80:
+                    if 140 <= touchX <= 320 and 0 <= touchY <= 80:
                         showConfirm = True
 
         if len(trail) > 0:
@@ -276,30 +294,29 @@ def mainLoop():
         screen.blit(textY, (0, 80))
 
         if showConfirm:
-            pygame.draw.rect(screen, (200, 50, 0), pygame.Rect(300, 240, 480, 320))
-            screen.blit(confirmText, (320, 270))
+            pygame.draw.rect(screen, (200, 50, 0), pygame.Rect(140, 400, 320, 480))
+            screen.blit(confirmText, (180, 430))
         else:
-            pygame.draw.rect(screen, (200, 150, 0), pygame.Rect(300, 0, 480, 80))
-            screen.blit(shutdownText, (320, 30))
+            pygame.draw.rect(screen, (200, 150, 0), pygame.Rect(140, 0, 320, 80))
+            screen.blit(shutdownText, (150, 30))
 
         pygame.display.flip()
 
 
 if __name__ == "__main__":
     try:
-        print("Starting pygame-demo agent...")
+        print("Starting screen service...")
 
-        pyroslib.subscribe("pygame-demo/command", handleAgentCommands)
+        pyroslib.subscribe("screen/command", handleAgentCommands)
 
-        pyroslib.init("pygame-demo-agent", unique=True, onConnected=connected)
+        pyroslib.init("screen", unique=True, onConnected=connected)
 
-        print("Started pygame-demo agent.")
+        print("Started screen service.")
 
         startPyGame()
 
         # pyroslib.forever(0.016949152542373, mainLoop)
         pyroslib.forever(0.04, mainLoop)
-
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
