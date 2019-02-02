@@ -25,8 +25,8 @@ DEBUG = False
 
 
 class MQTTLocalPipeTelemetryServer(PubSubLocalPipeTelemetryServer):
-    def __init__(self):
-        super(MQTTLocalPipeTelemetryServer, self).__init__('telemetry', pyroslib.publish, pyroslib.subscribeBinary)
+    def __init__(self, topic='telemetry'):
+        super(MQTTLocalPipeTelemetryServer, self).__init__(topic, pyroslib.publish, pyroslib.subscribeBinary)
 
     def waitAndProcess(self, waitTime=0.02):  # 50 times a second by default
         self.mqtt.loop(waitTime)
@@ -47,9 +47,14 @@ if __name__ == "__main__":
     try:
         print("Starting telemetry service...")
 
-        pyroslib.init("telemetry-service")
+        pyroslib.init("telemetry-service", unique=True)
 
-        server = MQTTLocalPipeTelemetryServer()
+        if pyroslib.clusterId is not None:
+            telemetryTopic = pyroslib.clusterId + ":telemetry"
+        else:
+            telemetryTopic = "telemetry"
+
+        server = MQTTLocalPipeTelemetryServer(telemetryTopic)
 
         print("Started telemetry service.")
 
