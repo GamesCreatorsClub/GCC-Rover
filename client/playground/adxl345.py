@@ -154,14 +154,12 @@ while True:
         c = 0
         print("y = " + str(round(posY, 4)) + ", avg acc: " + str(round((avgAccY / 25.0))) + ", avg vel: " + str(round((avgVelY / 25.0))))
 
-
     if len(accYs) > 3000:
         client.publish("accel/log", "\n".join(accYs))
         del accYs[:]
     else:
         accYs.append(str(accY))
         sys.exit(0)
-
 
     avgAccY = 0
 

@@ -25,6 +25,11 @@ def handleEcho(topic, payload, groups):
     else:
         pyroslib.publish("echo/out", "default:" + payload)
 
+
+def stopCallback():
+    print("Asked to stop!")
+
+
 if __name__ == "__main__":
     try:
         print("Starting echo service...")
@@ -32,7 +37,7 @@ if __name__ == "__main__":
         pyroslib.subscribe("echo/in", handleEcho)
         pyroslib.subscribe("echo/in/a/b/#", handleEcho)
         pyroslib.subscribe("echo/in/b/+/c", handleEcho)
-        pyroslib.init("echo-service")
+        pyroslib.init("echo-service", onStop=stopCallback)
 
         print("Started echo service.")
 

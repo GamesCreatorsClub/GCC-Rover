@@ -183,7 +183,7 @@ while True:
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_ESCAPE]:
-        sys.exit();
+        sys.exit()
     screen.fill((0, 0, 0))
 
     for i in range(0, 3):

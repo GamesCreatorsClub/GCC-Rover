@@ -41,7 +41,7 @@ def processArguments(arguments):
                 del arguments[0]
         elif arguments[0] == "delete" or arguments[0] == "del":
             if len(arguments) > 2:
-                print("ERROR: " +  arguments[0] + " requires only one argument.")
+                print("ERROR: " + arguments[0] + " requires only one argument.")
                 sys.exit(1)
             elif len(arguments) < 1:
                 print("ERROR: " + arguments[0] + " requires one argument.")
