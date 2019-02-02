@@ -17,15 +17,23 @@ import traceback
 #
 
 DEBUG = False
+timeToShutDown = False
 
 
 def doShutdown():
-    print("Shutting down now!")
-    pyroslib.loop(0.5)
-    try:
-        subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
-    except Exception as exception:
-        print("ERROR: Failed to shutdown; " + str(exception))
+    global timeToShutDown
+    timeToShutDown = True
+
+
+def checkShutdown():
+    if timeToShutDown:
+        print("Shutting down...")
+        pyroslib.loop(0.2)
+        print("Shutting down now!")
+        try:
+            subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
+        except Exception as exception:
+            print("ERROR: Failed to shutdown; " + str(exception))
 
 
 def checkIfSecretMessage(topic, payload, groups):
@@ -47,7 +55,7 @@ if __name__ == "__main__":
 
         print("Started shutdown service.")
 
-        pyroslib.forever(0.5)
+        pyroslib.forever(0.5, checkShutdown)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

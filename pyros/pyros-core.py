@@ -131,6 +131,7 @@ def complexProcessId(processId):
         return thisClusterId + ":" + processId
     return processId
 
+
 def processDir(processId):
     return CODE_DIR_NAME + "/" + processId
 
@@ -723,6 +724,25 @@ def testForAgents(currentTime):
                 stopProcess(processId)
 
 
+
+def _connect_mqtt():
+    _connect_retries = 0
+    _connected_successfully = False
+    while not _connected_successfully:
+        _try_lasted = 0
+        try:
+            important("    Connecting to " + str(host) + ":" + str(port) + " (timeout " + str(timeout) + ").")
+            _now = time.time()
+            client.connect(host, port, timeout)
+            _connected_successfully = True
+        except BaseException as e:
+            _try_lasted = time.time() - _now
+            important("    Failed to connect, retrying; error " + str(e))
+            _connect_retries += 1
+            if _try_lasted < 1:
+                time.sleep(1)
+
+
 processEnv()
 args = processCommonHostSwitches(sys.argv)
 
@@ -737,10 +757,7 @@ client = mqtt.Client(clientName)
 client.on_connect = onConnect
 client.on_message = onMessage
 
-
-important("    Connecting to " + str(host) + ":" + str(port) + " (timeout " + str(timeout) + ").")
-client.connect(host, port, timeout)
-
+_connect_mqtt()
 
 important("Started PyROS.")
 

@@ -27,6 +27,8 @@ switchPin = None
 
 lightsState = False
 useLights = True
+doPrepareToShutdown = False
+timeToShutDown = False
 
 
 def setLights(state):
@@ -72,9 +74,15 @@ def prepareToShutdown():
 
 
 def doShutdown():
-    print("Shutting down now!")
+    print("Shutting announcing shutdown now")
     pyroslib.publish("shutdown/announce", "now")
-    pyroslib.loop(2.0)
+    for i in range(15, 1, -1):
+        print("Waiting " + str(i) + " seconds")
+        pyroslib.loop(1.0)
+
+    print("Waiting 1 second")
+    pyroslib.loop(1.0)
+    print("Shutting down now!")
     try:
         subprocess.call(["/usr/bin/sudo", "/sbin/shutdown", "-h", "now"])
     except Exception as exception:
@@ -82,10 +90,11 @@ def doShutdown():
 
 
 def checkIfSecretMessage(topic, payload, groups):
+    global doPrepareToShutdown, timeToShutDown
     if payload == "secret_message":
-        prepareToShutdown()
+        doPrepareToShutdown = True
     elif payload == "secret_message_now":
-        doShutdown()
+        timeToShutDown = True
 
 
 def loadStorage():
@@ -133,8 +142,10 @@ if __name__ == "__main__":
         print("Started shutdown service.")
 
         def checkSwitch():
-            if switchPin is not None and GPIO.input(switchPin) == 0:
+            if doPrepareToShutdown or (switchPin is not None and GPIO.input(switchPin) == 0):
                 prepareToShutdown()
+            elif timeToShutDown:
+                doShutdown()
 
         pyroslib.forever(0.5, checkSwitch)
 
