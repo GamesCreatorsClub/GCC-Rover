@@ -25,7 +25,7 @@ else:
 # print("binDir=" + binDir)
 # print("installDir=" + installDir)
 
-uniqueId = str(os.uname().nodename) + "." + str(os.getpid())
+uniqueId = str(socket.gethostname()) + "." + str(os.getpid())
 
 del args[0]
 

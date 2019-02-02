@@ -14,7 +14,7 @@ import threading
 
 
 if len(pc.args) == 0:
-    sys.exit(os.system(pc.binDir + "/pyros-help"))
+    sys.exit(exec(open(pc.binDir + "/pyros-help").read()))
 
 localCommands = ["alias", "discover", "help"]
 commandAlias = {
@@ -132,8 +132,9 @@ if command is None:
 
 if command is not None:
     if len(args) > 0 and (args[0] == "-h"):
-        fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
-        sys.exit(os.system(fullCommand))
+        sys.argv = args
+        fullCommand = os.path.join(pc.binDir, "pyros-" + command)
+        sys.exit(exec(open(fullCommand).read()))
 
     if command not in localCommands:
         if host is None:
@@ -154,8 +155,9 @@ if command is not None:
 
         args.insert(0, host)
 
-    fullCommand = pc.binDir + "/pyros-" + command + pc.expandArgs(args)
-    sys.exit(os.system(fullCommand))
+    sys.argv = args
+    fullCommand = os.path.join(pc.binDir, "pyros-" + command)
+    sys.exit(exec(open(fullCommand).read()))
 
 print("Unknown command " + str(command))
 sys.exit(1)
