@@ -77,9 +77,9 @@ Copy these two files:
 --- /lib/dhcpcd/dhcpcd-hooks/80-usb0
 # usb0 up after assign ip address
 # echo >> /home/pi/80-usb.log "$interface $reason"
-if [ "$interface" = "usb0" ] && [ "$reason" = "IPV4LL" ]; then
+if [ "$interface" = "usb0" ] && [ "$reason" = "STATIC" ]; then
         # echo >> /home/pi/80-usb.log " matched: "
-        ifconfig usb0 169.254.1.1/16
+        # ifconfig usb0 169.254.1.1/16
         # echo >> /home/pi/80-usb.log " set address "
         iptables-restore < /etc/iproute2/usb0_rules
         # echo >> /home/pi/80-usb.log " set iptables "
