@@ -11,12 +11,16 @@ from telemetry import TelemetryLogger, LocalPipeTelemetryLoggerDestination, PubS
 
 
 class MQTTLocalPipeTelemetryLogger(TelemetryLogger):
-    def __init__(self, stream_name, host="localhost", port=1883, topic='telemetry'):
+    def __init__(self, stream_name, host="localhost", port=1883, topic=None):
+        if topic is None:
+            topic = "telemetry" if pyroslib.getClusterId() == "master" else pyroslib.getClusterId() + ":telemetry"
         super(MQTTLocalPipeTelemetryLogger, self).__init__(stream_name,
                                                            destination=LocalPipeTelemetryLoggerDestination(),
-                                                           telemetry_client=PubSubTelemetryLoggerClient('telemetry', pyroslib.publish, pyroslib.subscribeBinary))
+                                                           telemetry_client=PubSubTelemetryLoggerClient(topic, pyroslib.publish, pyroslib.subscribeBinary))
 
     def init(self):
+        print("    set up topic " + self.telemetry_client.topic)
+
         print("    waiting for pyros to connect...")
         while not pyroslib.isConnected():
             pyroslib.loop(0.02)

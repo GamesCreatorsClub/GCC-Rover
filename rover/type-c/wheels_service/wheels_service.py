@@ -766,7 +766,14 @@ if __name__ == "__main__":
         print("  Initialising radio...")
         nRF2401.initNRF(0, 0, NRF_PACKET_SIZE, NRF_DEFAULT_ADDRESS, NRF_CHANNEL)
 
-        steer_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-steer')
+        clusterId = pyroslib.getClusterId()
+        if clusterId is not "master":
+            telemetryTopic = clusterId + ":telemetry"
+        else:
+            telemetryTopic = "telemetry"
+        print("Running telemetry at topic " + telemetryTopic)
+
+        steer_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-steer', topic=telemetryTopic)
         steer_logger.addFixedString('wheel', 2)
         steer_logger.addFixedString('action', 2)
         steer_logger.addDouble('current')
@@ -779,7 +786,7 @@ if __name__ == "__main__":
         steer_logger.addDouble('pid_d')
         steer_logger.addDouble('pid_last_error')
 
-        drive_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-drive')
+        drive_logger = telemetry.MQTTLocalPipeTelemetryLogger('wheel-drive', topic=telemetryTopic)
         drive_logger.addFixedString('wheel', 2)
         drive_logger.addDouble('pos')
         drive_logger.addByte('status')
@@ -793,8 +800,7 @@ if __name__ == "__main__":
 
         print("Started wheels service.")
 
-        driveThread = threading.Thread(target=driveThreadMain)
-        driveThread.daemon = True
+        driveThread = threading.Thread(target=driveThreadMain, daemon=True)
         driveThread.start()
 
         pyroslib.forever(0.02, steerWheels)

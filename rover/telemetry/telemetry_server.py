@@ -8,10 +8,10 @@ from telemetry import *
 
 import functools
 import os
-import select
-import time
 import threading
 import uuid
+
+DEBUG = False
 
 
 class TelemetryServer:
@@ -65,43 +65,70 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
         if not os.path.exists(self.telemetry_fifo):
             os.mkfifo(self.telemetry_fifo)
 
-        self.pipe_fd = os.open(self.telemetry_fifo, os.O_NONBLOCK | os.O_RDONLY)
+        # self.pipe_fd = os.open(self.telemetry_fifo, os.O_RDONLY)
+        self.pipe = open(self.telemetry_fifo, "rb")
 
-        self.pipe = os.fdopen(self.pipe_fd, 'rb', buffering=0)
-
-        self.thread = threading.Thread(target=self._service_pipe)
-        self.thread.daemon = True
+        self.thread = threading.Thread(target=self._service_pipe, daemon=True)
         self.thread.start()
 
     def _service_pipe(self):
         def read_pipe(size):
-            reads, writes, errors = select.select([self.pipe], [], [self.pipe])
-            return self.pipe.read(size)
+            # buf = os.read(self.pipe_fd, size)
+            buf = self.pipe.read(size)
+            # if buf != b'' and len(buf) == size:
+            #     return buf
+            # elif buf != b'':
+            #     size -= len(buf)
+            #
+            # while size > 0:
+            #     b = os.read(self.pipe_fd, size)
+            #     if b != b'':
+            #         buf += b
+            #         size -= len(b)
+
+            return buf
 
         while True:
-            reads, writes, errors = select.select([self.pipe], [], [self.pipe])
-            d = read_pipe(1)
-            if d != b'' and d is not None:
-                i = ord(d)
-                if i & 1 == 0:
-                    stream_id = struct.unpack('<b', read_pipe(1))[0]
-                else:
-                    stream_id = struct.unpack('<h', read_pipe(2))[0]
-
-                if i & 6 == 0:
-                    record_size = struct.unpack('<b', read_pipe(1))[0]
-                elif i & 6 == 1:
-                    record_size = struct.unpack('<h', read_pipe(2))[0]
-                else:
-                    record_size = struct.unpack('<i', read_pipe(4))[0]
-
-                record = read_pipe(record_size)
-
-                if stream_id in self.stream_ids:
-                    stream = self.stream_ids[stream_id]
-                    self.stream_storage.store(stream, stream.extractTimestamp(record), record)
+            d = read_pipe(1)[0]
+            if DEBUG:
+                print("Def char " + str(bin(d)))
+            if d & 1 == 0:
+                if DEBUG:
+                    print("Reading one byte stream id...")
+                stream_id = struct.unpack('<b', read_pipe(1))[0]
             else:
-                time.sleep(0.02)
+                if DEBUG:
+                    print("Reading two bytes stream id...")
+                stream_id = struct.unpack('<h', read_pipe(2))[0]
+
+            if DEBUG:
+                print("Stream id = " + str(stream_id))
+
+            if d & 6 == 0:
+                if DEBUG:
+                    print("Reading one byte record size...")
+                record_size = struct.unpack('<b', read_pipe(1))[0]
+            elif d & 6 == 1:
+                if DEBUG:
+                    print("Reading two bytes record size...")
+                record_size = struct.unpack('<h', read_pipe(2))[0]
+            else:
+                if DEBUG:
+                    print("Reading four bytes record size...")
+                record_size = struct.unpack('<i', read_pipe(4))[0]
+
+            if DEBUG:
+                print("Record size = " + str(record_size) + ", reading record...")
+
+            record = read_pipe(record_size)
+            if DEBUG:
+                print("Got record of size = " + str(len(record)) + ", storing record...")
+
+            if stream_id in self.stream_ids:
+                stream = self.stream_ids[stream_id]
+                self.stream_storage.store(stream, stream.extractTimestamp(record), record)
+            else:
+                print("Got unknown stream id! stream_id=" + str(stream_id) + ",  record_id=" + str(record_size) + ", def=" + str(bin(d)))
 
     def _handleRegister(self, topic, payload):
         payload = str(payload, 'UTF-8')

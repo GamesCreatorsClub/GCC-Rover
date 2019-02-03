@@ -73,11 +73,14 @@ class MemoryTelemetryStorage(TelemetryStorage):
         callback([])
 
     def getOldestTimestamp(self, stream, callback):
-        values = self.streams[stream.name]
-        if len(values) > 0:
-            return callback(values[0][0])
+        if stream.name in self.streams:
+            values = self.streams[stream.name]
+            if len(values) > 0:
+                return callback(values[0][0])
 
-        return callback(time.time())
+            return callback(time.time())
+        else:
+            return 0
 
 
 class StreamCallback:
