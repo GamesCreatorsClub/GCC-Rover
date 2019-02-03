@@ -50,7 +50,7 @@ spi = spidev.SpiDev()
 shutdownText = None
 confirmText = None
 showConfirm = False
-
+showShutdownStarted = False
 
 def doNothing():
     pass
@@ -203,7 +203,7 @@ def start():
 
 
 def mainLoop():
-    global touchDown, touchX, touchY, trail, showConfirm, touchChanged
+    global touchDown, touchX, touchY, trail, showConfirm, touchChanged, showShutdownStarted
 
     def fixValue(value, minv, maxv, dest_max):
         if value < minv:
@@ -266,6 +266,7 @@ def mainLoop():
                     if 140 <= touchX <= 320 and 400 <= touchY <= 480:
                         print("Shutting down")
                         pyroslib.publish("system/shutdown", "secret_message_now")
+                        showShutdownStarted = True
                     else:
                         showConfirm = False
                 else:
@@ -293,7 +294,9 @@ def mainLoop():
         screen.blit(textX, (0, 40))
         screen.blit(textY, (0, 80))
 
-        if showConfirm:
+        if showShutdownStarted:
+            screen.blit(shutdownText, (10, 200))
+        elif showConfirm:
             pygame.draw.rect(screen, (200, 50, 0), pygame.Rect(140, 400, 320, 480))
             screen.blit(confirmText, (180, 430))
         else:
