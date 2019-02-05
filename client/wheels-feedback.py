@@ -1,10 +1,10 @@
-
 #
 # Copyright 2016-2019 Games Creators Club
 #
 # MIT License
 #
 
+import math
 import sys
 import pygame
 import pyros
@@ -63,6 +63,8 @@ calibrateWheelButtons = []
 calibratePIDButtons = []
 calibrateCancelButton = []
 
+angle = 0.0
+
 
 def createTemplateWheel():
     return {
@@ -70,7 +72,9 @@ def createTemplateWheel():
         'deg_status': 0,
         'speed_status': 0,
         'odo': 0,
-        'cal': {}
+        'cal': {},
+        'd1': -1.0,
+        'd2': -1.0
     }
 
 
@@ -154,10 +158,10 @@ def rightMoreButtonClick():
 
 
 def saveCalibrationWheelButtonClick():
-    wheel = wheelsMap[selectedWheel]
+    wheel = wheelsMap[str(selectedWheel)]
     calDeg = wheel['cal']['deg']['0']
-    angle = wheel['angle']
-    value = angle + calDeg
+    _angle = wheel['angle']
+    value = _angle + calDeg
     if value < 0:
         value += 360
 
@@ -166,7 +170,7 @@ def saveCalibrationWheelButtonClick():
 
     wheel['wanted'] = 0
 
-    print("Old value " + str(calDeg) + ", angle " + str(angle) + ", new value " + str(value))
+    print("Old value " + str(calDeg) + ", angle " + str(_angle) + ", new value " + str(value))
 
     pyros.publish("storage/write/wheels/cal/" + str(selectedWheel) + "/deg/0", str(value))
     pyros.publish("wheel/" + str(selectedWheel) + "/deg", str(0))
@@ -226,20 +230,20 @@ def saveCalibrationPIDButtonClick():
 
 def directionDegToggleButtonClick():
     wheel = wheelsMap[str(selectedWheel)]
-    dir = wheelsMap[str(selectedWheel)]['cal']['deg']['dir']
-    dir = -dir
-    wheelsMap[str(selectedWheel)]['cal']['deg']['dir'] = dir
-    print("Old value " + str(-dir) + ", new value " + str(dir))
-    pyros.publish("storage/write/wheels/cal/" + str(selectedWheel) + "/deg/dir", str(dir))
+    _direction = wheelsMap[str(selectedWheel)]['cal']['deg']['dir']
+    _direction = -_direction
+    wheelsMap[str(selectedWheel)]['cal']['deg']['dir'] = _direction
+    print("Old value " + str(-_direction) + ", new value " + str(_direction))
+    pyros.publish("storage/write/wheels/cal/" + str(selectedWheel) + "/deg/dir", str(_direction))
 
 
 def directionSteerToggleButtonClick():
     wheel = wheelsMap[str(selectedWheel)]
-    dir = wheelsMap[str(selectedWheel)]['cal']['steer']['dir']
-    dir = -dir
-    wheelsMap[str(selectedWheel)]['cal']['steer']['dir'] = dir
-    print("Old value " + str(-dir) + ", new value " + str(dir))
-    pyros.publish("storage/write/wheels/cal/" + str(selectedWheel) + "/steer/dir", str(dir))
+    _direction = wheelsMap[str(selectedWheel)]['cal']['steer']['dir']
+    _direction = -_direction
+    wheelsMap[str(selectedWheel)]['cal']['steer']['dir'] = _direction
+    print("Old value " + str(-_direction) + ", new value " + str(_direction))
+    pyros.publish("storage/write/wheels/cal/" + str(selectedWheel) + "/steer/dir", str(_direction))
 
 
 def stopAllButtonClick():
@@ -267,45 +271,39 @@ def initGui():
         pygame.draw.rect(screen, WHITE, rect, 1)
 
     def makeTextButton(rect, text, onClick):
-        button = {'rect': rect, 'onClick': onClick}
-
-        button['drawSelected'] = drawSelected
-        button['draw'] = draw
-        button['text'] = font.render(text, 0, WHITE)
-        return button
+        return {'rect': rect, 'onClick': onClick, 'drawSelected': drawSelected, 'draw': draw, 'text': font.render(text, 0, WHITE)}
 
     def makeBorderButton(rect, onClick):
         button = {'rect': rect, 'onClick': onClick}
 
-        def drawSelected(button):
-            rect = button['rect']
-            pygame.draw.rect(screen, WHITE, rect, 1)
+        def _drawSelected(_button):
+            _rect = _button['rect']
+            pygame.draw.rect(screen, WHITE, _rect, 1)
 
-        def draw(button):
-            rect = button['rect']
-            pygame.draw.rect(screen, WHITE, rect, 1)
+        def _draw(_button):
+            _rect = _button['rect']
+            pygame.draw.rect(screen, WHITE, _rect, 1)
 
-        button['drawSelected'] = drawSelected
-        button['draw'] = draw
+        button['drawSelected'] = _drawSelected
+        button['draw'] = _draw
         return button
 
     def makeDirectionToggleButton(rect, text, calPath, onClick):
         button = {'rect': rect, 'onClick': onClick}
 
-        def checkText(button):
-            dir = wheelsMap[selectedWheel]['cal'][calPath]['dir']
-            if 'text' not in button or button['prevdir'] != dir:
+        def checkText(_button):
+            _direction = wheelsMap[str(selectedWheel)]['cal'][calPath]['dir']
+            if 'text' not in _button or _button['prevdir'] != _direction:
+                _button['text'] = font.render(text + "<---" if _direction < 0 else text + "--->", 20, WHITE)
+                _button['prevdir'] = _direction
 
-                button['text'] = font.render(text + "<---" if dir < 0 else text + "--->", 20, WHITE)
-                button['prevdir'] = dir
+        def drawToggleSelected(_button):
+            checkText(_button)
+            drawSelected(_button)
 
-        def drawToggleSelected(button):
-            checkText(button)
-            drawSelected(button)
-
-        def drawToggle(button):
-            checkText(button)
-            draw(button)
+        def drawToggle(_button):
+            checkText(_button)
+            draw(_button)
 
         button['drawSelected'] = drawToggleSelected
         button['draw'] = drawToggle
@@ -382,10 +380,10 @@ def initGui():
 def handleWheelPositions(topic, message, groups):
     global received  # , angle
 
-    def updateWheel(wheelName, values, index):
+    def updateWheel(wheelName, _values, index):
         wheel = wheelsMap[wheelName]
-        odoStr = values[index]
-        statusStr = values[index + 1]
+        odoStr = _values[index]
+        statusStr = _values[index + 1]
         wheel['odo'] = int(odoStr)
         wheel['speed_status'] = int(statusStr)
 
@@ -402,25 +400,30 @@ def handleWheelPositions(topic, message, groups):
 def handleWheelOrientations(topic, message, groups):
     global received  # , angle
 
-    def updateWheel(wheelName, values, index):
+    def updateWheel(wheelName, _values, index, distance_index):
         wheel = wheelsMap[wheelName]
-        angleStr = values[index]
-        statusStr = values[index + 1]
+        angleStr = _values[index]
+        statusStr = _values[index + 1]
         wheel['deg_status'] = int(statusStr)
         if angleStr != '-':
-            angle = int(angleStr)
-            wheel['angle'] = angle
+            _angle = int(angleStr)
+            wheel['angle'] = _angle
             if 'wanted' not in wheel or mode != MODE_CALIBRATE_WHEEL:
-                wheel['wanted'] = angle
+                wheel['wanted'] = _angle
+
+        d1 = _values[distance_index]
+        d2 = _values[distance_index + 1]
+        wheel['d1'] = float(d1)
+        wheel['d2'] = float(d2)
 
     received = True
     # print("** wheel positions = " + message)
 
     values = message.split(",")
-    updateWheel('fl', values, 1)
-    updateWheel('fr', values, 3)
-    updateWheel('bl', values, 5)
-    updateWheel('br', values, 7)
+    updateWheel('fl', values, 1, 9)
+    updateWheel('fr', values, 3, 11)
+    updateWheel('bl', values, 5, 13)
+    updateWheel('br', values, 7, 15)
 
 
 def handleStorageWrite(topic, message, groups):
@@ -431,6 +434,7 @@ def handleStorageWrite(topic, message, groups):
     if 'pid' == wheelName:
         pid = wheelsMap['pid']
         try:
+            # noinspection PyTypeChecker
             pid[topics[1]] = float(message)
         except:
             pid[topics[1]] = message
@@ -463,18 +467,20 @@ def hasCalibrationLoaded():
         pid = wheelsMap['pid']
         return 'p' in pid and 'i' in pid and 'd' in pid and 'd' in pid and 'g' in pid and 'deadband' in pid
 
-    return hasCalibrationLoadedWheel('fr') and hasCalibrationLoadedWheel('fl') and \
-           hasCalibrationLoadedWheel('br') and hasCalibrationLoadedWheel('bl') and \
-           hasCalibrationLoadedPID()
+    return hasCalibrationLoadedWheel('fr') and \
+        hasCalibrationLoadedWheel('fl') and \
+        hasCalibrationLoadedWheel('br') and \
+        hasCalibrationLoadedWheel('bl') and \
+        hasCalibrationLoadedPID()
 
 
 def processButtons(buttons):
     global selectedButton, mousePreviousState
 
     def findButton():
-        for button in buttons:
-            if button['rect'].collidepoint(mousePos):
-                return button
+        for _button in buttons:
+            if _button['rect'].collidepoint(mousePos):
+                return _button
 
         return None
 
@@ -501,22 +507,27 @@ def drawTextInCentre(text, colour, rect):
 
 
 def drawAngle(wheel, wheelRect):
-
-    def wheelStatusToString(status):
-        return " ".join([f for f in [("i2c_W" if status & STATUS_ERROR_I2C_WRITE else ""),
-               ("i2c_R" if status & STATUS_ERROR_I2C_READ else ""),
-               ("O" if status & STATUS_ERROR_MOTOR_OVERHEAT else ""),
-               ("MH" if status & STATUS_ERROR_MAGNET_HIGH else ""),
-               ("ML" if status & STATUS_ERROR_MAGNET_LOW else ""),
-               ("MND" if status & STATUS_ERROR_MAGNET_NOT_DETECTED else ""),
-               ("RX" if status & STATUS_ERROR_RX_FAILED else ""),
-               ("TX" if status & STATUS_ERROR_TX_FAILED else "")] if f != ""])
+    def wheelStatusToString(_status):
+        return " ".join([f for f in [("i2c_W" if _status & STATUS_ERROR_I2C_WRITE else ""),
+                                     ("i2c_R" if _status & STATUS_ERROR_I2C_READ else ""),
+                                     ("O" if _status & STATUS_ERROR_MOTOR_OVERHEAT else ""),
+                                     ("MH" if _status & STATUS_ERROR_MAGNET_HIGH else ""),
+                                     ("ML" if _status & STATUS_ERROR_MAGNET_LOW else ""),
+                                     ("MND" if _status & STATUS_ERROR_MAGNET_NOT_DETECTED else ""),
+                                     ("RX" if _status & STATUS_ERROR_RX_FAILED else ""),
+                                     ("TX" if _status & STATUS_ERROR_TX_FAILED else "")] if f != ""])
 
     status = wheel['deg_status'] | wheel['speed_status']
     angle_text = font.render(str(wheel['angle']), 0, BLACK)
     screen.blit(angle_text, (wheelRect.centerx - angle_text.get_width() // 2, wheelRect.centery - angle_text.get_height() // 2))
     odo_text = smallFont.render(str(wheel['odo']), 0, BLACK)
     screen.blit(odo_text, (wheelRect.centerx - odo_text.get_width() // 2, wheelRect.centery - odo_text.get_height() // 2 + angle_text.get_height() + 3))
+
+    d1_text = smallFont.render(str(wheel['d1']), 0, WHITE)
+    d2_text = smallFont.render(str(wheel['d2']), 0, WHITE)
+    screen.blit(d1_text, (wheelRect.x, wheelRect.y))
+    screen.blit(d2_text, (wheelRect.right - d2_text.get_width(), wheelRect.y))
+
 
     if status != 32:
         font.set_bold(True)
@@ -529,9 +540,9 @@ def drawAngle(wheel, wheelRect):
 
 def drawCalibration(wheel, wheelRect):
     value = wheel['cal']['deg']['0']
-    angle = wheel['angle']
+    _angle = wheel['angle']
 
-    value += angle
+    value += _angle
     if value < 0:
         value += 360
     if value >= 360:
@@ -542,7 +553,6 @@ def drawCalibration(wheel, wheelRect):
 
 
 def drawWheel(wheelName, middleTextCallback, rect):
-
     wheel = wheelsMap[wheelName]
 
     selectedWheelImage = wheelImage
@@ -554,9 +564,9 @@ def drawWheel(wheelName, middleTextCallback, rect):
     else:
         selectedWheelImage = wheelRedImage
 
-    angle = float(wheel['angle'])
+    _angle = float(wheel['angle'])
 
-    rotatedWheelImage = pygame.transform.rotate(selectedWheelImage, -angle)
+    rotatedWheelImage = pygame.transform.rotate(selectedWheelImage, -_angle)
     imageRect = rotatedWheelImage.get_rect(center=rect.center)
     screen.blit(rotatedWheelImage, imageRect)
 
@@ -564,6 +574,7 @@ def drawWheel(wheelName, middleTextCallback, rect):
         middleTextCallback(wheel, rect)
 
 
+# noinspection PyTypeChecker
 def drawWheels(middleTextCallback):
     drawWheel('fr', middleTextCallback, wheelRects['fr'])
     drawWheel('fl', middleTextCallback, wheelRects['fl'])
@@ -571,8 +582,52 @@ def drawWheels(middleTextCallback):
     drawWheel('bl', middleTextCallback, wheelRects['bl'])
 
 
+def drawRadar():
+
+    def limit(d):
+        if d < 0:
+            d = 0
+        if d > 900:
+            d = 900
+        return 80 - d / 20.0
+
+    rect = pygame.Rect(0, 100, 100, 100)
+
+    d1Fl = limit(wheelsMap['fl']['d1'])
+    d2Fl = limit(wheelsMap['fl']['d2'])
+    d1Fr = limit(wheelsMap['fr']['d1'])
+    d2Fr = limit(wheelsMap['fr']['d2'])
+    d1Bl = limit(wheelsMap['bl']['d1'])
+    d2Bl = limit(wheelsMap['bl']['d2'])
+    d1Br = limit(wheelsMap['br']['d1'])
+    d2Br = limit(wheelsMap['br']['d2'])
+
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fl, -d1Fl), 202.5, 247.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fl, -d2Fl), 247.5, 292.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d1Fr), 292.5, 337.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d2Fr), 337.55, 22.5)
+    #
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Bl, -d1Bl), 22.5, 67.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d2Bl, -d2Bl), 67.5, 112.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d1Br), 112.5, 157.5)
+    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d2Br), 157.55, 202.5)
+
+    pi8 = math.pi / 8
+
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fr, -d2Fr), pi8 * 15, pi8 * 1)  # 90º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d1Fr), pi8 * 1, pi8 * 3)  # 45º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fl, -d2Fl), pi8 * 3, pi8 * 5)  # 0º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fl, -d1Fl), pi8 * 5, pi8 * 7)  # 315º
+
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Bl, -d2Bl), pi8 * 7, pi8 * 9)  # 270º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Bl, -d1Bl), pi8 * 9, pi8 * 11)  # 225º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d2Br), pi8 * 11, pi8 * 13)  # 180º
+    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d1Br), pi8 * 13, pi8 * 15)  # 135º
+
+
 def drawStatusScreen():
     drawWheels(drawAngle)
+    drawRadar()
     processButtons(mainButtons)
 
 
@@ -586,6 +641,7 @@ def drawCalibrateWheel():
         drawTextInCentre("Loading calibration", WHITE, screen.get_rect())
         processButtons(calibrateCancelButton)
     else:
+        # noinspection PyTypeChecker
         drawWheel(selectedWheel, drawCalibration, wheelRects['middle'])
 
         processButtons(calibrateWheelButtons)
@@ -599,8 +655,8 @@ def drawCalibratePID():
 
         s = "{0:.2f}".format(value)
         i = s.index('.')
-        left = s[0:i+1]
-        right = s[i+1:]
+        left = s[0:i + 1]
+        right = s[i + 1:]
 
         leftSurface = font.render(left, 0, WHITE)
         rightSurface = font.render(right, 0, WHITE)
