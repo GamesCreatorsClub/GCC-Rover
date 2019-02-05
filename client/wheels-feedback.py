@@ -62,6 +62,7 @@ selectWheelButtons = []
 calibrateWheelButtons = []
 calibratePIDButtons = []
 calibrateCancelButton = []
+distances = [0, 0, 0, 0, 0, 0, 0, 0]
 
 angle = 0.0
 
@@ -397,10 +398,20 @@ def handleWheelPositions(topic, message, groups):
     updateWheel('br', values, 7)
 
 
+def handleDistance(topic, message, groups):
+    global received  # , angle
+
+    values = message.split(",")
+    for i in range(8):
+        distances[i] = float(values[i + 1])
+        if distances[i] < 0:
+            distances[i] = 0
+
+
 def handleWheelOrientations(topic, message, groups):
     global received  # , angle
 
-    def updateWheel(wheelName, _values, index, distance_index):
+    def updateWheel(wheelName, _values, index):
         wheel = wheelsMap[wheelName]
         angleStr = _values[index]
         statusStr = _values[index + 1]
@@ -411,19 +422,14 @@ def handleWheelOrientations(topic, message, groups):
             if 'wanted' not in wheel or mode != MODE_CALIBRATE_WHEEL:
                 wheel['wanted'] = _angle
 
-        d1 = _values[distance_index]
-        d2 = _values[distance_index + 1]
-        wheel['d1'] = float(d1)
-        wheel['d2'] = float(d2)
-
     received = True
     # print("** wheel positions = " + message)
 
     values = message.split(",")
-    updateWheel('fl', values, 1, 9)
-    updateWheel('fr', values, 3, 11)
-    updateWheel('bl', values, 5, 13)
-    updateWheel('br', values, 7, 15)
+    updateWheel('fl', values, 1)
+    updateWheel('fr', values, 3)
+    updateWheel('bl', values, 5)
+    updateWheel('br', values, 7)
 
 
 def handleStorageWrite(topic, message, groups):
@@ -589,40 +595,20 @@ def drawRadar():
             d = 0
         if d > 900:
             d = 900
-        return 80 - d / 20.0
+        return - (80 - d / 20.0)
 
     rect = pygame.Rect(0, 100, 100, 100)
 
-    d1Fl = limit(wheelsMap['fl']['d1'])
-    d2Fl = limit(wheelsMap['fl']['d2'])
-    d1Fr = limit(wheelsMap['fr']['d1'])
-    d2Fr = limit(wheelsMap['fr']['d2'])
-    d1Bl = limit(wheelsMap['bl']['d1'])
-    d2Bl = limit(wheelsMap['bl']['d2'])
-    d1Br = limit(wheelsMap['br']['d1'])
-    d2Br = limit(wheelsMap['br']['d2'])
-
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fl, -d1Fl), 202.5, 247.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fl, -d2Fl), 247.5, 292.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d1Fr), 292.5, 337.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d2Fr), 337.55, 22.5)
-    #
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Bl, -d1Bl), 22.5, 67.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d2Bl, -d2Bl), 67.5, 112.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d1Br), 112.5, 157.5)
-    # pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d2Br), 157.55, 202.5)
-
     pi8 = math.pi / 8
 
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fr, -d2Fr), pi8 * 15, pi8 * 1)  # 90º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fr, -d1Fr), pi8 * 1, pi8 * 3)  # 45º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Fl, -d2Fl), pi8 * 3, pi8 * 5)  # 0º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Fl, -d1Fl), pi8 * 5, pi8 * 7)  # 315º
-
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d2Bl, -d2Bl), pi8 * 7, pi8 * 9)  # 270º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Bl, -d1Bl), pi8 * 9, pi8 * 11)  # 225º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d2Br), pi8 * 11, pi8 * 13)  # 180º
-    pygame.draw.arc(screen, WHITE, rect.inflate(-d1Br, -d1Br), pi8 * 13, pi8 * 15)  # 135º
+    pygame.draw.arc(screen, (255, 0, 255), rect.inflate(limit(distances[0]), limit(distances[0])), pi8 * 3, pi8 * 5)  # 0º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[1]), limit(distances[1])), pi8 * 1, pi8 * 3)  # 45º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[2]), limit(distances[2])), pi8 * 15, pi8 * 1)  # 90º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[3]), limit(distances[3])), pi8 * 13, pi8 * 15)  # 135º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[4]), limit(distances[4])), pi8 * 11, pi8 * 13)  # 180º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[5]), limit(distances[5])), pi8 * 9, pi8 * 11)  # 225º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[6]), limit(distances[6])), pi8 * 7, pi8 * 9)  # 270º
+    pygame.draw.arc(screen, WHITE, rect.inflate(limit(distances[7]), limit(distances[7])), pi8 * 5, pi8 * 7)  # 315º
 
 
 def drawStatusScreen():
@@ -706,6 +692,7 @@ def onKeyUp(key):
 
 pyros.subscribe("wheel/deg/status", handleWheelOrientations)
 pyros.subscribe("wheel/speed/status", handleWheelPositions)
+pyros.subscribe("distance/deg", handleDistance)
 pyros.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
