@@ -10,14 +10,16 @@ import RPi.GPIO as GPIO
 
 import copy
 import nRF2401
+import os
 import pyroslib
-import re
 import smbus
 import storagelib
 import telemetry
 import time
 import threading
 import traceback
+
+from vl53l1x.GCC_VL53L1X import VL53L1X, VL53L1X_I2C
 
 #
 # wheels service
@@ -62,13 +64,20 @@ STATUS_ERROR_TX_FAILED = 128
 I2C_BUS = 1
 I2C_MULTIPLEXER_ADDRESS = 0x70
 I2C_AS5600_ADDRESS = 0x36
+I2C_VL53L1X_ADDRESS_1 = 0x31
+I2C_VL53L1X_ADDRESS_2 = 0x32
+XSHUT_PIN = 4
 
 i2cBus = smbus.SMBus(I2C_BUS)
+vl53l1x_i2c = VL53L1X_I2C()
 
 shutdown = False
 
 steer_logger = None
 drive_logger = None
+
+sensor1 = None
+sensor2 = None
 
 kp = 0.7
 ki = 0.29
@@ -105,7 +114,6 @@ PROTOTYPE_PID_CALIBRATION = {
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
-
 
 STOP_OVERHEAT = bytes('SO', 'ASCII')
 STOP_NO_DATA = bytes('SN', 'ASCII')
@@ -162,14 +170,14 @@ def smallestAngleChange(old_angle, mod, new_angle):
 
 
 class PID:
-    def __init__(self, kp, ki, kd, gain, dead_band):
+    def __init__(self, _kp, _ki, _kd, gain, dead_band):
         self.set_point = 0.0
         self.p = 0.0
         self.i = 0.0
         self.d = 0.0
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
+        self.kp = _kp
+        self.ki = _ki
+        self.kd = _kd
         self.kg = gain
         self.dead_band = dead_band
         self.last_error = 0.0
@@ -274,10 +282,11 @@ def updateWheelsPid():
 
 
 def checkPidsChanged():
-    if kp != wheelCalibrationMap['pid']['p'] or ki != wheelCalibrationMap['pid']['i'] or \
-        kd != wheelCalibrationMap['pid']['d'] or kg != wheelCalibrationMap['pid']['g'] or \
-        deadband != wheelCalibrationMap['pid']['deadband']:
-
+    if kp != float(wheelCalibrationMap['pid']['p']) or \
+            ki != float(wheelCalibrationMap['pid']['i']) or \
+            kd != float(wheelCalibrationMap['pid']['d']) or \
+            kg != float(wheelCalibrationMap['pid']['g']) or \
+            deadband != float(wheelCalibrationMap['pid']['deadband']):
         updateWheelsPid()
 
 
@@ -298,6 +307,7 @@ def ensureWheelData(name, motorEnablePin, motorPWMPin, i2cAddress, nrfAddress):
     storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calMap)
 
 
+# noinspection PyTypeChecker
 def ensurePIDData():
     calMap = copy.deepcopy(PROTOTYPE_PID_CALIBRATION)
     calMap['p'] = str(PROTOTYPE_PID_CALIBRATION['p'])
@@ -382,7 +392,6 @@ def stopAllWheels():
 
 
 def handleDeg(wheel, wheelCal, new_angle):
-
     try:
         new_angle = float(new_angle)
 
@@ -428,7 +437,6 @@ def interpolate(value, zerostr, maxstr):
 
 
 def steerWheel(wheelName, curDeg, status):
-
     def stopAll():
         GPIO.output(enPin, GPIO.LOW)
         motor_pwm.ChangeDutyCycle(0)
@@ -491,7 +499,8 @@ def steerWheel(wheelName, curDeg, status):
                         del wheel['termal']
                         wheel['overheat'] = now
                         stopAll()
-                        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+                        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point,
+                                         pid.i, pid.d, pid.last_error)
                         return
                 else:
                     wheel['termal'] = now
@@ -523,7 +532,8 @@ def readPosition(wheelName):
             status = pos[0] & 0b00111000 | STATUS_ERROR_MAGNET_NOT_DETECTED
 
             if DEBUG_READ:
-                print("Read wheel " + wheelName + " @ address " + str(i2cAddress) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
+                print("Read wheel " + wheelName + " @ address " + str(i2cAddress) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + (
+                    "MD" if status & 32 else "  "))
 
             return angle, status
         except:
@@ -539,6 +549,35 @@ def readPosition(wheelName):
         return 0, STATUS_ERROR_I2C_WRITE
 
 
+def readDistances(wheelName):
+    sensor1 = wheelMap[wheelName]['vl53l1x_1']
+    sensor2 = wheelMap[wheelName]['vl53l1x_2']
+
+    now = time.time()
+    if sensor1.data_ready():
+        data_ready_time = time.time() - now
+        measurement_data1 = sensor1.get_measurement_data()
+        measurement_time = time.time() - now
+        d1 = measurement_data1.distance
+        sensor1.clear_interrupt()
+        wheelMap[wheelName]['d1'] = d1
+        print("data_ready_time " + str(data_ready_time) + " measurement_time " + str(measurement_time - data_ready_time) + " total " + str(measurement_time))
+    else:
+        # data_ready_time = time.time() - now
+        # print("data_ready_time only " + str(data_ready_time))
+        d1 = wheelMap[wheelName]['d1']
+
+    if sensor2.data_ready():
+        measurement_data2 = sensor2.get_measurement_data()
+        d2 = measurement_data2.distance
+        sensor2.clear_interrupt()
+        wheelMap[wheelName]['d2'] = d2
+    else:
+        d2 = wheelMap[wheelName]['d2']
+
+    return d1, d2
+
+
 def prepareAndSteerWheel(wheelName):
     angle, status = readPosition(wheelName)
     if DBEUG_ERRORS and status & 24 != 0:
@@ -550,7 +589,8 @@ def prepareAndSteerWheel(wheelName):
         angle = 360 - angle
 
     if status == 1:
-        return 0, status
+        d1, d2 = readDistances(wheelName)
+        return 0, status, d1, d2
 
     caloffset = int(wheelCalibrationMap[wheelName]['deg']['0'])
     angle -= caloffset
@@ -562,7 +602,9 @@ def prepareAndSteerWheel(wheelName):
     if 'overheat' in wheel:
         status |= STATUS_ERROR_MOTOR_OVERHEAT
 
-    return angle, status
+    d1, d2 = readDistances(wheelName)
+
+    return angle, status, d1, d2
 
 
 def prepareAndDriveWheel(wheelName):
@@ -609,7 +651,7 @@ def prepareAndDriveWheel(wheelName):
                 pwm_reg = p[11]
 
                 now = time.time()
-                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos_deg, 0, (now- started_time), speed)
+                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos_deg, 0, (now - started_time), speed)
                 return wheel_pos_deg, 0
             else:
                 now = time.time()
@@ -646,7 +688,6 @@ def driveAllWheels():
 
 def driveWheels():
     if not shutdown:
-
         odoFl, statusSpeedFl = prepareAndDriveWheel("fl")
         odoFr, statusSpeedFr = prepareAndDriveWheel("fr")
         odoBl, statusSpeedBl = prepareAndDriveWheel("bl")
@@ -660,12 +701,12 @@ def steerWheels():
     if not shutdown:
         checkPidsChanged()
 
-        angleFl, statusSteerFl = prepareAndSteerWheel("fl")
-        angleFr, statusSteerFr = prepareAndSteerWheel("fr")
-        angleBl, statusSteerBl = prepareAndSteerWheel("bl")
-        angleBr, statusSteerBr = prepareAndSteerWheel("br")
+        angleFl, statusSteerFl, d1Fl, d2Fl = prepareAndSteerWheel("fl")
+        angleFr, statusSteerFr, d1Fr, d2Fr = prepareAndSteerWheel("fr")
+        angleBl, statusSteerBl, d1Bl, d2Bl = prepareAndSteerWheel("bl")
+        angleBr, statusSteerBr, d1Br, d2Br = prepareAndSteerWheel("br")
 
-        message = ",".join([str(f) for f in [time.time(), angleFl, statusSteerFl, angleFr, statusSteerFr, angleBl, statusSteerBl, angleBr, statusSteerBr]])
+        message = ",".join([str(f) for f in [time.time(), angleFl, statusSteerFl, angleFr, statusSteerFr, angleBl, statusSteerBl, angleBr, statusSteerBr, d1Fl, d2Fl, d1Fr, d2Fr, d1Bl, d2Bl, d1Br, d2Br]])
         pyroslib.publish("wheel/deg/status", message)
 
 
@@ -742,6 +783,92 @@ def handleShutdownAnnounced(topic, payload, groups):
     stopAllWheels()
 
 
+def initDistanceSensors():
+
+    # noinspection PyProtectedMember
+    def switchBus(_wheelName):
+        i2cAddress = int(wheelCalibrationMap[_wheelName]['deg']["i2c"])
+        try:
+            i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2cAddress)
+            print("        switched bus to " + bin(i2cAddress))
+        except BaseException as e:
+            print("Cannot initialise distance sensors - i2c is not working; " + str(e))
+            os._exit(1)
+
+    vl53l1x_i2c.open()
+
+    GPIO.setup(XSHUT_PIN, GPIO.OUT)
+    GPIO.output(XSHUT_PIN, GPIO.HIGH)
+
+    need_to_init_xshut = False
+    wheelNames = ['fl', 'fr', 'bl', 'br']
+    i = 0
+    while i < len(wheelNames) and not need_to_init_xshut:
+        wheelName = wheelNames[i]
+        switchBus(wheelName)
+        if not vl53l1x_i2c.is_device_at(I2C_VL53L1X_ADDRESS_2):
+            print("        " + wheelName + ": not present on " + hex(I2C_VL53L1X_ADDRESS_2))
+            need_to_init_xshut = True
+        else:
+            print("        " + wheelName + ": present on " + hex(I2C_VL53L1X_ADDRESS_2))
+
+        i += 1
+
+    if need_to_init_xshut:
+        print("        Need to configure XSHUT sensors")
+        GPIO.output(XSHUT_PIN, GPIO.LOW)
+    else:
+        print("        All XSHUT sensors already configured")
+
+    for wheelName in wheelNames:
+        switchBus(wheelName)
+
+        if vl53l1x_i2c.is_device_at(I2C_VL53L1X_ADDRESS_1):
+            print("        " + wheelName + ": first sensor already present on " + hex(I2C_VL53L1X_ADDRESS_1))
+
+            sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=wheelName + '-s1')
+        else:
+            print("        " + wheelName + ": configuring first sensor to " + hex(I2C_VL53L1X_ADDRESS_1))
+            sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=wheelName + '-s1')
+
+        sensor1.stop_ranging()
+        sensor1.set_distance_mode(VL53L1X.SHORT)
+        sensor1.set_timing_budget(8, 16)
+        wheelMap[wheelName]['vl53l1x_1'] = sensor1
+
+    if need_to_init_xshut:
+        GPIO.output(XSHUT_PIN, GPIO.HIGH)
+        time.sleep(0.002)
+        for wheelName in wheelNames:
+            switchBus(wheelName)
+
+            print("        " + wheelName + ": configuring XSHUT sensor to " + hex(I2C_VL53L1X_ADDRESS_2))
+            sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=wheelName + '-s2')
+            sensor2.stop_ranging()
+            sensor2.set_distance_mode(VL53L1X.SHORT)
+            sensor2.set_timing_budget(8, 16)
+            wheelMap[wheelName]['vl53l1x_2'] = sensor2
+    else:
+        for wheelName in wheelNames:
+            switchBus(wheelName)
+            print("        configuring XSHUT sensor on " + hex(I2C_VL53L1X_ADDRESS_2))
+            sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=wheelName + '-s2')
+            sensor2.stop_ranging()
+            sensor2.set_distance_mode(VL53L1X.SHORT)
+            sensor2.set_timing_budget(8, 16)
+            wheelMap[wheelName]['vl53l1x_2'] = sensor2
+
+    for wheelName in wheelNames:
+        switchBus(wheelName)
+        print("        " + wheelName + ": starting ranging for both sensors")
+        sensor1 = wheelMap[wheelName]['vl53l1x_1']
+        sensor2 = wheelMap[wheelName]['vl53l1x_2']
+        sensor1.start_ranging()
+        sensor2.start_ranging()
+        wheelMap[wheelName]['d1'] = -1
+        wheelMap[wheelName]['d2'] = -1
+
+
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
@@ -797,6 +924,10 @@ if __name__ == "__main__":
         steer_logger.init()
         drive_logger.init()
         print("  Telemetry logging initialised.")
+
+        print("  Initialising distance sensors...")
+        initDistanceSensors()
+        print("  Distance sensors initiated")
 
         print("Started wheels service.")
 
