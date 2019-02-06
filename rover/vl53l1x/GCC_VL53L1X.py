@@ -31,10 +31,11 @@ from ctypes import util
 
 from smbus2 import SMBus, i2c_msg
 
+
 # Load the C library and define functions
-libc = CDLL(ctypes.util.find_library('libc'))
-libc.free.argtypes = [ctypes.c_void_p]
-libc.free.restype = None
+C_LIBRARY = CDLL(ctypes.util.find_library('libc'))
+C_LIBRARY.free.argtypes = [ctypes.c_void_p]
+C_LIBRARY.free.restype = None
 
 # Load the VL53L1X driver library
 _POSSIBLE_LIBRARY_LOCATIONS = [os.path.dirname(os.path.realpath(__file__))]
@@ -50,16 +51,11 @@ except AttributeError:
 for lib_location in _POSSIBLE_LIBRARY_LOCATIONS:
     files = glob.glob(os.path.join(lib_location, "gcc_vl53l1x*.so"))
     if len(files) > 0:
-        lib_file = files[0]
-        try:
-            lib = CDLL(lib_file)
-            print("Loaded gcc_vl53l1x library from {}".format(lib_location))
-            break
-        except OSError:
-            print("Did not find gcc_vl53l1x library in {}".format(lib_location))
-            pass
+        VL53L1X_C_LIBRARY = CDLL(files[0])
+        # print("VL53L1X loaded gcc_vl53l1x library from {}".format(lib_location))
+        break
 else:
-    raise OSError('Could not find gcc_vl53l1x*.so library')
+    raise OSError('VL53L1X: Could not find gcc_vl53l1x*.so library')
 
 
 class VL53L1X_I2C:
@@ -67,17 +63,24 @@ class VL53L1X_I2C:
     def __init__(self, i2c_bus=1):
         self._i2c_bus = i2c_bus
         self._i2c = SMBus(1)
+        self.debug = False
+        self.devices = []
 
     def open(self):
         """Opens the I2C bus"""
         self._i2c.open(bus=self._i2c_bus)
         self._configure_i2c_library_functions()
-        print('Opened I2C bus {}'.format(self._i2c_bus))
+        if self.debug:
+            print('VL53L1X: Opened I2C bus {}'.format(self._i2c_bus))
 
     def close(self):
         """Closes the I2C bus"""
         self._i2c.close()
-        print('Closed I2C bus {}'.format(self._i2c_bus))
+        if self.debug:
+            print('VL53L1X: Closed I2C bus {}'.format(self._i2c_bus))
+        for device in self.devices:
+            device.close()
+        self.devices.clear()
 
     def is_device_at(self, address: int) -> bool:
         """
@@ -103,7 +106,7 @@ class VL53L1X_I2C:
             try:
                 self._i2c.i2c_rdwr(msg_w, msg_r)
             except:
-                print("Cannot read on 0x%x I2C bus, reg: %d" % (address, reg))
+                print("VL53L1X: Cannot read on 0x%x I2C bus, reg: %d" % (address, reg))
 
             for index in range(length):
                 data_p[index] = ord(msg_r.buf[index])
@@ -120,22 +123,92 @@ class VL53L1X_I2C:
             try:
                 self._i2c.i2c_rdwr(msg_w)
             except:
-                print("Cannot write on 0x%x I2C bus, reg: %d" % (address, reg))
+                print("VL53L1X: Cannot write on 0x%x I2C bus, reg: %d" % (address, reg))
             return 0
 
         # Pass i2c read/write function pointers to VL53L1X library.
         self._i2c_read_func = _I2C_READ_FUNC(_i2c_read)
         self._i2c_write_func = _I2C_WRITE_FUNC(_i2c_write)
-        lib.VL53L1_set_i2c(self._i2c_read_func, self._i2c_write_func)
+        VL53L1X_C_LIBRARY.VL53L1_set_i2c(self._i2c_read_func, self._i2c_write_func)
 
 
 class VL53L1XError(RuntimeError):
     def __init__(self, error_code: int):
-        message = ctypes.create_string_buffer(lib.getMaxStringLength())
-        err = lib.VL53L1_GetPalErrorString(error_code, byref(message))
+        message = ctypes.create_string_buffer(VL53L1X_C_LIBRARY.getMaxStringLength())
+        err = VL53L1X_C_LIBRARY.VL53L1_GetPalErrorString(error_code, byref(message))
         if err:
-            raise RuntimeError("Failed to lookup error code")
+            raise RuntimeError("VL53L1X: Failed to lookup error code")
         super().__init__(message.value.decode())
+
+
+class Utils:
+    @staticmethod
+    def check(error_code: int):
+        if error_code:
+            raise VL53L1XError(error_code)
+
+
+class OpticalCentreStructure(ctypes.Structure):
+    _fields_ = [
+        ('x_centre', ctypes.c_uint8),
+        ('y_centre', ctypes.c_uint8),
+    ]
+
+
+class OpticalCentre:
+    """Wraps raw data"""
+    def __init__(self, data: OpticalCentreStructure):
+        self.data = data
+
+    @property
+    def x(self) -> int:
+        """The x co-ordinate in spads. The whole grid is 16x16 spads.
+        The x axis is parallel to a line drawn between the two parts of the sensor."""
+        return self.data.x_centre >> 4
+
+    @property
+    def y(self) -> int:
+        """The y co-ordinate in spads. The whole grid is 16x16 spads.
+        The y axis is perpendicular to a line drawn between the two parts of the sensor."""
+        return self.data.y_centre >> 4
+
+
+class UserRoiStructure(ctypes.Structure):
+    _fields_ = [
+        ('left', ctypes.c_uint8),
+        ('top', ctypes.c_uint8),
+        ('right', ctypes.c_uint8),
+        ('bottom', ctypes.c_uint8),
+    ]
+
+
+class UserRoi:
+    @staticmethod
+    def from_struct(struct: UserRoiStructure):
+        return UserRoi(struct.left, struct.top, struct.right, struct.bottom)
+
+    def __init__(self, left: int, top: int, right: int, bottom: int):
+        self.left = left
+        self.top = top
+        self.right = right
+        self.bottom = bottom
+        self._assert_valid(self.left, "Left")
+        self._assert_valid(self.top, "Top")
+        self._assert_valid(self.right, "Right")
+        self._assert_valid(self.bottom, "Bottom")
+
+    def to_struct(self) -> UserRoiStructure:
+        s = UserRoiStructure()
+        s.left = c_uint8(self.left)
+        s.top =  c_uint8(self.top)
+        s.right =  c_uint8(self.right)
+        s.bottom =  c_uint8(self.bottom)
+        return s
+
+    @staticmethod
+    def _assert_valid(value: int, position: str):
+        if value < 0 or value > 15:
+            raise ValueError("{} out of range. {} must be > 0 and < 16".format(position, value))
 
 
 class MeasurementDataStructure(ctypes.Structure):
@@ -176,14 +249,9 @@ class MeasurementData:
         return self.data.range_status == 0
 
     def get_range_status_description(self) -> str:
-        message = ctypes.create_string_buffer(lib.getMaxStringLength())
-        self.check(lib.VL53L1_GetRangeStatusString(self.data.range_status, byref(message)))
+        message = ctypes.create_string_buffer(VL53L1X_C_LIBRARY.getMaxStringLength())
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_GetRangeStatusString(self.data.range_status, byref(message)))
         return message.value.decode()
-
-    @staticmethod
-    def check(error_code: int):
-        if error_code:
-            raise VL53L1XError(error_code)
 
 
 class VL53L1X:
@@ -195,11 +263,6 @@ class VL53L1X:
     MEDIUM = 2
     LONG = 3
 
-    @staticmethod
-    def check(error_code: int):
-        if error_code:
-            raise VL53L1XError(error_code)
-
     def __init__(self,
                  vl53l1x_i2c: VL53L1X_I2C,
                  initial_address: int = DEFAULT_ADDRESS,
@@ -210,22 +273,27 @@ class VL53L1X:
         :param initial_address: the current I2C address of the sensor
         :param required_address: the desired I2C address of the sensor
         """
-        print("Creating VL53L1X at I2C address 0x{:x}.".format(initial_address))
+        self.closed = False
+        self.debug = vl53l1x_i2c.debug
+        if self.debug:
+            print("VL53L1X: Creating sensor at I2C address 0x{:x}.".format(initial_address))
         self.name = name
         self.address = initial_address
         if not vl53l1x_i2c.is_device_at(initial_address):
-            raise ValueError("No device found at I2C address 0x{:x}".format(initial_address))
-        self.dev = lib.allocDevice(c_uint8(initial_address))
+            raise ValueError("VL53L1X: No device found at I2C address 0x{:x}".format(initial_address))
+        self.dev = VL53L1X_C_LIBRARY.allocDevice(c_uint8(initial_address))
+        vl53l1x_i2c.devices.append(self)
         if initial_address == VL53L1X.DEFAULT_ADDRESS:
-            self.check(lib.VL53L1_software_reset(self.dev))
+            Utils.check(VL53L1X_C_LIBRARY.VL53L1_software_reset(self.dev))
         # else skip soft reset because it only works with the default I2C address
-        self.check(lib.VL53L1_WaitDeviceBooted(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_WaitDeviceBooted(self.dev))
         if required_address and required_address != initial_address:
-            print("  Changing address to 0x{:x} from 0x{:x}.".format(required_address, initial_address))
-            self.check(lib.setAddress(self.dev, c_uint8(required_address)))
+            if self.debug:
+                print("  Changing sensor address to 0x{:x} from 0x{:x}.".format(required_address, initial_address))
+            Utils.check(VL53L1X_C_LIBRARY.setAddress(self.dev, c_uint8(required_address)))
             self.address = required_address
-        self.check(lib.VL53L1_DataInit(self.dev))
-        self.check(lib.VL53L1_StaticInit(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_DataInit(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_StaticInit(self.dev))
 
     def set_distance_mode(self, distance_mode: int):
         """Sets the distance mode. The default is LONG.
@@ -234,46 +302,48 @@ class VL53L1X:
         MEDIUM - Up to 3 m
         LONG - Up to 4 m Maximum distance
         """
-        self.check(lib.VL53L1_SetDistanceMode(self.dev, c_uint8(distance_mode)))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_SetDistanceMode(self.dev, c_uint8(distance_mode)))
 
-    def set_timing_budget(self, timing_budget_millis: int = 20, inter_measurement_period_millis: int = 30):
+    def set_timing_budget(self, timing_budget_millis: float = 20, inter_measurement_period_millis: int = 26):
         """Sets the timing budget and interval between ranging calls.
-        You must read the range during the inter-measurement period.
+        The sensor will stop generating new samples if inter_measurement_period_millis
+        is too small. If in doubt use timing_budget_millis + 6 milliseconds.
+        The choice of values can have large and unpredictable effects on the output data rate.
         This call stops ranging if it is running.
-        :param timing_budget_millis valid range is 20 to 1000 ms
-        :param inter_measurement_period_millis minimum value is timingBudgetMillis + 4m
+        :param timing_budget_millis valid range is 6 to 1000 ms
+        :param inter_measurement_period_millis minimum value is timingBudgetMillis + 3.5 millis
         """
         self.stop_ranging()
-        self.check(lib.VL53L1_SetMeasurementTimingBudgetMicroSeconds(self.dev, timing_budget_millis * 1000))
-        self.check(lib.VL53L1_SetInterMeasurementPeriodMilliSeconds(self.dev, inter_measurement_period_millis))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_SetMeasurementTimingBudgetMicroSeconds(self.dev, int(timing_budget_millis * 1000)))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_SetInterMeasurementPeriodMilliSeconds(self.dev, inter_measurement_period_millis))
 
     def start_ranging(self):
         """Starts continuous range measurements"""
-        self.check(lib.VL53L1_StartMeasurement(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_StartMeasurement(self.dev))
 
     def stop_ranging(self):
         """Stops ranging measurements"""
-        self.check(lib.VL53L1_StopMeasurement(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_StopMeasurement(self.dev))
 
     def clear_interrupt(self):
         """Resets the interrupt status and interrupt pin"""
-        self.check(lib.VL53L1_ClearInterruptAndStartMeasurement(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_ClearInterruptAndStartMeasurement(self.dev))
 
     def data_ready(self) -> bool:
         """Returns true if there is a measurement ready."""
         data_ready = ctypes.c_uint8()
-        self.check(lib.VL53L1_GetMeasurementDataReady(self.dev, byref(data_ready)))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_GetMeasurementDataReady(self.dev, byref(data_ready)))
         return data_ready.value != 0
 
     def wait_for_data_ready(self):
         """Blocks until there is a measurement ready."""
-        self.check(lib.VL53L1_WaitMeasurementDataReady(self.dev))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_WaitMeasurementDataReady(self.dev))
 
     def get_measurement_data(self) -> MeasurementData:
         """Returns the current measurement data in all its glory.
         range_milli_meter contains the actual distance."""
         result = MeasurementDataStructure()
-        self.check(lib.VL53L1_GetRangingMeasurementData(self.dev, byref(result)))
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_GetRangingMeasurementData(self.dev, byref(result)))
         return MeasurementData(result)
 
     def get_distance(self) -> int:
@@ -281,5 +351,29 @@ class VL53L1X:
         Use get_measurement_data to check the validity of ranges."""
         return self.get_measurement_data().distance
 
+    def get_optical_centre(self) -> OpticalCentre:
+        """Returns the optical centre of the sensor from the most recent
+        calibration. This may be the factory calibration. This is important
+        when setting the field of view."""
+        result = OpticalCentreStructure()
+        Utils.check(VL53L1X_C_LIBRARY.getOpticalCentre(self.dev, byref(result)))
+        return OpticalCentre(result)
+
+    def set_region_of_interest(self, roi: UserRoi):
+        """Gets the sensors region of interest"""
+        value = roi.to_struct()
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_SetUserROI(self.dev, byref(value)))
+
+    def get_region_of_interest(self) -> UserRoi:
+        """Gets the sensors region of interest"""
+        result = UserRoiStructure()
+        Utils.check(VL53L1X_C_LIBRARY.VL53L1_GetUserROI(self.dev, byref(result)))
+        return UserRoi.from_struct(result)
+
     def close(self):
-        libc.free(self.dev)
+        """Frees up C memory assocated with this sensor. Closing
+        the VL53L1X_I2C instance will call this method for you."""
+        if not self.closed:
+            C_LIBRARY.free(self.dev)
+            self.closed = True
+
