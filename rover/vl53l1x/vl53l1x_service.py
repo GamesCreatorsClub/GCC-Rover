@@ -15,7 +15,7 @@ import time
 import threading
 import traceback
 
-from GCC_VL53L1X import VL53L1X, VL53L1X_I2C
+from GCC_VL53L1X import VL53L1X, VL53L1X_I2C, UserRoi
 
 #
 # vl53l1x service
@@ -136,6 +136,7 @@ def initDistanceSensors():
         sensor1.stop_ranging()
         sensor1.set_distance_mode(VL53L1X.SHORT)
         sensor1.set_timing_budget(8, 16)
+        sensor1.set_region_of_interest(UserRoi(6, 10, 10, 6))
         sensorsMap[i2c_address]['vl53l1x_1'] = sensor1
 
     if need_to_init_xshut:
@@ -149,6 +150,7 @@ def initDistanceSensors():
             sensor2.stop_ranging()
             sensor2.set_distance_mode(VL53L1X.SHORT)
             sensor2.set_timing_budget(8, 16)
+            sensor2.set_region_of_interest(UserRoi(6, 10, 10, 6))
             sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
     else:
         for i2c_address in sensors:
@@ -158,6 +160,7 @@ def initDistanceSensors():
             sensor2.stop_ranging()
             sensor2.set_distance_mode(VL53L1X.SHORT)
             sensor2.set_timing_budget(8, 16)
+            sensor2.set_region_of_interest(UserRoi(6, 10, 10, 6))
             sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
 
     for i2c_address in sensors:
