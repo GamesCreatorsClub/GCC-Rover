@@ -591,10 +591,10 @@ def prepareAndDriveWheel(wheelName):
 
         data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
         nRF2401.swithToTX()
-        done = nRF2401.sendData(data, 0.015)
+        done = nRF2401.sendDataAndSwitchRx(data, 0.015)
         if done:
-            nRF2401.swithToRX()
-            nRF2401.startListening()
+            # nRF2401.swithToRX()
+            # nRF2401.startListening()
             if nRF2401.poolData(0.0025):  # 1 sec / 50 times a second / 4 wheels / 2 max half of time needed for wheel
                 p = nRF2401.receiveData(NRF_PACKET_SIZE)
                 nRF2401.stopListening()
@@ -612,8 +612,8 @@ def prepareAndDriveWheel(wheelName):
                 pwm_reg = p[11]
 
                 now = time.time()
-                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos_deg, 0, (now - started_time), speed)
-                return wheel_pos_deg, 0
+                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
+                return wheel_pos, 0
             else:
                 now = time.time()
                 drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_RX_FAILED, (now - started_time), speed)

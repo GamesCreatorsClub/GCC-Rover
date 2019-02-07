@@ -75,6 +75,12 @@ def delay100ms():
     time.sleep(0.1)
 
 
+def no_sleep_wait(delay):
+    _now = time.time()
+    while time.time() - _now < delay:
+        pass
+
+
 def _clearCE():
     GPIO.output(CE_GPIO, 0)
 
@@ -85,7 +91,10 @@ def _setCE():
 
 def _writeCommand(address, v):
     _spi.xfer([0x20 | address, v])
-    time.sleep(0.00002)
+    # time.sleep(0.00002)
+    _now = time.time()
+    while time.time() - _now < 0.00002:
+        pass
 
 
 def setReadPipeAddress(pipeNumber, address):
@@ -188,8 +197,11 @@ def swithToTX():
 def swithToRX():
     _clearCE()
     _writeCommand(_CONFIG, 0x1f)      # PWR_UP | CRC0 | EN_CRC | MASK_MAX_RT | PRX
-    time.sleep(0.0002)
     # time.sleep(0.02)
+    _now = time.time()
+    while time.time() - _now < 0.0002:
+        pass
+    time.sleep(0.0002)
 
 
 def reset():
@@ -219,6 +231,32 @@ def sendData(buf, timeout=1):
     while time.time() - now < timeout:
         s = _readRegister(_STATUS) & 0x20
         if s > 0:
+            return True
+
+    return False
+
+
+def sendDataAndSwitchRx(buf, timeout=1):
+    writeFlushTX()
+    _clearInterrupts()
+
+    d = [_W_TX_PAYLOAD]
+    for v in buf:
+        d.append(v)
+    _spi.xfer(d)
+
+    delay10us()
+    _setCE()
+    delay10us()  # 0.1ms = 20us
+    _clearCE()
+
+    now = time.time()
+    while time.time() - now < timeout:
+        s = _readRegister(_STATUS) & 0x20
+        if s > 0:
+            swithToRX()
+            startListening()
+
             return True
 
     return False
