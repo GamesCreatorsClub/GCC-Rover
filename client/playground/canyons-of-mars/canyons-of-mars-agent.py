@@ -34,10 +34,10 @@ lastProcessed = time.time()
 
 def deltaDeg(old, new):
     d = new - old
-    if d > 180:
-        d -= 360
-    elif d < -180:
-        d += 360
+    if d > 32768:
+        d -= 32768
+    elif d < -32768:
+        d += 32768
 
     # 100, 102 -> 2
     # 102, 100 -> -2
@@ -123,7 +123,7 @@ def stop():
 def start(distanceStr):
     global running
 
-    distance = int(distanceStr)
+    distance = int((int(distanceStr) / 360) * 4096)
     for i in range(4):
         odo[i] = 0
         requiredOdo[i] = distance
