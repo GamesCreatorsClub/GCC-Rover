@@ -27,6 +27,7 @@ MODE_STATUS = 1
 MODE_CALIBRATE_SELECT_WHEEL = 2
 MODE_CALIBRATE_WHEEL = 3
 MODE_CALIBRATE_PID = 4
+MODE_DRAW_RADAR = 5
 
 mode = MODE_STATUS
 
@@ -67,19 +68,18 @@ distances = [0, 0, 0, 0, 0, 0, 0, 0]
 angle = 0.0
 
 
-def createTemplateWheel():
+def createTemplateWheel(distance_index):
     return {
         'angle': 0,
         'deg_status': 0,
         'speed_status': 0,
         'odo': 0,
         'cal': {},
-        'd1': -1.0,
-        'd2': -1.0
+        'dindex': distance_index
     }
 
 
-wheelsMap = {'fl': createTemplateWheel(), 'fr': createTemplateWheel(), 'bl': createTemplateWheel(), 'br': createTemplateWheel(), 'pid': {}}
+wheelsMap = {'fl': createTemplateWheel(0), 'fr': createTemplateWheel(2), 'bl': createTemplateWheel(4), 'br': createTemplateWheel(6), 'pid': {}}
 
 
 def selectWheelButtonClick():
@@ -97,6 +97,11 @@ def pidButtonClick():
     global mode
     mode = MODE_CALIBRATE_PID
     pyros.publish("storage/read/wheels/cal", "")
+
+
+def radarButtonClick():
+    global mode
+    mode = MODE_DRAW_RADAR
 
 
 def startLoadingCalibration():
@@ -347,6 +352,7 @@ def initGui():
 
     mainButtons.append(makeTextButton(pygame.Rect(392, 60, 80, 40), "CAL", selectWheelButtonClick))
     mainButtons.append(makeTextButton(pygame.Rect(392, 110, 80, 40), "PID", pidButtonClick))
+    mainButtons.append(makeTextButton(pygame.Rect(392, 160, 80, 40), "RADAR", radarButtonClick))
     mainButtons.append(makeTextButton(pygame.Rect(392, 272, 80, 40), "STOP", stopAllButtonClick))
 
     selectWheelButtons.append(makeTextButton(pygame.Rect(392, 272, 80, 40), "CANCEL", returnToStatusButtonClick))
@@ -529,11 +535,11 @@ def drawAngle(wheel, wheelRect):
     odo_text = smallFont.render(str(wheel['odo']), 0, BLACK)
     screen.blit(odo_text, (wheelRect.centerx - odo_text.get_width() // 2, wheelRect.centery - odo_text.get_height() // 2 + angle_text.get_height() + 3))
 
-    d1_text = smallFont.render(str(wheel['d1']), 0, WHITE)
-    d2_text = smallFont.render(str(wheel['d2']), 0, WHITE)
-    screen.blit(d1_text, (wheelRect.x, wheelRect.y))
-    screen.blit(d2_text, (wheelRect.right - d2_text.get_width(), wheelRect.y))
-
+    # dindex = wheel['dindex']
+    # d1_text = smallFont.render(str(distances[dindex]), 0, WHITE)
+    # d2_text = smallFont.render(str(distances[dindex + 1]), 0, WHITE)
+    # screen.blit(d1_text, (wheelRect.x, wheelRect.y))
+    # screen.blit(d2_text, (wheelRect.right - d2_text.get_width(), wheelRect.y))
 
     if status != 32:
         font.set_bold(True)
@@ -588,16 +594,16 @@ def drawWheels(middleTextCallback):
     drawWheel('bl', middleTextCallback, wheelRects['bl'])
 
 
-def drawRadar():
+def drawRadarGadget(pos, size, limit_distance):
 
     def limit(d):
         if d < 0:
             d = 0
-        if d > 900:
-            d = 900
-        return - (80 - d / 20.0)
+        if d > limit_distance:
+            d = limit_distance
+        return - (int(size * 0.8) - d / 20.0)
 
-    rect = pygame.Rect(0, 100, 100, 100)
+    rect = pygame.Rect(pos[0], pos[1], size, size)
 
     pi8 = math.pi / 8
 
@@ -613,7 +619,32 @@ def drawRadar():
 
 def drawStatusScreen():
     drawWheels(drawAngle)
-    drawRadar()
+    drawRadarGadget((0, 100), 100, 900)
+    processButtons(mainButtons)
+
+
+def drawRadarScreen():
+    def drawDistanceText(pos, dindex):
+        d_text = smallFont.render(str(distances[dindex]), 0, WHITE)
+        screen.blit(d_text, (pos[0] - d_text.get_width() // 2, pos[1] - d_text.get_height() // 2))
+
+    drawRadarGadget((50, 50), 220, 2000)
+
+    drawDistanceText((160, 40), 0)
+    drawDistanceText((260, 70), 1)
+    drawDistanceText((290, 160), 2)
+    drawDistanceText((260, 260), 3)
+    drawDistanceText((160, 290), 4)
+    drawDistanceText((70, 260), 5)
+    drawDistanceText((40, 160), 6)
+    drawDistanceText((70, 70), 7)
+
+    # d1_text = smallFont.render(str(distances[dindex]), 0, WHITE)
+    # d2_text = smallFont.render(str(distances[dindex + 1]), 0, WHITE)
+    # screen.blit(d1_text, (wheelRect.x, wheelRect.y))
+    # screen.blit(d2_text, (wheelRect.right - d2_text.get_width(), wheelRect.y))
+
+
     processButtons(mainButtons)
 
 
@@ -723,6 +754,8 @@ while True:
         drawCalibrateWheel()
     elif mode == MODE_CALIBRATE_PID:
         drawCalibratePID()
+    elif mode == MODE_DRAW_RADAR:
+        drawRadarScreen()
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
