@@ -88,6 +88,7 @@ PROTOTYPE_WHEEL_CALIBRATION = {
     'speed': {
         'addr': "WHL00",
         '0': "0",
+        'dir': "1"
     },
     'steer': {
         'en_pin': "0",
@@ -573,6 +574,7 @@ def prepareAndDriveWheel(wheelName):
     wheelSpeedCalMap = wheelCalibrationMap[wheelName]['speed']
 
     address = wheelSpeedCalMap['nrf']
+    speedDirStr = wheelSpeedCalMap['dir']
 
     started_time = time.time()
     nRF2401.setReadPipeAddress(0, address)
@@ -582,7 +584,7 @@ def prepareAndDriveWheel(wheelName):
     speedModStr = wheel['s_mod']
 
     try:
-        speed = int(float(speedStr)) * int(speedModStr)
+        speed = int(float(speedStr)) * int(speedModStr) * int(speedDirStr)
     except:
         speed = None
 
