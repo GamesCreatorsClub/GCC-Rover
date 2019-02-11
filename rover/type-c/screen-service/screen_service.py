@@ -241,8 +241,9 @@ if __name__ == "__main__":
 
         startPyGame()
 
-        uiFactory = gccui.FlatTheme.FlatThemeFactory()
-        uiFactory.font = font
+        # uiFactory = gccui.FlatTheme.FlatThemeFactory()
+        uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(font=font)
+
         uiAdapter = gccui.UIAdapter(screen)
         touchHandler = TouchHandler(uiAdapter)
 

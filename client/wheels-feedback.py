@@ -49,7 +49,8 @@ def onKeyUp(key):
 
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
-uiFactory = gccui.FlatTheme.FlatThemeFactory()
+# uiFactory = gccui.FlatTheme.FlatThemeFactory()
+uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory()
 uiFactory.font = pyros.gccui.font
 uiAdapter = gccui.UIAdapter(screen)
 

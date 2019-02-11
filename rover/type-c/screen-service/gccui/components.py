@@ -74,7 +74,7 @@ class Collection(Component):
                 component.draw(surace)
 
     def findComponent(self, pos):
-        for component in self.components:
+        for component in reversed(self.components):
             if component.isVisible() and component.rect.collidepoint(pos):
                 return component
         return None
@@ -151,21 +151,28 @@ class Image(Component):
         self.h_alignment = h_alignment
         self.v_alignment = v_alignment
 
+    def getImage(self):
+        return self._surface
+
+    def setImage(self, surface):
+        self._surface = surface
+
     def draw(self, surface):
-        x = self.rect.x
-        y = self.rect.y
+        if self._surface is not None:
+            x = self.rect.x
+            y = self.rect.y
 
-        if self.h_alignment == ALIGNMENT.CENTER:
-            x = self.rect.centerx - self._surface.get_width() // 2
-        elif self.h_alignment == ALIGNMENT.RIGHT:
-            x = self.rect.right - self._surface.get_width()
+            if self.h_alignment == ALIGNMENT.CENTER:
+                x = self.rect.centerx - self._surface.get_width() // 2
+            elif self.h_alignment == ALIGNMENT.RIGHT:
+                x = self.rect.right - self._surface.get_width()
 
-        if self.v_alignment == ALIGNMENT.MIDDLE:
-            y = self.rect.centery - self._surface.get_height() // 2
-        elif self.h_alignment == ALIGNMENT.RIGHT:
-            y = self.rect.bottom - self._surface.get_height()
+            if self.v_alignment == ALIGNMENT.MIDDLE:
+                y = self.rect.centery - self._surface.get_height() // 2
+            elif self.h_alignment == ALIGNMENT.RIGHT:
+                y = self.rect.bottom - self._surface.get_height()
 
-        surface.blit(self._surface, (x, y))
+            surface.blit(self._surface, (x, y))
 
 
 class Label(Image):
@@ -175,10 +182,16 @@ class Label(Image):
         self.font = font
         self.colour = colour if colour is not None else pygame.color.THECOLORS['white']
 
+    def getText(self):
+        return self._text
+
     def setText(self, text):
-        if (self._text != text):
+        if self._text != text:
             self._text = text
             self._surface = None
+
+    def invalidateSurface(self):
+        self._surface = None
 
     def draw(self, surface):
         if self._surface is None:
@@ -271,18 +284,24 @@ class UIAdapter:
             self.topComponent.draw(surface)
 
 
+class UI_HINT:
+    NORMAL = 1
+    WARNING = 2
+    ERROR = 3
+
+
 class BaseUIFactory:
     def __init__(self):
         pass
 
-    def label(self, rect, text, font=None, colour=None, h_alignment=ALIGNMENT.LEFT, v_alignment=ALIGNMENT.TOP):
+    def label(self, rect, text, font=None, colour=None, h_alignment=ALIGNMENT.LEFT, v_alignment=ALIGNMENT.TOP, hint=UI_HINT.NORMAL):
         return None
 
-    def image(self, rect, image):
+    def image(self, rect, image, hint=UI_HINT.NORMAL):
         return None
 
-    def button(self, rect, onClick=None, onHover=None, label=None):
+    def button(self, rect, onClick=None, onHover=None, label=None, hint=UI_HINT.NORMAL):
         return None
 
-    def text_button(self, rect, text, onClick=None, onHover=None):
-        return self.button(rect, onClick, onHover, self.label(None, text, h_alignment=ALIGNMENT.CENTER, v_alignment=ALIGNMENT.MIDDLE))
+    def text_button(self, rect, text, onClick=None, onHover=None, hint=UI_HINT.NORMAL):
+        return self.button(rect, onClick, onHover, self.label(None, text, h_alignment=ALIGNMENT.CENTER, v_alignment=ALIGNMENT.MIDDLE), hint=hint)

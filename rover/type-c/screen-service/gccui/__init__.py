@@ -6,4 +6,4 @@
 #
 
 from gccui.components import *
-from gccui import FlatTheme
+from gccui import FlatTheme, BoxBlueSFTheme
