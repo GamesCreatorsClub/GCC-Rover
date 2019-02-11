@@ -118,6 +118,20 @@ def subscribeBinary(topic, method):
         client.subscribe(topic, 0)
 
 
+def unsubscribe(topic):
+    if _connected:
+        client.unsubscribe(topic)
+
+    regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
+    regex = re.compile(regexString)
+
+    if regex in _regexBinaryToLambda:
+        del _regexBinaryToLambda[regex]
+
+    if regex in _regexTextToLambda:
+        del _regexTextToLambda[regex]
+
+
 def _sendStats():
     msg = ""
     for stat in _stats:
