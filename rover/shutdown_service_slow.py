@@ -117,6 +117,9 @@ def doShutdown():
     while not masterPyrosStopped and time.time() - now < 30.0 and testUSB():
         pyroslib.loop(0.1)
 
+    if testUSB():
+        pyroslib.publish("shutdown/announce", "slaves")
+
     print("Allowing wheels pi to stop... (2s)")
 
     now = time.time()
