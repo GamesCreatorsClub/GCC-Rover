@@ -1,52 +1,48 @@
 #!/bin/bash
 
-echo ""
-echo Uploading     pyroslib
-pyros $1 upload    pyroslib  pyroslib/pyroslib.py
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-echo ""
-echo Uploading     storagelib
-pyros $1 upload    storagelib   storagelib/storagelib.py
+$DIR/../pyroslib/upload-pyroslib.sh $1 wheels
+$DIR/../storagelib/upload-storagelib.sh $1 wheels
 
 echo ""
 echo Uploading     storage
-pyros $1 upload -s storage      storage_service.py
+pyros $1 upload -s storage      $DIR/storage_service.py
 echo Restarting    storage
 pyros $1 restart   storage
 
 echo ""
 echo Uploading     discovery
-pyros $1 upload -s discovery    discovery_service.py
+pyros $1 upload -s discovery    $DIR/discovery_service.py
 echo Restarting    discovery
 pyros $1 restart   discovery
 
 echo ""
 echo Uploading     wifi
-pyros $1 upload -s wifi         wifi_service.py
+pyros $1 upload -s wifi         $DIR/wifi_service.py
 echo Restarting    wifi
 pyros $1 restart   wifi
 
 echo ""
 echo Uploading     drive
-pyros $1 upload -s drive        type-c/drive_service.py
+pyros $1 upload -s drive        $DIR/type-c/drive_service.py
 echo Restarting    drive
 pyros $1 restart   drive
 
 echo ""
 echo Uploading     shutdown
-pyros $1 upload -s shutdown     shutdown_service.py
+pyros $1 upload -s shutdown     $DIR/shutdown_service.py
 echo Restarting    shutdown
 pyros $1 restart   shutdown
 
-cd telemetry
+$DIR/telemetry/upload-telemetry.sh $1
+$DIR/vl53l1x/upload-vl53l1x.sh $1
 
-./upload-telemetry.sh $1
-./upload-telemetry-wheels.sh $1
+echo "Uploading all for wheels:"
 
-cd wheels_service
-./upload-wheels.sh $1
-
-cd ../..
+$DIR/upload-telemetry-wheels.sh $1
+$DIR//upload-wheels.sh $1
+$DIR/pyroslib/upload-pyroslib.sh $1
 
 echo ""
 echo "Currently running processes:"
