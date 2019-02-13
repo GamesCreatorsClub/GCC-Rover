@@ -8,6 +8,7 @@
 import sys
 import time
 import pygame
+import gccui
 import pyros
 import pyros.gcc
 import pyros.gccui
@@ -15,67 +16,107 @@ import pyros.agent
 import pyros.pygamehelper
 
 
-MAX_PING_TIMEOUT = 1
-
-pingLastTime = 0
-
-
 screen_size = (800, 640)
-
 screen = pyros.gccui.initAll(screen_size, True)
-
-arrow_image = pygame.image.load("arrow.png")
-arrow_image = pygame.transform.scale(arrow_image, (50, 50))
-
-
-gyroAngle = 0
-
-running = False
-
-odos = [1, 2, 3, 4]
-
-
-def handleData(topic, message, groups):
-    global odos
-    odos = [int(x) for x in message.split(",")]
 
 
 def connected():
     print("Starting agent... ", end="")
     pyros.agent.init(pyros.client, "canyons-of-mars-agent.py")
-    pyros.subscribe("canyons/odo", handleData)
     print("Done.")
 
 
-def toggleStart():
-    global running
+class CanyonsOfMars:
+    def __init__(self):
+        self.running = False
+        self.onOffButton = None
 
-    pass
+    def connected(self):
+        pass
+        # pyros.subscribe("canyons/odo", handleData)
+
+    def start(self):
+        self.running = True
+        pyros.publish("canyons/command", "start " + str(360 * 2.2))
+        self.onOffButton.on()
+
+    def stop(self):
+        self.running = False
+        pyros.publish("canyons/command", "stop")
+        self.onOffButton.off()
+
+    def handleRunning(self, topic, message, groups):
+        if message == 'False':
+            self.running = False
+            self.onOffButton.off()
 
 
-def stop():
-    global running
-    pyros.publish("canyons/command", "stop")
-    running = False
+canyonsOfMars = CanyonsOfMars()
 
 
-def start():
-    global running
-    pyros.publish("canyons/command", "start " + str(360 * 2.2))
-    running = True
+class OnOffButton(gccui.components.CardsCollection):
+    def __init__(self, rect, on_label_text, off_label_text, on_button_text, off_button_text, on_callback, off_callback):
+        super(OnOffButton, self).__init__(rect)
+        self.on_callback = on_callback
+        self.off_callback = off_callback
+        self.onComponent = gccui.Collection(rect)
+        self.onComponent.addComponent(uiFactory.label(rect, on_label_text))
+        self.onComponent.addComponent(uiFactory.text_button(rect, off_button_text, self.off_button_clicked, hint=gccui.UI_HINT.WARNING))
+        self.offComponent = gccui.Collection(rect)
+        self.offComponent.addComponent(uiFactory.label(rect, off_label_text))
+        self.offComponent.addComponent(uiFactory.text_button(rect, on_button_text, self.on_button_clicked))
+        self.offComponent.addComponent(uiFactory.text_button(rect, off_button_text, self.off_button_clicked, hint=gccui.UI_HINT.ERROR))
+        self.addCard("on", self.onComponent)
+        self.addCard("off", self.offComponent)
+        self.selectCard("off")
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        width = int(rect.width * 0.3)
+        margin = int(rect.width * 0.05)
+
+        self.onComponent.components[0].redefineRect(pygame.Rect(rect.x, rect.y, width, rect.height))
+        self.onComponent.components[1].redefineRect(pygame.Rect(rect.right - width, rect.y, width, rect.height))
+
+        self.offComponent.components[0].redefineRect(pygame.Rect(rect.x, rect.y, width, rect.height))
+        self.offComponent.components[1].redefineRect(pygame.Rect(rect.x + width + margin, rect.y, width, rect.height))
+        self.offComponent.components[2].redefineRect(pygame.Rect(rect.right - width, rect.y, width, rect.height))
+
+    def on(self):
+        self.selectCard("on")
+
+    def off(self):
+        self.selectCard("off")
+
+    def on_button_clicked(self, button, pos):
+        self.selectCard('on')
+        self.on_callback()
+
+    def off_button_clicked(self, button, pos):
+        self.selectCard('off')
+        self.off_callback()
+
+
+def initGraphics(screens):
+    # arrow_image = pygame.image.load("arrow.png")
+    # arrow_image = pygame.transform.scale(arrow_image, (50, 50))
+
+    statusComponents = gccui.Collection(screens.rect)
+    screens.addCard("status", statusComponents)
+    onOffButton = OnOffButton(pygame.Rect(10, 40, 300, 30), "Running", "Stopped", "Run", "Stop", canyonsOfMars.start, canyonsOfMars.stop)
+    statusComponents.addComponent(onOffButton)
+    canyonsOfMars.onOffButton = onOffButton
+
+    screens.selectCard("status")
 
 
 def onKeyDown(key):
-    global running
-
     if pyros.gcc.handleConnectKeyDown(key):
         pass
     elif key == pygame.K_SPACE:
-        print("Sending stop...")
-        stop()
+        canyonsOfMars.stop()
     elif key == pygame.K_RETURN:
-        print("Sending start...")
-        start()
+        canyonsOfMars.start()
 
 
 def onKeyUp(key):
@@ -83,10 +124,16 @@ def onKeyUp(key):
     return
 
 
-# pyros.subscribe("overtherainbow/gyro", handleGyro)
-
 pyros.init("canyons-of-mars-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.subscribe("canyons/feedback/running", canyonsOfMars.handleRunning)
 
+uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory()
+uiFactory.font = pyros.gccui.font
+uiAdapter = gccui.UIAdapter(screen)
+
+screensComponent = gccui.CardsCollection(screen.get_rect())
+uiAdapter.setTopComponent(screensComponent)
+initGraphics(screensComponent)
 
 while True:
     for event in pygame.event.get():
@@ -95,6 +142,9 @@ while True:
             sys.exit()
         if event.type == pygame.VIDEORESIZE:
             pyros.gccui.screenResized(event.size)
+            screensComponent.redefineRect(pygame.Rect(0, 0, event.size[0], event.size[1]))
+
+        uiAdapter.processEvent(event)
 
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
@@ -102,27 +152,7 @@ while True:
     pyros.agent.keepAgents()
     pyros.gccui.background(True)
 
-    # noinspection PyRedeclaration
-    hpos = 40
-    hpos = pyros.gccui.drawKeyValue("Running", str(running), 8, hpos)
-
-    hpos = pyros.gccui.drawKeyValue("FL", str(odos[0]), 20, hpos)
-    hpos = pyros.gccui.drawKeyValue("FR", str(odos[1]), 20, hpos)
-    hpos = pyros.gccui.drawKeyValue("BL", str(odos[2]), 20, hpos)
-    hpos = pyros.gccui.drawKeyValue("BR", str(odos[3]), 20, hpos)
-
-    loc = arrow_image.get_rect().center
-    rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
-    rot_arrow_image.get_rect().center = loc
-    screen.blit(rot_arrow_image, (530, 200))
-
-    # if len(rotSpeeds) > 0:
-    #     gyroDegPersSecText = str(round(sum(rotSpeeds) / len(rotSpeeds), 2))
-    #     pyros.gccui.drawBigText(gyroDegPersSecText, (440, 10))
-    #
-    #     pyros.gccui.drawText("º/s", (445 + pyros.gccui.bigFont.size(gyroDegPersSecText)[0], 15))
-    #
-    #     pyros.gccui.drawBigText(str(int(thisGyroAngle)), (440, 40))
+    uiAdapter.draw(screen)
 
     pyros.gccui.drawSmallText("Put help here", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
 
