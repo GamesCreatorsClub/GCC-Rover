@@ -111,10 +111,11 @@ def executeCommand(client):
 
     def processDir(dest_path, dir):
         for file in os.listdir(dir):
-            if os.path.isdir(file):
-                processDir(os.path.join(dest_path, file), os.path.join(dir, file))
-            else:
-                sendFile(dest_path, os.path.join(dir, file))
+            if not file.endswith('__pycache__'):
+                if os.path.isdir(file):
+                    processDir(os.path.join(dest_path, file), os.path.join(dir, file))
+                else:
+                    sendFile(dest_path, os.path.join(dir, file))
 
     pyrosClient = client
 
