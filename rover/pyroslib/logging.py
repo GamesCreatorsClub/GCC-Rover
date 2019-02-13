@@ -7,10 +7,14 @@
 
 import time
 
-DEBUG_LEVEL_OFF = 0
-DEBUG_LEVEL_INFO = 1
-DEBUG_LEVEL_DEBUG = 2
-DEBUG_LEVEL_ALL = 3
+DEBUG_LEVEL_OFF = 0  # To be used when setting up level
+DEBUG_LEVEL_ALWAYS = 1  # To be used when logging or setting up level
+DEBUG_LEVEL_ERROR = 1  # To be used when logging or setting up level
+DEBUG_LEVEL_INFO = 2  # To be used when logging or setting up level
+DEBUG_LEVEL_DEBUG = 3  # To be used when logging or setting up level
+DEBUG_LEVEL_TRACE = 4  # To be used when logging or setting up level
+DEBUG_LEVEL_ALL = 10  # To be used when setting up level
+
 DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
 

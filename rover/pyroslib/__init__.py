@@ -6,3 +6,4 @@
 #
 
 from pyroslib.pyroslib import *
+from pyroslib.logging import *
