@@ -5,6 +5,7 @@
 # MIT License
 #
 
+import math
 import time
 import traceback
 
@@ -13,6 +14,8 @@ import pyroslib.logging
 from pyroslib.logging import log, DEBUG_LEVEL_ALWAYS, DEBUG_LEVEL_INFO, DEBUG_LEVEL_DEBUG
 
 pyroslib.logging.DEBUG_LEVEL = DEBUG_LEVEL_INFO
+
+sqrt2 = math.sqrt(2)
 
 
 class Action:
@@ -60,9 +63,10 @@ class StopAction(Action):
 
 
 class MoveForwardOnOdo(Action):
-    def __init__(self, odo, stop_action):
+    def __init__(self, odo, radar, stop_action):
         super(MoveForwardOnOdo, self).__init__()
         self.odo = odo
+        self.radar = radar
         self.stop_action = stop_action
         self.required_odo = [0, 0, 0, 0]
 
@@ -88,6 +92,9 @@ class MoveForwardOnOdo(Action):
             if self.odo[i] >= self.required_odo[i]:
                 do_stop = True
 
+        if self.radar[0] < 1.0 or self.radar[315] < 1.0 or self.radar[45] < 1.0:
+            do_stop = True
+
         if do_stop:
             return self.stop_action
         else:
@@ -97,24 +104,107 @@ class MoveForwardOnOdo(Action):
         return "Move-Forward-Action"
 
 
+class MazeAction(Action):
+    def __init__(self, radar):
+        super(MazeAction, self).__init__()
+        self.radar = radar
+
+    def check_next_action_conditions(self):
+        return self
+
+
+class FollowWallAction(MazeAction):
+    LEFT = -1
+    RIGHT = 1
+
+    def __init__(self, radar, left_or_right, distance):
+        super(FollowWallAction, self).__init__(radar)
+        self.left_or_right = left_or_right
+        self.distance = distance
+        if self.left_or_right == FollowWallAction.RIGHT:
+            self.a1 = 45
+            self.a2 = 90
+            self.a3 = 135
+        else:
+            self.a1 = 315
+            self.a2 = 270
+            self.a3 = 225
+
+    def start(self):
+        super(FollowWallAction, self).start()
+
+    def end(self):
+        super(FollowWallAction, self).end()
+
+    def execute(self):
+
+        def calculateAngleAndFrontDistance(df, dm, db):
+            dfsqrt2 = df / sqrt2
+            dbsqrt2 = db / sqrt2
+
+            if df < db:
+                angle = math.atan2(dfsqrt2, dfsqrt2 - dm) * 180 / math.pi - 90
+            else:
+                angle = 90 - math.atan2(dbsqrt2, dbsqrt2 - dm) * 180 / math.pi
+
+            xf, yf = dfsqrt2, dfsqrt2
+            xm, ym = dm, 0
+            xb, yb = dbsqrt2, -dbsqrt2
+
+            d = ((ym - yb) * xf + (xb - xm) * yf + (xm * yb - xb * ym)) / math.sqrt((xb - xm) * (xb - xm) + (yb - ym) * (yb - ym))
+
+            return angle, d
+
+        left_angle, left_front_distance = calculateAngleAndFrontDistance(self.radar[315], self.radar[270], self.radar[225])
+        right_angle, right_front_distance = calculateAngleAndFrontDistance(self.radar[45], self.radar[90], self.radar[135])
+
+        pyroslib.publish("canyons/feedback/orientation",
+                         str(int(self.radar[0])) +
+                         " " + str(int(self.radar[180])) +
+                         " " + str(int(left_angle)) +
+                         " " + str(int(right_angle)) +
+                         " " + str(int(left_front_distance)) +
+                         " " + str(int(right_front_distance))
+                         )
+
+        return self
+
+    def __repr__(self):
+        return "Follow-Wall-Action"
+
+
 class CanyonsOfMarsAgent:
     def __init__(self):
         self.running = False
         self.odo = [0, 0, 0, 0]
         self.last_odo = [0, 0, 0, 0]
+        self.radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+        self.last_radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
         self.time_to_send_compact_data = 0
         self.last_execution_time = 0
 
         self.do_nothing = DoNothing()
         self.stop_action = StopAction(self)
-        self.move_forward_on_odo = MoveForwardOnOdo(self.odo, self.stop_action)
+        self.move_forward_on_odo = MoveForwardOnOdo(self.odo, self.radar, self.stop_action)
         self.current_action = self.do_nothing
 
     def connected(self):
         pyroslib.subscribe("canyons/command", self.handleAgentCommands)
         pyroslib.subscribe("wheel/speed/status", self.handleOdo)
+        pyroslib.subscribe("distance/deg", self.handleRadar)
         # pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
         pass
+
+    def handleAgentCommands(self, topic, message, groups):
+        data = message.split(" ")
+
+        log(DEBUG_LEVEL_INFO, "Got command " + message)
+
+        cmd = data[0]
+        if cmd == "stop":
+            self.stop()
+        elif cmd == "start":
+            self.start(data[1:])
 
     def handleOdo(self, topic, message, groups):
         def deltaOdo(old, new):
@@ -136,16 +226,19 @@ class CanyonsOfMarsAgent:
                 self.last_odo[i] = newOdo
                 self.odo[i] += delta_odo
 
-    def handleAgentCommands(self, topic, message, groups):
-        data = message.split(" ")
+    def handleRadar(self, topic, message, groups):
+        data = message.split(",")
+        for d in self.radar:
+            self.last_radar[d] = self.radar[d]
 
-        log(DEBUG_LEVEL_INFO, "Got command " + message)
-
-        cmd = data[0]
-        if cmd == "stop":
-            self.stop()
-        elif cmd == "start":
-            self.start(data[1:])
+        self.radar[0] = float(data[1])
+        self.radar[45] = float(data[2])
+        self.radar[90] = float(data[3])
+        self.radar[135] = float(data[4])
+        self.radar[180] = float(data[5])
+        self.radar[225] = float(data[6])
+        self.radar[270] = float(data[7])
+        self.radar[315] = float(data[8])
 
     def sendCompactData(self):
         pass
@@ -158,6 +251,8 @@ class CanyonsOfMarsAgent:
 
     def execute(self):
         next_action = self.current_action.execute()
+        if next_action is None:
+            next_action = self.stop_action
         self.nextAction(next_action)
 
         now = time.time()
@@ -177,8 +272,10 @@ class CanyonsOfMarsAgent:
 
             distance = int((float(data[0]) / 360) * 4096)
 
-            self.move_forward_on_odo.setRequiredOdo(distance)
-            self.nextAction(self.move_forward_on_odo)
+            # self.move_forward_on_odo.setRequiredOdo(distance)
+            # self.nextAction(self.move_forward_on_odo)
+
+            self.nextAction(FollowWallAction(self.radar, FollowWallAction.RIGHT, 200))
 
             log(DEBUG_LEVEL_ALWAYS, "Started driving... for  " + str(distance) + " (" + str(self.move_forward_on_odo.required_odo) + ")")
 
