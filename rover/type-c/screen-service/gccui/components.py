@@ -68,10 +68,10 @@ class Collection(Component):
         if i > 0:
             del self.components[i]
 
-    def draw(self, surace):
+    def draw(self, surface):
         for component in self.components:
             if component.isVisible():
-                component.draw(surace)
+                component.draw(surface)
 
     def findComponent(self, pos):
         for component in reversed(self.components):
@@ -169,7 +169,7 @@ class Image(Component):
 
             if self.v_alignment == ALIGNMENT.MIDDLE:
                 y = self.rect.centery - self._surface.get_height() // 2
-            elif self.h_alignment == ALIGNMENT.RIGHT:
+            elif self.v_alignment == ALIGNMENT.RIGHT:
                 y = self.rect.bottom - self._surface.get_height()
 
             surface.blit(self._surface, (x, y))
