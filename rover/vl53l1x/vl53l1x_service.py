@@ -47,8 +47,8 @@ vl53l1x_i2c = VL53L1X_I2C()
 
 sensorsMap = {
     1: {'s1_name': 'left', 's2_name': 'back_left'},
-    2: {'s1_name': 'forward', 's2_mame': 'forward_right'},
-    4: {'s1_mame': 'right', 's2_name': 'forward_right'},
+    2: {'s1_name': 'forward', 's2_name': 'forward_right'},
+    4: {'s1_name': 'right', 's2_name': 'forward_right'},
     8: {'s1_name': 'back', 's2_name': 'back_right'}
 }
 
@@ -88,11 +88,20 @@ def readSensors(i2c_address):
 
 def readAllSensors():
     d270, d225 = readSensors(1)
-    d0, d335 = readSensors(2)
+    d0, d315 = readSensors(2)
     d90, d45 = readSensors(4)
     d180, d135 = readSensors(8)
 
-    message = ",".join([str(f) for f in [time.time(), d0, d45, d90, d135, d180, d225, d270, d335]])
+    d0 += 83
+    d90 += 83
+    d180 += 83
+    d270 += 83
+    d45 += 121
+    d135 += 121
+    d225 += 121
+    d315 += 121
+
+    message = ",".join([str(f) for f in [time.time(), d0, d45, d90, d135, d180, d225, d270, d315]])
     pyroslib.publish("distance/deg", message)
 
 
@@ -145,10 +154,10 @@ def initDistanceSensors():
         if vl53l1x_i2c.is_device_at(I2C_VL53L1X_ADDRESS_1):
             print("        " + str(i2c_address) + ": first sensor already present on " + hex(I2C_VL53L1X_ADDRESS_1))
 
-            sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_mame'])
+            sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_name'])
         else:
             print("        " + str(i2c_address) + ": configuring first sensor to " + hex(I2C_VL53L1X_ADDRESS_1))
-            sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_mame'])
+            sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_name'])
 
         configureSensor(sensor1)
         sensorsMap[i2c_address]['vl53l1x_1'] = sensor1
@@ -160,14 +169,14 @@ def initDistanceSensors():
             switchBus(i2c_address)
 
             print("        " + str(i2c_address) + ": configuring XSHUT sensor to " + hex(I2C_VL53L1X_ADDRESS_2))
-            sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_mame'])
+            sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_name'])
             configureSensor(sensor2)
             sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
     else:
         for i2c_address in sensors:
             switchBus(i2c_address)
             print("        configuring XSHUT sensor on " + hex(I2C_VL53L1X_ADDRESS_2))
-            sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_mame'])
+            sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_name'])
             configureSensor(sensor2)
             sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
 
