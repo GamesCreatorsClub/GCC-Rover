@@ -31,16 +31,16 @@ class Action:
     def execute(self):
         return self
 
-    def __repr__(self):
-        return "not defined"
+    def getActionName(self):
+        return "Stop"
 
 
 class DoNothing(Action):
     def __init__(self):
         super(DoNothing, self).__init__()
 
-    def __repr__(self):
-        return "Do-Nothing"
+    def getActionName(self):
+        return "Ready"
 
 
 class StopAction(Action):
@@ -58,8 +58,8 @@ class StopAction(Action):
     def execute(self):
         return self.parent.do_nothing
 
-    def __repr__(self):
-        return "Stop-Action"
+    def getActionName(self):
+        return "Stop"
 
 
 class MoveForwardOnOdo(Action):
@@ -100,8 +100,8 @@ class MoveForwardOnOdo(Action):
         else:
             return self
 
-    def __repr__(self):
-        return "Move-Forward-Action"
+    def getActionName(self):
+        return "Forward ODO"
 
 
 class MazeAction(Action):
@@ -113,15 +113,15 @@ class MazeAction(Action):
         return self
 
 
-class FollowWallAction(MazeAction):
+class MazeCorridorAction(MazeAction):
     LEFT = -1
     RIGHT = 1
 
     def __init__(self, radar, left_or_right, distance):
-        super(FollowWallAction, self).__init__(radar)
+        super(MazeCorridorAction, self).__init__(radar)
         self.left_or_right = left_or_right
         self.distance = distance
-        if self.left_or_right == FollowWallAction.RIGHT:
+        if self.left_or_right == MazeCorridorAction.RIGHT:
             self.a1 = 45
             self.a2 = 90
             self.a3 = 135
@@ -131,10 +131,10 @@ class FollowWallAction(MazeAction):
             self.a3 = 225
 
     def start(self):
-        super(FollowWallAction, self).start()
+        super(MazeCorridorAction, self).start()
 
     def end(self):
-        super(FollowWallAction, self).end()
+        super(MazeCorridorAction, self).end()
 
     def execute(self):
 
@@ -158,7 +158,7 @@ class FollowWallAction(MazeAction):
         left_angle, left_front_distance = calculateAngleAndFrontDistance(self.radar[315], self.radar[270], self.radar[225])
         right_angle, right_front_distance = calculateAngleAndFrontDistance(self.radar[45], self.radar[90], self.radar[135])
 
-        pyroslib.publish("canyons/feedback/orientation",
+        pyroslib.publish("canyons/feedback/corridor",
                          str(int(self.radar[0])) +
                          " " + str(int(self.radar[180])) +
                          " " + str(int(left_angle)) +
@@ -169,8 +169,8 @@ class FollowWallAction(MazeAction):
 
         return self
 
-    def __repr__(self):
-        return "Follow-Wall-Action"
+    def getActionName(self):
+        return "Corridor"
 
 
 class CanyonsOfMarsAgent:
@@ -191,9 +191,9 @@ class CanyonsOfMarsAgent:
     def connected(self):
         pyroslib.subscribe("canyons/command", self.handleAgentCommands)
         pyroslib.subscribe("wheel/speed/status", self.handleOdo)
-        pyroslib.subscribe("distance/deg", self.handleRadar)
-        # pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
-        pass
+        pyroslib.subscribe("sensor/distance", self.handleRadar)
+        pyroslib.publish("canyons/feedback/action", self.current_action.getActionName())
+        pyroslib.publish("canyons/feedback/running", self.running)
 
     def handleAgentCommands(self, topic, message, groups):
         data = message.split(" ")
@@ -227,18 +227,15 @@ class CanyonsOfMarsAgent:
                 self.odo[i] += delta_odo
 
     def handleRadar(self, topic, message, groups):
-        data = message.split(",")
         for d in self.radar:
             self.last_radar[d] = self.radar[d]
 
-        self.radar[0] = float(data[1])
-        self.radar[45] = float(data[2])
-        self.radar[90] = float(data[3])
-        self.radar[135] = float(data[4])
-        self.radar[180] = float(data[5])
-        self.radar[225] = float(data[6])
-        self.radar[270] = float(data[7])
-        self.radar[315] = float(data[8])
+        values = [v.split(":") for v in message.split(" ")]
+        for (k,v) in values:
+            if k == 'timestamp':
+                timestamp = float(v)
+            else:
+                self.radar[int(k)] = int(v)
 
     def sendCompactData(self):
         pass
@@ -248,6 +245,7 @@ class CanyonsOfMarsAgent:
             self.current_action.end()
             self.current_action = action
             action.start()
+            pyroslib.publish("canyons/feedback/action", action.getActionName())
 
     def execute(self):
         next_action = self.current_action.execute()
@@ -275,7 +273,7 @@ class CanyonsOfMarsAgent:
             # self.move_forward_on_odo.setRequiredOdo(distance)
             # self.nextAction(self.move_forward_on_odo)
 
-            self.nextAction(FollowWallAction(self.radar, FollowWallAction.RIGHT, 200))
+            self.nextAction(MazeCorridorAction(self.radar, MazeCorridorAction.RIGHT, 250))
 
             log(DEBUG_LEVEL_ALWAYS, "Started driving... for  " + str(distance) + " (" + str(self.move_forward_on_odo.required_odo) + ")")
 

@@ -46,63 +46,50 @@ i2cBus = smbus.SMBus(I2C_BUS)
 vl53l1x_i2c = VL53L1X_I2C()
 
 sensorsMap = {
-    1: {'s1_name': 'left', 's2_name': 'back_left'},
-    2: {'s1_name': 'forward', 's2_name': 'forward_right'},
-    4: {'s1_name': 'right', 's2_name': 'forward_right'},
-    8: {'s1_name': 'back', 's2_name': 'back_right'}
+    1: {1: {'name': 'left', 'adjust': 83}, 2: {'name': 'back_left', 'adjust': 121}},
+    2: {1: {'name': 'forward', 'adjust': 83}, 2: {'name': 'forward_right', 'adjust': 121}},
+    4: {1: {'name': 'right', 'adjust': 83}, 2: {'name': 'forward_right', 'adjust': 121}},
+    8: {1: {'name': 'back', 'adjust': 83}, 2: {'name': 'back_right', 'adjust': 121}}
 }
+
+radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'timestamp': 0.0}
 
 
 # noinspection PyTypeChecker
-def readSensors(i2c_address):
+def readSensors(i2c_address, sensor1_angle, sensor2_angle):
 
-    def readOneSensor(sensor: VL53L1X, sensor_id):
+    def readOneSensor(sensor: VL53L1X, sensor_angle):
         if sensor.data_ready():
             measurement_data = sensor.get_measurement_data()
             sensor.clear_interrupt()
 
             if measurement_data.is_valid:
-                sensorsMap[i2c_address][sensor_id] = measurement_data.distance
+                radar[sensor_angle] = measurement_data.distance
             else:
                 print("Measurement error " + sensor.name + ": " + measurement_data.get_range_status_description() + " d=" + str(measurement_data.distance))
                 if measurement_data.distance > 0:
-                    sensorsMap[i2c_address][sensor_id] = measurement_data.distance
-                return measurement_data.distance
-
-        return sensorsMap[i2c_address][sensor_id]
+                    radar[sensor_angle] = measurement_data.distance
 
     try:
         i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2c_address)
 
-        d1 = readOneSensor(sensorsMap[i2c_address]['vl53l1x_1'], 'd1')
-        d2 = readOneSensor(sensorsMap[i2c_address]['vl53l1x_2'], 'd2')
-
-        return d1, d2
+        readOneSensor(sensorsMap[i2c_address][1]['vl53l1x'], sensor1_angle)
+        readOneSensor(sensorsMap[i2c_address][2]['vl53l1x'], sensor2_angle)
 
     except BaseException as e:
         if DEBUG:
             print("Failed to read sensor from i2c multiplexer address " + str(i2c_address) + ", " + str(e))
 
-    return -1, -1
-
 
 def readAllSensors():
-    d270, d225 = readSensors(1)
-    d0, d315 = readSensors(2)
-    d90, d45 = readSensors(4)
-    d180, d135 = readSensors(8)
+    readSensors(1, 270, 225)
+    readSensors(2, 0, 315)
+    readSensors(4, 90, 45)
+    readSensors(8, 180, 135)
 
-    d0 += 83
-    d90 += 83
-    d180 += 83
-    d270 += 83
-    d45 += 121
-    d135 += 121
-    d225 += 121
-    d315 += 121
+    radar['timestamp'] = time.time()
 
-    message = ",".join([str(f) for f in [time.time(), d0, d45, d90, d135, d180, d225, d270, d315]])
-    pyroslib.publish("distance/deg", message)
+    pyroslib.publish("sensor/distance", " ".join([":".join([str(v) for v in kv]) for kv in radar.items()]))
 
 
 # noinspection PyTypeChecker
@@ -153,42 +140,38 @@ def initDistanceSensors():
 
         if vl53l1x_i2c.is_device_at(I2C_VL53L1X_ADDRESS_1):
             print("        " + str(i2c_address) + ": first sensor already present on " + hex(I2C_VL53L1X_ADDRESS_1))
-
-            sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_name'])
+            sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address][1]['name'])
         else:
             print("        " + str(i2c_address) + ": configuring first sensor to " + hex(I2C_VL53L1X_ADDRESS_1))
-            sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address]['s1_name'])
+            sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=sensorsMap[i2c_address][1]['name'])
 
         configureSensor(sensor1)
-        sensorsMap[i2c_address]['vl53l1x_1'] = sensor1
+        sensorsMap[i2c_address][1]['vl53l1x'] = sensor1
 
     if need_to_init_xshut:
         GPIO.output(XSHUT_PIN, GPIO.HIGH)
         time.sleep(0.002)
         for i2c_address in sensors:
             switchBus(i2c_address)
-
             print("        " + str(i2c_address) + ": configuring XSHUT sensor to " + hex(I2C_VL53L1X_ADDRESS_2))
-            sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_name'])
+            sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address][2]['name'])
             configureSensor(sensor2)
-            sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
+            sensorsMap[i2c_address][2]['vl53l1x'] = sensor2
     else:
         for i2c_address in sensors:
             switchBus(i2c_address)
-            print("        configuring XSHUT sensor on " + hex(I2C_VL53L1X_ADDRESS_2))
-            sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address]['s2_name'])
+            print("        " + str(i2c_address) + ": configuring XSHUT sensor on " + hex(I2C_VL53L1X_ADDRESS_2))
+            sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=sensorsMap[i2c_address][2]['name'])
             configureSensor(sensor2)
-            sensorsMap[i2c_address]['vl53l1x_2'] = sensor2
+            sensorsMap[i2c_address][2]['vl53l1x'] = sensor2
 
     for i2c_address in sensors:
         switchBus(i2c_address)
         print("        " + str(i2c_address) + ": starting ranging for both sensors")
-        sensor1 = sensorsMap[i2c_address]['vl53l1x_1']
-        sensor2 = sensorsMap[i2c_address]['vl53l1x_2']
+        sensor1 = sensorsMap[i2c_address][1]['vl53l1x']
+        sensor2 = sensorsMap[i2c_address][2]['vl53l1x']
         sensor1.start_ranging()
         sensor2.start_ranging()
-        sensorsMap[i2c_address]['d1'] = -1
-        sensorsMap[i2c_address]['d2'] = -1
 
 
 if __name__ == "__main__":

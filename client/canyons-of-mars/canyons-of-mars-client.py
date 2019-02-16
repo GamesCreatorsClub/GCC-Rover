@@ -16,6 +16,8 @@ import pyros.pygamehelper
 import sys
 import time
 
+from pygame import Rect
+
 sqrt2 = math.sqrt(2)
 
 screen_size = (800, 700)
@@ -69,6 +71,9 @@ class CanyonsOfMars:
             self.running = False
             self.onOffButton.off()
 
+    def handleAction(self, topic, message, groups):
+        self.onOffButton.label.setText(message)
+
     def handleOrientaion(self, topic, message, groups):
         data = message.split(" ")
 
@@ -95,27 +100,22 @@ class CanyonsOfMars:
         self.front_distance_label.setText("{:.2f}".format(self.front_distance))
         self.back_distance_label.setText("{:.2f}".format(self.back_distance))
 
-    def handleDistance(self, topic, message, groups):
-        data = message.split(",")
+    def handleDistances(self, topic, message, groups):
         for d in self.radar:
             self.last_radar[d] = self.radar[d]
 
-        self.radar[0] = float(data[1])
-        self.radar[45] = float(data[2])
-        self.radar[90] = float(data[3])
-        self.radar[135] = float(data[4])
-        self.radar[180] = float(data[5])
-        self.radar[225] = float(data[6])
-        self.radar[270] = float(data[7])
-        self.radar[315] = float(data[8])
+        values = [v.split(":") for v in message.split(" ")]
+        for (k,v) in values:
+            if k != 'timestamp':
+                self.radar[int(k)] = int(v)
 
 
 canyonsOfMars = CanyonsOfMars()
 
 
-class MazeComponent(gccui.components.CardsCollection):
+class MazeCorridorComponent(gccui.components.CardsCollection):
     def __init__(self, rect):
-        super(MazeComponent, self).__init__(rect)
+        super(MazeCorridorComponent, self).__init__(rect)
 
         self.rover_image = pygame.image.load("rover-top-no-cover-48.png")
 
@@ -232,19 +232,19 @@ class MazeComponent(gccui.components.CardsCollection):
         rotated_rover_image.get_rect(center=self.rect.center)
         self.rover_image_component._surface = rotated_rover_image
 
-        super(MazeComponent, self).draw(surface)
+        super(MazeCorridorComponent, self).draw(surface)
 
 
 class OnOffButton(gccui.components.CardsCollection):
-    def __init__(self, rect, on_label_text, off_label_text, on_button_text, off_button_text, on_callback, off_callback):
+    def __init__(self, rect, on_button_text, off_button_text, on_callback, off_callback):
         super(OnOffButton, self).__init__(rect)
         self.on_callback = on_callback
         self.off_callback = off_callback
         self.onComponent = gccui.Collection(rect)
-        self.onComponent.addComponent(uiFactory.label(rect, on_label_text))
+        self.label = uiFactory.label(rect, "Connecting...")
+        self.addComponent(self.label)
         self.onComponent.addComponent(uiFactory.text_button(rect, off_button_text, self.off_button_clicked, hint=gccui.UI_HINT.WARNING))
         self.offComponent = gccui.Collection(rect)
-        self.offComponent.addComponent(uiFactory.label(rect, off_label_text))
         self.offComponent.addComponent(uiFactory.text_button(rect, on_button_text, self.on_button_clicked))
         self.offComponent.addComponent(uiFactory.text_button(rect, off_button_text, self.off_button_clicked, hint=gccui.UI_HINT.ERROR))
         self.addCard("on", self.onComponent)
@@ -255,13 +255,11 @@ class OnOffButton(gccui.components.CardsCollection):
     def redefineRect(self, rect):
         width = int(rect.width * 0.3)
         margin = int(rect.width * 0.05)
+        self.label.redefineRect(Rect(rect.x, rect.y, width, rect.height))
+        self.onComponent.components[0].redefineRect(Rect(rect.right - width, rect.y, width, rect.height))
 
-        self.onComponent.components[0].redefineRect(pygame.Rect(rect.x, rect.y, width, rect.height))
-        self.onComponent.components[1].redefineRect(pygame.Rect(rect.right - width, rect.y, width, rect.height))
-
-        self.offComponent.components[0].redefineRect(pygame.Rect(rect.x, rect.y, width, rect.height))
-        self.offComponent.components[1].redefineRect(pygame.Rect(rect.x + width + margin, rect.y, width, rect.height))
-        self.offComponent.components[2].redefineRect(pygame.Rect(rect.right - width, rect.y, width, rect.height))
+        self.offComponent.components[0].redefineRect(Rect(rect.x + width + margin, rect.y, width, rect.height))
+        self.offComponent.components[1].redefineRect(Rect(rect.right - width, rect.y, width, rect.height))
 
     def on(self):
         self.selectCard("on")
@@ -281,29 +279,29 @@ class OnOffButton(gccui.components.CardsCollection):
 def initGraphics(screens):
     statusComponents = gccui.Collection(screens.rect)
     screens.addCard("status", statusComponents)
-    onOffButton = OnOffButton(pygame.Rect(10, 40, 300, 30), "Running", "Stopped", "Run", "Stop", canyonsOfMars.start, canyonsOfMars.stop)
+    onOffButton = OnOffButton(Rect(10, 40, 300, 30), "Run", "Stop", canyonsOfMars.start, canyonsOfMars.stop)
     statusComponents.addComponent(onOffButton)
     canyonsOfMars.onOffButton = onOffButton
-    canyonsOfMars.left_angle_label = uiFactory.label(pygame.Rect(360, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    canyonsOfMars.right_angle_label = uiFactory.label(pygame.Rect(470, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    canyonsOfMars.left_front_distance_label = uiFactory.label(pygame.Rect(360, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    canyonsOfMars.right_front_distance_label = uiFactory.label(pygame.Rect(470, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    canyonsOfMars.front_distance_label = uiFactory.label(pygame.Rect(580, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    canyonsOfMars.back_distance_label = uiFactory.label(pygame.Rect(580, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(330, 30, 30, 20), "LA:"))
+    canyonsOfMars.left_angle_label = uiFactory.label(Rect(360, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    canyonsOfMars.right_angle_label = uiFactory.label(Rect(470, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    canyonsOfMars.left_front_distance_label = uiFactory.label(Rect(360, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    canyonsOfMars.right_front_distance_label = uiFactory.label(Rect(470, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    canyonsOfMars.front_distance_label = uiFactory.label(Rect(580, 30, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    canyonsOfMars.back_distance_label = uiFactory.label(Rect(580, 50, 70, 20), "", h_alignment=gccui.ALIGNMENT.RIGHT)
+    statusComponents.addComponent(uiFactory.label(Rect(330, 30, 30, 20), "LA:"))
     statusComponents.addComponent(canyonsOfMars.left_angle_label)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(440, 30, 30, 20), "RA:"))
+    statusComponents.addComponent(uiFactory.label(Rect(440, 30, 30, 20), "RA:"))
     statusComponents.addComponent(canyonsOfMars.right_angle_label)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(330, 50, 30, 20), "LD:"))
+    statusComponents.addComponent(uiFactory.label(Rect(330, 50, 30, 20), "LD:"))
     statusComponents.addComponent(canyonsOfMars.left_front_distance_label)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(440, 50, 30, 20), "RD:"))
+    statusComponents.addComponent(uiFactory.label(Rect(440, 50, 30, 20), "RD:"))
     statusComponents.addComponent(canyonsOfMars.right_front_distance_label)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(550, 30, 30, 20), "FD:"))
+    statusComponents.addComponent(uiFactory.label(Rect(550, 30, 30, 20), "FD:"))
     statusComponents.addComponent(canyonsOfMars.front_distance_label)
-    statusComponents.addComponent(uiFactory.label(pygame.Rect(550, 50, 30, 20), "BD:"))
+    statusComponents.addComponent(uiFactory.label(Rect(550, 50, 30, 20), "BD:"))
     statusComponents.addComponent(canyonsOfMars.back_distance_label)
 
-    maze_component = MazeComponent(pygame.Rect(10, 80, 600, 600))
+    maze_component = MazeCorridorComponent(Rect(10, 80, 600, 600))
     maze_component.radar = canyonsOfMars.radar
     canyonsOfMars.maze_component = maze_component
     statusComponents.addComponent(maze_component)
@@ -326,9 +324,10 @@ def onKeyUp(key):
 
 
 pyros.init("canyons-of-mars-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+pyros.subscribe("canyons/feedback/action", canyonsOfMars.handleAction)
 pyros.subscribe("canyons/feedback/running", canyonsOfMars.handleRunning)
-pyros.subscribe("canyons/feedback/orientation", canyonsOfMars.handleOrientaion)
-pyros.subscribe("distance/deg", canyonsOfMars.handleDistance)
+pyros.subscribe("canyons/feedback/corridor", canyonsOfMars.handleOrientaion)
+pyros.subscribe("sensor/distance", canyonsOfMars.handleDistances)
 
 uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory()
 uiFactory.font = pyros.gccui.font
@@ -345,7 +344,7 @@ while True:
             sys.exit()
         if event.type == pygame.VIDEORESIZE:
             pyros.gccui.screenResized(event.size)
-            screensComponent.redefineRect(pygame.Rect(0, 0, event.size[0], event.size[1]))
+            screensComponent.redefineRect(Rect(0, 0, event.size[0], event.size[1]))
 
         uiAdapter.processEvent(event)
 

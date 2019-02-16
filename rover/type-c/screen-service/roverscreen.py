@@ -32,7 +32,7 @@ wheelRects = {'fl': None, 'fr': None, 'bl': None, 'br': None}
 
 received = False
 
-distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
 
 angle = 0.0
 
@@ -106,14 +106,13 @@ def handleWheelPositions(topic, message, groups):
     updateWheel('br', values, 7)
 
 
-def handleDistance(topic, message, groups):
+def handleDistances(topic, message, groups):
     global received  # , angle
 
-    values = message.split(",")
-    for i in range(8):
-        distances[i] = float(values[i + 1])
-        if distances[i] < 0:
-            distances[i] = 0
+    values = {int(v[0]): int(v[1]) for v in [v.split(":") for v in message.split(" ")] if v[0] != 'timestamp'}
+
+    for a in values:
+        radar[a] = values[a]
 
 
 def handleWheelOrientations(topic, message, groups):
@@ -509,14 +508,14 @@ class Radar(gccui.Component):
             y2 = math.sin(d) * int(self.rect.width / 12) + self.rect.centery
             pygame.draw.line(surface, self.gray, (x1, y1), (x2, y2))
 
-        pygame.draw.arc(_uiAdapter.getScreen(), (255, 0, 255), self.rect.inflate(limit(distances[0]), limit(distances[0])), pi8 * 3, pi8 * 5)  # 0º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[1]), limit(distances[1])), pi8 * 1, pi8 * 3)  # 45º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[2]), limit(distances[2])), pi8 * 15, pi8 * 1)  # 90º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[3]), limit(distances[3])), pi8 * 13, pi8 * 15)  # 135º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[4]), limit(distances[4])), pi8 * 11, pi8 * 13)  # 180º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[5]), limit(distances[5])), pi8 * 9, pi8 * 11)  # 225º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[6]), limit(distances[6])), pi8 * 7, pi8 * 9)  # 270º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(distances[7]), limit(distances[7])), pi8 * 5, pi8 * 7)  # 315º
+        pygame.draw.arc(_uiAdapter.getScreen(), (255, 0, 255), self.rect.inflate(limit(radar[0]), limit(radar[0])), pi8 * 3, pi8 * 5)  # 0º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[45]), limit(radar[45])), pi8 * 1, pi8 * 3)  # 45º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[90]), limit(radar[90])), pi8 * 15, pi8 * 1)  # 90º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[135]), limit(radar[135])), pi8 * 13, pi8 * 15)  # 135º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[180]), limit(radar[180])), pi8 * 11, pi8 * 13)  # 180º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[225]), limit(radar[225])), pi8 * 9, pi8 * 11)  # 225º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[270]), limit(radar[270])), pi8 * 7, pi8 * 9)  # 270º
+        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[315]), limit(radar[315])), pi8 * 5, pi8 * 7)  # 315º
 
 
 def returnToStatusButtonClick(button, pos):
@@ -957,28 +956,31 @@ class RadarScreen(ScreenComponent):
         self.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
         self.addComponent(Radar(pygame.Rect(50, 50, 220, 220), 1300))
-        self.distance_labels = [
-            _uiFactory.label(pygame.Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(260, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(160, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            _uiFactory.label(pygame.Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        ]
-        for label in self.distance_labels:
-            self.addComponent(label)
+        self.distance_labels = {
+            0: _uiFactory.label(pygame.Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            45: _uiFactory.label(pygame.Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            90: _uiFactory.label(pygame.Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            135: _uiFactory.label(pygame.Rect(260, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            180: _uiFactory.label(pygame.Rect(160, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            225: _uiFactory.label(pygame.Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            270: _uiFactory.label(pygame.Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            315: _uiFactory.label(pygame.Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        }
+        for a in self.distance_labels:
+            self.addComponent(self.distance_labels[a])
+
+        self.right_distance_label = _uiFactory.label(pygame.Rect(290, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.addComponent(self.right_distance_label)
 
     def draw(self, surface):
-        for i in range(len(distances)):
-            self.distance_labels[i].setText(str(distances[i]))
+        for a in radar:
+            self.distance_labels[a].setText(str(radar[a]))
 
         super(RadarScreen, self).draw(surface)
 
     def enter(self):
         super(RadarScreen, self).enter()
-        pyroslib.subscribe("distance/deg", handleDistance)
+        pyroslib.subscribe("sensor/distance", handleDistances)
 
     def leave(self):
         super(RadarScreen, self).leave()
@@ -992,9 +994,6 @@ def init(uiFactory, uiAdapter, font, smallFont):
     _font = font
     _smallFont = smallFont
 
-    # pyroslib.subscribe("wheel/deg/status", handleWheelOrientations)
-    # pyroslib.subscribe("wheel/speed/status", handleWheelPositions)
-    # pyroslib.subscribe("distance/deg", handleDistance)
     pyroslib.subscribe("screen/image", handleScreenImage)
     pyroslib.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
     pyroslib.subscribe("shutdown/announce", handleShutdown)
