@@ -473,61 +473,59 @@ def calcOuterSpeed(spd, dist):
 
 
 def steer():
+    def calcAngle(_xo, _yo, xw, yw, _distance):
+        xw = xw - _xo
+        yw = yw - _yo
+        a = math.atan2(xw, yw) * 180 / math.pi
+        if _distance >= 0:
+            return int(a + 90)
+        else:
+            return int(a - 90)
+
+    def calcSpeedDifference(_speed, _xo, _yo, xw, yw):
+        mr = math.sqrt(_xo * _xo + _yo * _yo)
+        wr = math.sqrt((xw - _xo) * (xw - _xo) + (yw - _yo) * (yw - _yo))
+        return int(wr * _speed / mr)
+
     args = currentCommand["args"].split(" ")
 
-    d = int(args[0])
+    distance = int(float(args[0]))
     if len(args) > 1:
-        speed = int(args[1])
+        speed = int(float(args[1]))
     else:
         speed = 0
-    frontAngle = sideAngleFront(abs(d))
-    backAngle = sideAngleBack(abs(d))
 
-    innerSpeed = calcInnerSpeed(speed, abs(d))
-    outerSpeed = calcOuterSpeed(speed, abs(d))
-
-    adjust = 0
-    if innerSpeed > 300:
-        adjust = innerSpeed - 300
-    elif innerSpeed < -300:
-        adjust = innerSpeed + 300
-    elif outerSpeed > 300:
-        adjust = outerSpeed - 300
-    elif outerSpeed < -300:
-        adjust = outerSpeed + 300
-
-    innerSpeed -= adjust
-    outerSpeed -= adjust
-
-    log("steer", "d=" + str(d) + " s=" + str(speed) + " fa=" + str(frontAngle) + " ba=" + str(backAngle) + " is=" + str(innerSpeed) + " os=" + str(outerSpeed) + " adj=" + str(adjust) + " args:" + str(args))
-
-    if d >= 0:
-        # wheelDeg("fl", str(backAngle))
-        # wheelDeg("bl", str(-backAngle))
-        # wheelDeg("fr", str(frontAngle))
-        # wheelDeg("br", str(-frontAngle))
-        if speed != 0:
-            allWheels(backAngle, frontAngle, -backAngle, -frontAngle, int(outerSpeed), int(innerSpeed), int(outerSpeed), int(innerSpeed))
-            # wheelSpeed("fl", str(outerSpeed))
-            # wheelSpeed("fr", str(innerSpeed))
-            # wheelSpeed("bl", str(outerSpeed))
-            # wheelSpeed("br", str(innerSpeed))
-        else:
-            allWheelsDeg(backAngle, frontAngle, -backAngle, -frontAngle)
-
+    if len(args) > 2:
+        angle = - int(float(args[2])) * math.pi / 180
     else:
-        # wheelDeg("fl", str(-frontAngle))
-        # wheelDeg("bl", str(frontAngle))
-        # wheelDeg("fr", str(-backAngle))
-        # wheelDeg("br", str(backAngle))
-        if speed != 0:
-            allWheels(-frontAngle, -backAngle, frontAngle, backAngle, innerSpeed, outerSpeed, innerSpeed, outerSpeed)
-            # wheelSpeed("fl", str(innerSpeed))
-            # wheelSpeed("fr", str(outerSpeed))
-            # wheelSpeed("bl", str(innerSpeed))
-            # wheelSpeed("br", str(outerSpeed))
-        else:
-            allWheelsDeg(-frontAngle, -backAngle, frontAngle, backAngle)
+        angle = 0 * math.pi / 180
+
+    if speed < 0:
+        angle = angle + math.pi
+        if angle > 2 * math.pi:
+            angle = angle - 2 * math.pi
+
+    xo = math.cos(angle) * distance
+    yo = math.sin(angle) * distance
+
+    wheel_distance = 53
+
+    fr_angle = calcAngle(xo, yo, wheel_distance, wheel_distance, distance)
+    fl_angle = calcAngle(xo, yo, -wheel_distance, wheel_distance, distance)
+    br_angle = calcAngle(xo, yo, wheel_distance, -wheel_distance, distance)
+    bl_angle = calcAngle(xo, yo, -wheel_distance, -wheel_distance, distance)
+
+    fr_speed = min(300, calcSpeedDifference(speed, xo, yo, wheel_distance, wheel_distance))
+    fl_speed = min(300, calcSpeedDifference(speed, xo, yo, -wheel_distance, wheel_distance))
+    br_speed = min(300, calcSpeedDifference(speed, xo, yo, wheel_distance, -wheel_distance))
+    bl_speed = min(300, calcSpeedDifference(speed, xo, yo, -wheel_distance, -wheel_distance))
+
+    log("steer", "d=" + str(distance) + " s=" + str(speed) + " a=" + str(angle) + " fra=" + str(fr_angle) + " fla=" + str(fl_angle) + " bra=" + str(br_angle) + " bla=" + str(bl_angle) + " frs=" + str(fr_speed) + " fls=" + str(fl_speed) + " brs=" + str(br_speed) + " bls=" + str(bl_speed) + " args:" + str(args))
+
+    if speed != 0:
+        allWheels(fl_angle, fr_angle, bl_angle, br_angle, fl_speed, fr_speed, bl_speed, br_speed)
+    else:
+        allWheelsDeg(fl_angle, fr_angle, bl_angle, br_angle)
 
 
 def drive():

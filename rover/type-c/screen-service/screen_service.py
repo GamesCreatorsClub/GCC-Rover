@@ -7,6 +7,7 @@
 
 
 import gccui
+import os
 import pyroslib
 import pygame
 import roverscreen
@@ -36,6 +37,7 @@ screen = None
 font = None
 smallFont = None
 
+uptime_updated = 0
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -214,26 +216,53 @@ def startPyGame():
     # screen.fill((128, 128, 0))
     # pygame.display.flip()
 
-    font = pygame.font.Font("garuda.ttf", 40)
     font = pygame.font.Font("garuda.ttf", 20)
+    smallFont = pygame.font.Font("garuda.ttf", 16)
 
     working = True
 
 
 def mainLoop():
-    if working and screen is not None:
-        screen.fill((0, 0, 0))
+    global uptime_updated
 
-        touchHandler.process()
-        uiAdapter.draw(screen)
-        touchHandler.draw(screen)
+    try:
+        if working and screen is not None:
+            screen.fill((0, 0, 0))
 
-        pygame.display.flip()
+            touchHandler.process()
+            uiAdapter.draw(screen)
+            touchHandler.draw(screen)
+
+            pygame.display.flip()
+
+            uptime_updated = 0
+            now = time.time()
+            if uptime_updated + 60 < now:
+                now = time.time()
+                if os.path.exists("/proc/uptime"):
+                    with open("/proc/uptime", 'r') as fh:
+                        uptime_minutes = int(float(fh.read().split(" ")[0]) / 60)
+                        uptime_hours = int(uptime_minutes / 60)
+                        uptime_minutes = uptime_minutes % 60
+                        uptime = "{:02d}:{:02d}".format(uptime_hours, uptime_minutes)
+
+                else:
+                    uptime = os.popen('uptime').readline().split(" ")[0][:5]
+
+                pyroslib.publish("rover/status/uptime", uptime)
+
+                uptime_updated = now
+    except Exception as ex:
+        print("MainLoop Exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
 
 if __name__ == "__main__":
     try:
         print("Starting screen service...")
+
+        print("  setting up mixer volume to max...")
+        os.system("amixer cset numid=1 100%")
+        print("  set up mixer volume to max.")
 
         pyroslib.init("screen", unique=True, onConnected=connected)
 

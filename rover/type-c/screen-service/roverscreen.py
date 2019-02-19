@@ -9,9 +9,10 @@ import math
 import os
 import pygame
 import pyroslib
+import subprocess
 import time
 from functools import partial
-
+from pygame import Rect
 
 OFF = 10
 XOFF = 0
@@ -41,9 +42,12 @@ _uiAdapter = None
 _font = None
 _smallFont = None
 screensComponent = None
+topComponent = None
+statusBarComponent = None
 _slaves_shutdown = False
 _main_screen_image = None
 _backgrounds = {}
+_sounds = {}
 
 
 def _createTemplateWheel(distance_index):
@@ -61,14 +65,18 @@ wheelsMap = {'fl': _createTemplateWheel(0), 'fr': _createTemplateWheel(2), 'bl':
 
 
 def stopAllButtonClick(button, pos):
-    pyroslib.publish("wheel/fr/deg", "-")
-    pyroslib.publish("wheel/fl/deg", "-")
-    pyroslib.publish("wheel/br/deg", "-")
-    pyroslib.publish("wheel/bl/deg", "-")
+    # pyroslib.publish("wheel/fr/deg", "-")
+    # pyroslib.publish("wheel/fl/deg", "-")
+    # pyroslib.publish("wheel/br/deg", "-")
+    # pyroslib.publish("wheel/bl/deg", "-")
+    pyroslib.publish("wheel/stop", "toggle")
 
 
 def initGui():
     global wheelImage, wheelOdoImage
+
+    pygame.mixer.pre_init()
+    pygame.mixer.init()
 
     screen_rect = _uiAdapter.getScreen().get_rect()
 
@@ -97,7 +105,6 @@ def handleWheelPositions(topic, message, groups):
             wheel['odo'] = int(odoStr)
 
     received = True
-    # print("** wheel positions = " + message)
 
     values = message.split(",")
     updateWheel('fl', values, 1)
@@ -174,8 +181,24 @@ def handleShutdown(topic, message, groups):
         _slaves_shutdown = True
 
 
+def handleWheelsStatus(topic, message, groups):
+    statusBarComponent.setWheelsStatus(message)
+
+
+def handleJoystickStatus(topic, message, groups):
+    statusBarComponent.setJoystickStatus(message)
+
+
+def handleUptimeStatus(topic, message, groups):
+    statusBarComponent.setUptime(message)
+
+
 def handleScreenImage(topic, message, groups):
     setMainScreenImage(message)
+
+
+def handleScreenSound(topic, message, groups):
+    playScreenSound(message)
 
 
 def setMainScreenImage(imageName):
@@ -183,13 +206,48 @@ def setMainScreenImage(imageName):
     if imageName in _backgrounds:
         image = _backgrounds[imageName]
         _main_screen_image = image
+    elif (imageName + ".png") in _backgrounds:
+        image = _backgrounds[imageName + ".png"]
+        _main_screen_image = image
+    elif (imageName + ".jpg") in _backgrounds:
+        image = _backgrounds[imageName + ".jpg"]
+        _main_screen_image = image
     else:
+        if os.path.exists("images/" + imageName + ".png"):
+            imageName = imageName + ".png"
+        elif os.path.exists("images/" + imageName + ".jpg"):
+            imageName = imageName + ".jpg"
+
         if os.path.exists("images/" + imageName):
             image = pygame.image.load("images/" + imageName)
             _backgrounds[imageName] = image
             _main_screen_image = image
         else:
             _main_screen_image = None
+
+
+def playScreenSound(soundName):
+    if soundName in _sounds:
+        sound = _sounds[soundName]
+        sound.play()
+    elif soundName + ".wav" in _sounds:
+        sound = _sounds[soundName + ".wav"]
+        sound.play()
+    elif soundName + ".ogg" in _sounds:
+        sound = _sounds[soundName + ".ogg"]
+        sound.play()
+    else:
+        if os.path.exists("sounds/" + soundName + ".wav"):
+            soundName = soundName + ".wav"
+        elif os.path.exists("sounds/" + soundName + ".ogg"):
+            soundName = soundName + ".ogg"
+        if os.path.exists("sounds/" + soundName):
+            sound = pygame.mixer.Sound("sounds/" + soundName)
+            sound.set_volume(1.0)
+            _sounds[soundName] = sound
+            print("Playing " + soundName + " ...")
+            sound.play()
+            print("Played " + soundName)
 
 
 def hasCalibrationLoaded():
@@ -355,7 +413,7 @@ class WheelComponent(gccui.Collection):
     def redefineRect(self, rect):
         self.rect = rect
         self.image.redefineRect(rect)
-        self.angle_text.redefineRect(pygame.Rect(rect.x, rect.centery - self.angle_text.font.get_height() // 2, rect.width, self.angle_text.font.get_height()))
+        self.angle_text.redefineRect(Rect(rect.x, rect.centery - self.angle_text.font.get_height() // 2, rect.width, self.angle_text.font.get_height()))
 
     def draw(self, surface):
         wheel = wheelsMap[self.wheel_name]
@@ -456,11 +514,11 @@ class WheelStatusComponent(gccui.Collection):
         self.odo_image.redefineRect(rect)
         self.odo_text.redefineRect(rect.move(-self.margin - 5, 0))
 
-        self.i2c_text.redefineRect(pygame.Rect(rect.x, rect.y, self.margin // 2, rect.height))
-        self.radio_text.redefineRect(pygame.Rect(rect.x + self.margin // 2, rect.y, self.margin // 2, rect.height))
+        self.i2c_text.redefineRect(Rect(rect.x, rect.y, self.margin // 2, rect.height))
+        self.radio_text.redefineRect(Rect(rect.x + self.margin // 2, rect.y, self.margin // 2, rect.height))
 
-        self.control_text.redefineRect(pygame.Rect(rect.right - self.margin, rect.y, self.margin // 2, rect.height))
-        self.magnet_text.redefineRect(pygame.Rect(rect.right - self.margin + self.margin // 2, rect.y, self.margin // 2, rect.height))
+        self.control_text.redefineRect(Rect(rect.right - self.margin, rect.y, self.margin // 2, rect.height))
+        self.magnet_text.redefineRect(Rect(rect.right - self.margin + self.margin // 2, rect.y, self.margin // 2, rect.height))
 
     def draw(self, surface):
         wheel = wheelsMap[self.wheel_name]
@@ -518,13 +576,69 @@ class Radar(gccui.Component):
         pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[315]), limit(radar[315])), pi8 * 5, pi8 * 7)  # 315º
 
 
+class StatusBarComponent(gccui.Collection):
+    def __init__(self, rect):
+        super(StatusBarComponent, self).__init__(rect)
+
+        self.battery_gray_image = pygame.image.load("graphics/battery-gray.png")
+        self.stop_image = pygame.image.load("graphics/pause.png")
+        self.stop_black_image = pygame.image.load("graphics/play.png")
+        self.joystick_white_image = pygame.image.load("graphics/joystick-white.png")
+        self.joystick_black_image = pygame.image.load("graphics/joystick-black.png")
+        self.battery_component = _uiFactory.image(rect, self.battery_gray_image)
+        self.stop_component = _uiFactory.image(rect, self.stop_image)
+        self.joystick_component = _uiFactory.image(rect, self.joystick_black_image)
+        self.uptime_component = _uiFactory.label(rect, "--:--", colour=pygame.color.THECOLORS['lightgray'], h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.addComponent(self.stop_component)
+        self.addComponent(self.battery_component)
+        self.addComponent(self.joystick_component)
+        self.addComponent(self.uptime_component)
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        self.rect = rect
+        self.battery_component.redefineRect(Rect(rect.right - self.battery_gray_image.get_width() - 8, rect.y, self.battery_gray_image.get_width(), self.battery_gray_image.get_height()))
+        self.uptime_component.redefineRect(Rect(self.battery_component.rect.x - 60, rect.y, 50, 24))  # font size is bodge to make it render to right place
+        self.joystick_component.redefineRect(Rect(self.uptime_component.rect.x - self.joystick_white_image.get_width() - 10, rect.y, self.joystick_white_image.get_width(), self.joystick_white_image.get_height()))
+        self.stop_component.redefineRect(Rect(rect.x + 20, rect.y, self.stop_image.get_width(), self.stop_image.get_height()))
+
+    # def draw(self, surface):
+    #     super(StatusBarComponent, self).draw(surface)
+
+    def setWheelsStatus(self, status):
+        if status == 'stopped':
+            self.stop_component.setImage(self.stop_image)
+            self.stop_component.setVisible(True)
+        elif status == 'running':
+            self.stop_component.setImage(self.stop_black_image)
+            self.stop_component.setVisible(True)
+        else:
+            self.stop_component.setVisible(False)
+
+    def setJoystickStatus(self, status):
+        if status == 'connected':
+            self.joystick_component.setImage(self.joystick_white_image)
+            self.joystick_component.setVisible(True)
+        elif status == 'none':
+            self.joystick_component.setImage(self.joystick_black_image)
+            self.joystick_component.setVisible(True)
+        else:
+            self.joystick_component.setVisible(False)
+
+    def setUptime(self, uptime):
+        self.uptime_component.setText(uptime)
+
+    def setBatteryStatus(self, status):
+        pass
+
+
 def returnToStatusButtonClick(button, pos):
     screensComponent.selectCard('main')
 
 
 class ScreenComponent(gccui.Collection):
-    def __init__(self):
-        super(ScreenComponent, self).__init__(_uiAdapter.getScreen().get_rect())
+    def __init__(self, rect):
+        super(ScreenComponent, self).__init__(rect)
 
     def enter(self):
         pass
@@ -553,8 +667,8 @@ class ScreenComponent(gccui.Collection):
 
 
 class MainScreen(ScreenComponent):
-    def __init__(self):
-        super(MainScreen, self).__init__()
+    def __init__(self, rect):
+        super(MainScreen, self).__init__(rect)
 
         self._last_activity = time.time()
         self.activity_timeout = 5
@@ -562,8 +676,15 @@ class MainScreen(ScreenComponent):
         self.image = _uiFactory.image(_uiAdapter.getScreen().get_rect(), None)
         self.image.setVisible(False)
         self.addComponent(self.image)
-        self.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "MENU", partial(self.selectScreenButtonClick, 'menu')))
+        self.addComponent(_uiFactory.text_button(Rect(20, 410, 120, 50), "STOP", stopAllButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(180, 410, 120, 50), "MENU", partial(self.selectScreenButtonClick, 'menu')))
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(MainScreen, self).redefineRect(rect)
+        self.components[0].redefineRect(rect)
+        self.components[1].redefineRect(Rect(rect.x + 20, rect.bottom - 70, 120, 50))
+        self.components[2].redefineRect(Rect(rect.right - 140, rect.bottom - 70, 120, 50))
 
     def draw(self, surface):
         if self.image.getImage() != _main_screen_image:
@@ -603,19 +724,33 @@ class MainScreen(ScreenComponent):
 
 
 class WheelsScreen(ScreenComponent):
-    def __init__(self):
-        super(WheelsScreen, self).__init__()
+    def __init__(self, rect):
+        super(WheelsScreen, self).__init__(rect)
 
-        self.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "MENU", partial(self.selectScreenButtonClick, 'menu')))
+        self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "MENU", partial(self.selectScreenButtonClick, 'menu')))
         self.addComponent(WheelComponent(wheelRects['fr'], 'fr', True))
         self.addComponent(WheelComponent(wheelRects['fl'], 'fl', True))
         self.addComponent(WheelComponent(wheelRects['br'], 'br', True))
         self.addComponent(WheelComponent(wheelRects['bl'], 'bl', True))
-        self.addComponent(WheelStatusComponent(pygame.Rect(5, 38, 152, 32), 'fl'))
-        self.addComponent(WheelStatusComponent(pygame.Rect(163, 38, 152, 32), 'fr'))
-        self.addComponent(WheelStatusComponent(pygame.Rect(5, 74, 152, 32), 'bl'))
-        self.addComponent(WheelStatusComponent(pygame.Rect(163, 74, 152, 32), 'br'))
+        self.addComponent(WheelStatusComponent(Rect(5, 38, 152, 32), 'fl'))
+        self.addComponent(WheelStatusComponent(Rect(163, 38, 152, 32), 'fr'))
+        self.addComponent(WheelStatusComponent(Rect(5, 74, 152, 32), 'bl'))
+        self.addComponent(WheelStatusComponent(Rect(163, 74, 152, 32), 'br'))
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(WheelsScreen, self).redefineRect(rect)
+        self.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+        self.components[2].redefineRect(Rect(wheelRects['fr'].move(rect.x, rect.y)))
+        self.components[3].redefineRect(Rect(wheelRects['fl'].move(rect.x, rect.y)))
+        self.components[4].redefineRect(Rect(wheelRects['br'].move(rect.x, rect.y)))
+        self.components[5].redefineRect(Rect(wheelRects['bl'].move(rect.x, rect.y)))
+        self.components[6].redefineRect(Rect(rect.x + 5, rect.y + 38, 152, 32))
+        self.components[7].redefineRect(Rect(rect.x + 163, rect.y + 38, 152, 32))
+        self.components[8].redefineRect(Rect(rect.x + 5, rect.y + 74, 152, 32))
+        self.components[9].redefineRect(Rect(rect.x + 163, rect.y + 74, 152, 32))
 
     def enter(self):
         super(WheelsScreen, self).enter()
@@ -629,24 +764,41 @@ class WheelsScreen(ScreenComponent):
 
 
 class MenuScreen(ScreenComponent):
-    def __init__(self):
-        super(MenuScreen, self).__init__()
+    def __init__(self, rect):
+        super(MenuScreen, self).__init__(rect)
 
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 60, 220, 40), "WHEELS", partial(self.selectScreenButtonClick, 'wheels')))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 110, 220, 40), "RADAR", partial(self.selectScreenButtonClick, 'radar')))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 160, 220, 40), "CAL WHEELS", partial(self.selectScreenButtonClick, 'calibrateWheel')))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 210, 220, 40), "CAL PID", partial(self.selectScreenButtonClick, 'calibratePID')))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 380, 220, 40), "SHUTDOWN", partial(self.selectScreenButtonClick, 'shutdownConfirmation'), hint=gccui.UI_HINT.WARNING))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 430, 220, 40), "MAIN", self.backToMainScreenButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(50, 60, 220, 40), "WHEELS", partial(self.selectScreenButtonClick, 'wheels')))
+        self.addComponent(_uiFactory.text_button(Rect(50, 110, 220, 40), "RADAR", partial(self.selectScreenButtonClick, 'radar')))
+        self.addComponent(_uiFactory.text_button(Rect(50, 160, 220, 40), "CAL WHEELS", partial(self.selectScreenButtonClick, 'calibrateWheel')))
+        self.addComponent(_uiFactory.text_button(Rect(50, 210, 220, 40), "CAL PID", partial(self.selectScreenButtonClick, 'calibratePID')))
+        self.addComponent(_uiFactory.text_button(Rect(50, 380, 220, 40), "SHUTDOWN", partial(self.selectScreenButtonClick, 'shutdownConfirmation'), hint=gccui.UI_HINT.WARNING))
+        self.addComponent(_uiFactory.text_button(Rect(50, 430, 220, 40), "MAIN", self.backToMainScreenButtonClick))
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(MenuScreen, self).redefineRect(rect)
+        self.components[0].redefineRect(Rect(rect.x + 50, rect.y + 60, 220, 40))
+        self.components[1].redefineRect(Rect(rect.x + 50, rect.y + 110, 220, 40))
+        self.components[2].redefineRect(Rect(rect.x + 50, rect.y + 160, 220, 40))
+        self.components[3].redefineRect(Rect(rect.x + 50, rect.y + 210, 220, 40))
+        self.components[4].redefineRect(Rect(rect.x + 50, rect.bottom - 100, 220, 40))
+        self.components[5].redefineRect(Rect(rect.x + 50, rect.bottom - 50, 220, 40))
 
 
 class ShutdownConfirmationScreen(ScreenComponent):
-    def __init__(self):
-        super(ShutdownConfirmationScreen, self).__init__()
+    def __init__(self, rect):
+        super(ShutdownConfirmationScreen, self).__init__(rect)
 
-        self.addComponent(_uiFactory.label(pygame.Rect(50, 60, 220, 40), "Are you sure to shutdown?"))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 110, 220, 40), "SHUTDOWN", self.startShutdownButtonClick, hint=gccui.UI_HINT.ERROR))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(50, 430, 220, 40), "BACK", self.backToMainScreenButtonClick))
+        self.addComponent(_uiFactory.label(Rect(50, 60, 220, 40), "Are you sure to shutdown?"))
+        self.addComponent(_uiFactory.text_button(Rect(50, 110, 220, 40), "SHUTDOWN", self.startShutdownButtonClick, hint=gccui.UI_HINT.ERROR))
+        self.addComponent(_uiFactory.text_button(Rect(50, 430, 220, 40), "BACK", self.backToMainScreenButtonClick))
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(ShutdownConfirmationScreen, self).redefineRect(rect)
+        self.components[0].redefineRect(Rect(rect.x + 50, rect.y + 60, 220, 40))
+        self.components[1].redefineRect(Rect(rect.x + 50, rect.y + 110, 220, 40))
+        self.components[2].redefineRect(Rect(rect.x + 50, rect.bottom - 50, 220, 40))
 
     @staticmethod
     def startShutdownButtonClick(button, pos):
@@ -654,12 +806,17 @@ class ShutdownConfirmationScreen(ScreenComponent):
 
 
 class ShutdownScreen(ScreenComponent):
-    def __init__(self):
-        super(ShutdownScreen, self).__init__()
+    def __init__(self, rect):
+        super(ShutdownScreen, self).__init__(rect)
 
-        self.addComponent(_uiFactory.label(pygame.Rect(50, 160, 220, 40), "Shutdown in progress..."))
-        self.slaves_label = _uiFactory.label(pygame.Rect(50, 200, 220, 40), "Slaves have shutdown")
+        self.addComponent(_uiFactory.label(Rect(50, 160, 220, 40), "Shutdown in progress..."))
+        self.slaves_label = _uiFactory.label(Rect(50, 200, 220, 40), "Slaves have shutdown")
         self.addComponent(self.slaves_label)
+
+    def redefineRect(self, rect):
+        super(ShutdownScreen, self).redefineRect(rect)
+        self.components[0].redefineRect(Rect(rect.x + 50, rect.y + 160, 220, 40))
+        self.components[1].redefineRect(Rect(rect.x + 50, rect.y + 200, 220, 40))
 
     def draw(self, surface):
         self.slaves_label.setVisible(_slaves_shutdown)
@@ -693,8 +850,8 @@ class CalibrateWheelScreen(ScreenComponent):
                             background_decoration=self.back_deco(),
                             mouse_over_decoration=self.over_deco())
 
-    def __init__(self):
-        super(CalibrateWheelScreen, self).__init__()
+    def __init__(self, rect):
+        super(CalibrateWheelScreen, self).__init__(rect)
         self.card = gccui.CardsCollection(self.rect)
         self.addComponent(self.card)
         self.select = gccui.Collection(self.rect)
@@ -705,25 +862,25 @@ class CalibrateWheelScreen(ScreenComponent):
         self.card.addCard('calibrate', self.calibrate)
         self.card.selectCard('select')
 
-        self.select.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.select.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.select.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.select.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
         self.select.addComponent(self.createWheelButton('fr'))
         self.select.addComponent(self.createWheelButton('fl'))
         self.select.addComponent(self.createWheelButton('br'))
         self.select.addComponent(self.createWheelButton('bl'))
 
-        self.wheel_name_label = _uiFactory.label(pygame.Rect(10, 50, 310, 20), "", h_alignment=gccui.ALIGNMENT.CENTER)
+        self.wheel_name_label = _uiFactory.label(Rect(10, 50, 310, 20), "", h_alignment=gccui.ALIGNMENT.CENTER)
         self.calibrate.addComponent(self.wheel_name_label)
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationWheelButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(8, 170, 80, 40), "<", partial(self.moveWheelClick, -1)))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(8, 240, 80, 40), "<<", partial(self.moveWheelClick, -10)))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(232, 170, 80, 40), ">", partial(self.moveWheelClick, 1)))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(232, 240, 80, 40), ">>", partial(self.moveWheelClick, 10)))
-        self.degToggleButton = _uiFactory.text_button(pygame.Rect(20, 330, 80, 40), "A: --->", self.degToggleButtonClick)
-        self.steerToggleButton = _uiFactory.text_button(pygame.Rect(120, 330, 80, 40), "S: --->", self.steerToggleButtonClick)
-        self.speedToggleButton = _uiFactory.text_button(pygame.Rect(220, 330, 80, 40), "D: --->", self.speedToggleButtonClick)
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationWheelButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(8, 170, 80, 40), "<", partial(self.moveWheelClick, -1)))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(8, 240, 80, 40), "<<", partial(self.moveWheelClick, -10)))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(232, 170, 80, 40), ">", partial(self.moveWheelClick, 1)))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(232, 240, 80, 40), ">>", partial(self.moveWheelClick, 10)))
+        self.degToggleButton = _uiFactory.text_button(Rect(20, 330, 80, 40), "A: --->", self.degToggleButtonClick)
+        self.steerToggleButton = _uiFactory.text_button(Rect(120, 330, 80, 40), "S: --->", self.steerToggleButtonClick)
+        self.speedToggleButton = _uiFactory.text_button(Rect(220, 330, 80, 40), "D: --->", self.speedToggleButtonClick)
         self.calibrate.addComponent(self.degToggleButton)
         self.calibrate.addComponent(self.steerToggleButton)
         self.calibrate.addComponent(self.speedToggleButton)
@@ -731,11 +888,39 @@ class CalibrateWheelScreen(ScreenComponent):
         self.wheel = WheelComponent(wheelRects['middle'], '', True)
         self.calibrate.addComponent(self.wheel)
 
-        self.loading.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.loading.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
         self.loading.addComponent(_uiFactory.label(self.rect, "Loading calibration", h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE))
 
         self.selected_wheel_name = None
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(CalibrateWheelScreen, self).redefineRect(rect)
+        self.card.redefineRect(rect)
+        self.select.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.select.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+        self.select.components[2].redefineRect(wheelRects['fr'].move(rect.x, rect.y))
+        self.select.components[3].redefineRect(wheelRects['fl'].move(rect.x, rect.y))
+        self.select.components[4].redefineRect(wheelRects['br'].move(rect.x, rect.y))
+        self.select.components[5].redefineRect(wheelRects['bl'].move(rect.x, rect.y))
+
+        self.calibrate.components[0].redefineRect(Rect(rect.x + 10, rect.y + 50, 310, 20))
+        self.calibrate.components[1].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.calibrate.components[2].redefineRect(Rect(rect.x + 120, rect.bottom - 50, 90, 40))
+        self.calibrate.components[3].redefineRect(Rect(rect.x + 220, rect.bottom - 50, 90, 40))
+        self.calibrate.components[4].redefineRect(Rect(rect.x + 8, rect.y + 170, 80, 40))
+        self.calibrate.components[5].redefineRect(Rect(rect.x + 8, rect.y + 240, 80, 40))
+        self.calibrate.components[6].redefineRect(Rect(rect.x + 232, rect.y + 170, 80, 40))
+        self.calibrate.components[7].redefineRect(Rect(rect.x + 232, rect.y + 240, 80, 40))
+        self.calibrate.components[8].redefineRect(Rect(rect.x + 20, rect.y + 330, 80, 40))
+        self.calibrate.components[9].redefineRect(Rect(rect.x + 120, rect.y + 330, 80, 40))
+        self.calibrate.components[10].redefineRect(Rect(rect.x + 220, rect.y + 330, 80, 40))
+        self.calibrate.components[11].redefineRect(wheelRects['middle'].move(rect.x, rect.y))
+
+        self.loading.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.loading.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+        self.loading.components[2].redefineRect(rect)
 
     def enter(self):
         super(CalibrateWheelScreen, self).enter()
@@ -834,23 +1019,38 @@ class CalibrateWheelScreen(ScreenComponent):
 
 
 class PIDUIComponent(gccui.Collection):
-    def __init__(self, rect, name):
+    def __init__(self, rect, name, ui_label_text):
         super(PIDUIComponent, self).__init__(rect)
         self.name = name
 
-        self.addComponent(_uiFactory.label(pygame.Rect(rect.x + 112, rect.y, 30, 50), name, v_alignment=gccui.ALIGNMENT.MIDDLE))
+        self.addComponent(_uiFactory.label(Rect(rect.x + 112, rect.y, 30, 50), ui_label_text, v_alignment=gccui.ALIGNMENT.MIDDLE))
 
-        self.left = _uiFactory.label(pygame.Rect(rect.x + 100, rect.y, 64, 50), '', h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.right = _uiFactory.label(pygame.Rect(rect.x + 164, rect.y, 30, 50), '', h_alignment=gccui.ALIGNMENT.LEFT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.left = _uiFactory.label(Rect(rect.x + 100, rect.y, 64, 50), '', h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.right = _uiFactory.label(Rect(rect.x + 164, rect.y, 30, 50), '', h_alignment=gccui.ALIGNMENT.LEFT, v_alignment=gccui.ALIGNMENT.MIDDLE)
         self.addComponent(self.left)
         self.addComponent(self.right)
 
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.x, rect.y, 30, 40), "<", self.onClickMinus1))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.x + 34, rect.y, 30, 40), "<<", self.onClickMinus01))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.x + 34 * 2, rect.y, 30, 40), "<<<", self.onClickMinus001))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.right - 30 - 34 * 2, rect.y, 30, 40), ">>>", self.onClickPlus001))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.right - 30 - 34, rect.y, 30, 40), ">>", self.onClickPlus01))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(rect.right - 30, rect.y, 30, 40), ">", self.onClickPlus1))
+        self.addComponent(_uiFactory.text_button(Rect(rect.x, rect.y, 30, 40), "<", self.onClickMinus1))
+        self.addComponent(_uiFactory.text_button(Rect(rect.x + 34, rect.y, 30, 40), "<<", self.onClickMinus01))
+        self.addComponent(_uiFactory.text_button(Rect(rect.x + 34 * 2, rect.y, 30, 40), "<<<", self.onClickMinus001))
+        self.addComponent(_uiFactory.text_button(Rect(rect.right - 30 - 34 * 2, rect.y, 30, 40), ">>>", self.onClickPlus001))
+        self.addComponent(_uiFactory.text_button(Rect(rect.right - 30 - 34, rect.y, 30, 40), ">>", self.onClickPlus01))
+        self.addComponent(_uiFactory.text_button(Rect(rect.right - 30, rect.y, 30, 40), ">", self.onClickPlus1))
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(PIDUIComponent, self).redefineRect(rect)
+        self.components[0].redefineRect(Rect(rect.x + 112, rect.y, 30, 50))
+        self.components[1].redefineRect(Rect(rect.x + 100, rect.y, 64, 50))
+        self.components[2].redefineRect(Rect(rect.x + 164, rect.y, 30, 50))
+
+        self.components[3].redefineRect(Rect(rect.x, rect.y, 30, 40))
+        self.components[4].redefineRect(Rect(rect.x + 34, rect.y, 30, 40))
+        self.components[5].redefineRect(Rect(rect.x + 34 * 2, rect.y, 30, 40))
+        self.components[6].redefineRect(Rect(rect.right - 30 - 34 * 2, rect.y, 30, 40))
+        self.components[7].redefineRect(Rect(rect.right - 30 - 34, rect.y, 30, 40))
+        self.components[8].redefineRect(Rect(rect.right - 30, rect.y, 30, 40))
+        self.components[8].redefineRect(Rect(rect.right - 30, rect.y, 30, 40))
 
     def draw(self, surace):
         value = wheelsMap['pid'][self.name]
@@ -902,8 +1102,8 @@ class PIDUIComponent(gccui.Collection):
 
 
 class CalibratePIDScreen(ScreenComponent):
-    def __init__(self):
-        super(CalibratePIDScreen, self).__init__()
+    def __init__(self, rect):
+        super(CalibratePIDScreen, self).__init__(rect)
 
         self.card = gccui.CardsCollection(self.rect)
         self.addComponent(self.card)
@@ -913,18 +1113,35 @@ class CalibratePIDScreen(ScreenComponent):
         self.card.addCard('calibrate', self.calibrate)
         self.card.selectCard('loading')
 
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationPIDButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
-        self.calibrate.addComponent(PIDUIComponent(pygame.Rect(10, 72, 300, 50), 'p'))
-        self.calibrate.addComponent(PIDUIComponent(pygame.Rect(10, 122, 300, 50), 'i'))
-        self.calibrate.addComponent(PIDUIComponent(pygame.Rect(10, 172, 300, 50), 'd'))
-        self.calibrate.addComponent(PIDUIComponent(pygame.Rect(10, 222, 300, 50), 'g'))
-        self.calibrate.addComponent(PIDUIComponent(pygame.Rect(10, 272, 300, 50), 'd'))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationPIDButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
+        self.calibrate.addComponent(PIDUIComponent(Rect(10, 72, 300, 50), 'p', 'p'))
+        self.calibrate.addComponent(PIDUIComponent(Rect(10, 122, 300, 50), 'i', 'i'))
+        self.calibrate.addComponent(PIDUIComponent(Rect(10, 172, 300, 50), 'd', 'd'))
+        self.calibrate.addComponent(PIDUIComponent(Rect(10, 222, 300, 50), 'g', 'g'))
+        self.calibrate.addComponent(PIDUIComponent(Rect(10, 272, 300, 50), 'deadband', 'db'))
 
         self.loading.addComponent(_uiFactory.label(self.rect, "Loading calibration", h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE))
-        self.loading.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.loading.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(CalibratePIDScreen, self).redefineRect(rect)
+        self.calibrate.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.calibrate.components[1].redefineRect(Rect(rect.x + 120, rect.bottom - 50, 90, 40))
+        self.calibrate.components[2].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+        self.calibrate.components[3].redefineRect(Rect(rect.x + 10, rect.y + 72, 300, 50))
+        self.calibrate.components[4].redefineRect(Rect(rect.x + 10, rect.y + 122, 300, 50))
+        self.calibrate.components[5].redefineRect(Rect(rect.x + 10, rect.y + 172, 300, 50))
+        self.calibrate.components[6].redefineRect(Rect(rect.x + 10, rect.y + 222, 300, 50))
+        self.calibrate.components[7].redefineRect(Rect(rect.x + 10, rect.y + 272, 300, 50))
+
+        self.loading.components[0].redefineRect(rect)
+        self.loading.components[1].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.loading.components[2].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
 
     def draw(self, surface):
         super(CalibratePIDScreen, self).draw(surface)
@@ -947,30 +1164,49 @@ class CalibratePIDScreen(ScreenComponent):
         pyroslib.publish("storage/write/wheels/cal/pid/g", str(wheelsMap['pid']['g']))
         pyroslib.publish("storage/write/wheels/cal/pid/deadband", str(wheelsMap['pid']['deadband']))
 
-        returnToStatusButtonClick(button, pos)
+        # returnToStatusButtonClick(button, pos)
 
 
 class RadarScreen(ScreenComponent):
-    def __init__(self):
-        super(RadarScreen, self).__init__()
-        self.addComponent(_uiFactory.text_button(pygame.Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(pygame.Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
-        self.addComponent(Radar(pygame.Rect(50, 50, 220, 220), 1300))
+    def __init__(self, rect):
+        super(RadarScreen, self).__init__(rect)
+        self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
+        y_off = 100
+        self.addComponent(Radar(Rect(50, 50, 220, 220), 1300))
         self.distance_labels = {
-            0: _uiFactory.label(pygame.Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            45: _uiFactory.label(pygame.Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            90: _uiFactory.label(pygame.Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            135: _uiFactory.label(pygame.Rect(260, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            180: _uiFactory.label(pygame.Rect(160, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            225: _uiFactory.label(pygame.Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            270: _uiFactory.label(pygame.Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            315: _uiFactory.label(pygame.Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+            0: _uiFactory.label(Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            45: _uiFactory.label(Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            90: _uiFactory.label(Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            135: _uiFactory.label(Rect(260, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            180: _uiFactory.label(Rect(160, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            225: _uiFactory.label(Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            270: _uiFactory.label(Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            315: _uiFactory.label(Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
         }
         for a in self.distance_labels:
             self.addComponent(self.distance_labels[a])
 
-        self.right_distance_label = _uiFactory.label(pygame.Rect(290, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.right_distance_label = _uiFactory.label(Rect(290, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
         self.addComponent(self.right_distance_label)
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(RadarScreen, self).redefineRect(rect)
+        y_off = 100
+        self.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+
+        self.components[2].redefineRect(Rect(rect.x + 50, rect.y + y_off + 10, 220, 220))
+        self.components[3].redefineRect(Rect(rect.x + 160, rect.y + y_off, 0, 0))
+        self.components[4].redefineRect(Rect(rect.x + 260, rect.y + y_off + 30, 0, 0))
+        self.components[5].redefineRect(Rect(rect.x + 290, rect.y + y_off + 120, 0, 0))
+        self.components[6].redefineRect(Rect(rect.x + 260, rect.y + y_off + 220, 0, 0))
+        self.components[7].redefineRect(Rect(rect.x + 160, rect.y + y_off + 250, 0, 0))
+        self.components[8].redefineRect(Rect(rect.x + 70, rect.y + y_off + 220, 0, 0))
+        self.components[9].redefineRect(Rect(rect.x + 40, rect.y + y_off + 120, 0, 0))
+        self.components[10].redefineRect(Rect(rect.x + 70, rect.y + y_off + 30, 0, 0))
+        self.components[11].redefineRect(Rect(rect.x + 290, rect.y + y_off + 250, 0, 0))
 
     def draw(self, surface):
         for a in radar:
@@ -988,30 +1224,41 @@ class RadarScreen(ScreenComponent):
 
 
 def init(uiFactory, uiAdapter, font, smallFont):
-    global _uiFactory, _uiAdapter, screensComponent, _font, _smallFont
+    global _uiFactory, _uiAdapter, screensComponent, topComponent, statusBarComponent, _font, _smallFont
     _uiFactory = uiFactory
     _uiAdapter = uiAdapter
     _font = font
     _smallFont = smallFont
 
     pyroslib.subscribe("screen/image", handleScreenImage)
+    pyroslib.subscribe("screen/sound", handleScreenSound)
     pyroslib.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
+    pyroslib.subscribe("wheel/feedback/status", handleWheelsStatus)
+    pyroslib.subscribe("joystick/status", handleJoystickStatus)
+    pyroslib.subscribe("rover/status/uptime", handleUptimeStatus)
     pyroslib.subscribe("shutdown/announce", handleShutdown)
 
     initGui()
 
-    screensComponent = gccui.CardsCollection(_uiAdapter.getScreen().get_rect())
-    screensComponent.addCard('main', MainScreen())
-    screensComponent.addCard('wheels', WheelsScreen())
-    screensComponent.addCard('menu', MenuScreen())
-    screensComponent.addCard('calibrateWheel', CalibrateWheelScreen())
-    screensComponent.addCard('calibratePID', CalibratePIDScreen())
-    screensComponent.addCard('radar', RadarScreen())
-    screensComponent.addCard('shutdown', ShutdownScreen())
-    screensComponent.addCard('shutdownConfirmation', ShutdownConfirmationScreen())
+    screen_rect = _uiAdapter.getScreen().get_rect()
+
+    topComponent = gccui.Collection(screen_rect)
+    statusBarComponent = StatusBarComponent(Rect(0, 0, screen_rect.width, 20))
+    topComponent.addComponent(statusBarComponent)
+
+    screensComponent = gccui.CardsCollection(screen_rect)
+    screensComponent.addCard('main', MainScreen(screen_rect))
+    screensComponent.addCard('wheels', WheelsScreen(screen_rect))
+    screensComponent.addCard('menu', MenuScreen(screen_rect))
+    screensComponent.addCard('calibrateWheel', CalibrateWheelScreen(screen_rect))
+    screensComponent.addCard('calibratePID', CalibratePIDScreen(screen_rect))
+    screensComponent.addCard('radar', RadarScreen(screen_rect))
+    screensComponent.addCard('shutdown', ShutdownScreen(screen_rect))
+    screensComponent.addCard('shutdownConfirmation', ShutdownConfirmationScreen(screen_rect))
+    topComponent.addComponent(screensComponent)
 
     main = screensComponent.selectCard('main')
     main.enter()
     setMainScreenImage("gcc-portrait.png")
 
-    uiAdapter.setTopComponent(screensComponent)
+    uiAdapter.setTopComponent(topComponent)

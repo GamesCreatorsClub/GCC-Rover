@@ -14,7 +14,7 @@ import pyros.pygamehelper
 import gccui
 
 
-screen = pyros.gccui.initAll((320, 480), True)
+screen = pyros.gccui.initAll((320, 520), True)
 font = pyros.gccui.font
 smallFont = pyros.gccui.smallFont
 
@@ -55,7 +55,7 @@ uiFactory.font = pyros.gccui.font
 uiAdapter = gccui.UIAdapter(screen)
 
 roverscreen.init(uiFactory, uiAdapter, font, smallFont)
-
+roverscreen.topComponent.redefineRect(pygame.Rect(roverscreen.topComponent.rect.x, roverscreen.topComponent.rect.y + 40, roverscreen.topComponent.rect.width, roverscreen.topComponent.rect.height - 40))
 
 while True:
     for event in pygame.event.get():
