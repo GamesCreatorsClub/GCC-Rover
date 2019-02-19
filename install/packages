@@ -24,7 +24,7 @@ joystick:
 --------
 sudo apt-get install joystick
 
-
+sudo pip3 install approxeng.input
 
 mqtt:
 ------
