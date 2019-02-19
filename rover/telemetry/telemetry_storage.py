@@ -67,7 +67,7 @@ class MemoryTelemetryStorage(TelemetryStorage):
             if start < len(values):
                 end = _findTimeIndex(values, to_timestmap, starting_from=start)
 
-                callback(values[start: end])
+                callback(values[start:end])
                 return
 
         callback([])

@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
         server = MQTTLocalPipeTelemetryServer(telemetryTopic)
 
-        print("Started telemetry service.")
+        print("Started telemetry service on topic " + telemetryTopic)
 
         pyroslib.forever(0.5)
 

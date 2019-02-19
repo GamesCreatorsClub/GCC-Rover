@@ -181,6 +181,7 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
         if len(records) > 0:
             self.pub_method(topic, functools.reduce(lambda x, y: x + y, [r[1] for r in records]))
         else:
+            self.pub_method(topic, b'')
             print("*** got zero records")
 
 
