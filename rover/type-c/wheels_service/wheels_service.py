@@ -65,9 +65,13 @@ I2C_VL53L1X_ADDRESS_1 = 0x31
 I2C_VL53L1X_ADDRESS_2 = 0x32
 XSHUT_PIN = 4
 
+last_status_broadcast = 0
+status_broadcast_time = 5  # every 5 seconds
+
 i2cBus = smbus.SMBus(I2C_BUS)
 
 shutdown = False
+all_stop = False
 
 steer_logger = None
 drive_logger = None
@@ -117,21 +121,19 @@ BACK = bytes('BA', 'ASCII')
 
 
 def normaiseAngle(a):
+    a = a % 360
     if a < 0:
         a += 360
-    if a >= 360:
-        a -= 360
     return a
 
 
 def angleDiference(a1, a2):
     diff = a1 - a2
-    if diff > 180:
+    if diff >= 180:
         return diff - 360
-    elif diff < -180:
+    elif diff <= -180:
         return diff + 360
-    else:
-        return diff
+    return diff
 
 
 def addAngles(a1, a2):
@@ -150,17 +152,17 @@ def oppositeAngle(a, mod):
 
 def smallestAngleChange(old_angle, mod, new_angle):
     real_old_angle = oppositeAngle(old_angle, mod)
-    angle_diff = angleDiference(real_old_angle, new_angle)
+    angle_diff = angleDiference(new_angle, real_old_angle)
     if angle_diff > 90:
         new_diff = angle_diff - 180
         return normaiseAngle(old_angle + new_diff), -mod
     elif angle_diff < -90:
-        new_diff = 180 - angle_diff
+        new_diff = 180 + angle_diff
         return normaiseAngle(old_angle + new_diff), -mod
-    elif mod < 0:
-        return normaiseAngle(old_angle + angle_diff), mod
+    # elif real_old_angle == new_angle and real_old_angle != old_angle:
+    #     return old_angle, -mod
     else:
-        return new_angle, mod
+        return normaiseAngle(old_angle + angle_diff), mod
 
 
 class PID:
@@ -446,73 +448,75 @@ def steerWheel(wheelName, curDeg, status):
     else:
         motor_pwm = wheelCalibrationMap[wheelName]['steer']['pwm']
 
-    if motor_pwm is not None:
+    deg = int(wheel['deg'])
 
-        deg = int(wheel['deg'])
+    if all_stop:
+        stopAll()
+        return
 
-        if 'overheat' in wheel:
-            overheat = wheel['overheat']
-            now = time.time()
-            if now - overheat > OVERHEAT_COOLDOWN:
-                del wheel['overheat']
-            else:
-                stopAll()
-                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
-                return
-
-        deg_stop = wheel['deg_stop']
-
-        if deg_stop or curDeg is None or deg is None:
-            stopAll()
-            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_NO_DATA, curDeg, status, 0, 0, 0, 0, 0, 0, 0)
+    if 'overheat' in wheel:
+        overheat = wheel['overheat']
+        now = time.time()
+        if now - overheat > OVERHEAT_COOLDOWN:
+            del wheel['overheat']
         else:
+            stopAll()
+            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
+            return
 
-            pid = wheel['pid']
-            speed = pid.process(deg, curDeg)
+    deg_stop = wheel['deg_stop']
 
-            forward = True
-            speed = speed * steerDir
-            origSpeed = speed
-            if speed < 0:
-                forward = False
-                speed = -speed
+    if deg_stop or curDeg is None or deg is None:
+        stopAll()
+        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_NO_DATA, curDeg, status, 0, 0, 0, 0, 0, 0, 0)
+    else:
 
-            if speed > 100.0:
-                speed = 100.0
-            elif speed < 1:
-                speed = 0.0
-                stopAll()
-                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_REACHED_POSITION, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
-                return
+        pid = wheel['pid']
+        speed = pid.process(deg, curDeg)
 
-            if speed > 50:
-                now = time.time()
-                if 'termal' in wheel:
-                    termal = wheel['termal']
-                    if now - termal > OVERHEAT_PROTECTION:
-                        del wheel['termal']
-                        wheel['overheat'] = now
-                        stopAll()
-                        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point,
-                                         pid.i, pid.d, pid.last_error)
-                        return
-                else:
-                    wheel['termal'] = now
-            elif 'termal' in wheel:
-                del wheel['termal']
+        forward = True
+        speed = speed * steerDir
+        origSpeed = speed
+        if speed < 0:
+            forward = False
+            speed = -speed
 
-            if forward:
-                GPIO.output(enPin, GPIO.LOW)
-                motor_pwm.ChangeDutyCycle(speed)
-                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
-                if DEBUG_TURN:
-                    print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
+        if speed > 100.0:
+            speed = 100.0
+        elif speed < 1:
+            speed = 0.0
+            stopAll()
+            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_REACHED_POSITION, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            return
+
+        if speed > 50:
+            now = time.time()
+            if 'termal' in wheel:
+                termal = wheel['termal']
+                if now - termal > OVERHEAT_PROTECTION:
+                    del wheel['termal']
+                    wheel['overheat'] = now
+                    stopAll()
+                    steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point,
+                                     pid.i, pid.d, pid.last_error)
+                    return
             else:
-                GPIO.output(enPin, GPIO.HIGH)
-                motor_pwm.ChangeDutyCycle(100.0 - speed)
-                steer_logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
-                if DEBUG_TURN:
-                    print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
+                wheel['termal'] = now
+        elif 'termal' in wheel:
+            del wheel['termal']
+
+        if forward:
+            GPIO.output(enPin, GPIO.LOW)
+            motor_pwm.ChangeDutyCycle(speed)
+            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            if DEBUG_TURN:
+                print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
+        else:
+            GPIO.output(enPin, GPIO.HIGH)
+            motor_pwm.ChangeDutyCycle(100.0 - speed)
+            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            if DEBUG_TURN:
+                print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
 
 
 def readPosition(wheelName):
@@ -580,7 +584,10 @@ def prepareAndDriveWheel(wheelName):
     nRF2401.setReadPipeAddress(0, address)
     nRF2401.setWritePipeAddress(address)
 
-    speedStr = wheel['speed']
+    if all_stop:
+        speedStr = 0
+    else:
+        speedStr = wheel['speed']
     speedModStr = wheel['s_mod']
 
     try:
@@ -661,6 +668,8 @@ def driveWheels():
 
 
 def steerWheels():
+    global last_status_broadcast
+
     if not shutdown:
         checkPidsChanged()
 
@@ -671,6 +680,11 @@ def steerWheels():
 
         message = ",".join([str(f) for f in [time.time(), angleFl, statusSteerFl, angleFr, statusSteerFr, angleBl, statusSteerBl, angleBr, statusSteerBr]])
         pyroslib.publish("wheel/deg/status", message)
+
+        now = time.time()
+        if last_status_broadcast + status_broadcast_time < now:
+            broadcastWheelsStatus()
+            last_status_broadcast = now
 
 
 def driveThreadMain():
@@ -719,6 +733,24 @@ def wheelSpeedTopic(topic, payload, groups):
         print("ERROR: no wheel with name " + wheelName + " fonund.")
 
 
+def wheelsAllStop(topic, payload, groups):
+    global all_stop
+    if payload == 'stop':
+        all_stop = True
+    elif payload == 'run':
+        all_stop = False
+    elif payload == 'toggle':
+        all_stop = not all_stop
+    elif payload == 'status':
+        pass
+
+    broadcastWheelsStatus()
+
+
+def broadcastWheelsStatus():
+    pyroslib.publish('wheel/feedback/status', "stopped" if all_stop else "running")
+
+
 def wheelsCombined(topic, payload, groups):
     if DEBUG_SPEED:
         print(str(int(time.time() * 1000) % 10000000) + ": wheels " + payload)
@@ -757,6 +789,7 @@ if __name__ == "__main__":
         GPIO.setmode(GPIO.BCM)
 
         print("    sbscribing to topics...")
+        pyroslib.subscribe("wheel/stop", wheelsAllStop)
         pyroslib.subscribe("wheel/all", wheelsCombined)
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
