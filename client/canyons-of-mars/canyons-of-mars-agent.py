@@ -117,10 +117,11 @@ class MazeCorridorAction(MazeAction):
     LEFT = -1
     RIGHT = 1
 
-    def __init__(self, radar, left_or_right, distance):
+    def __init__(self, radar, left_or_right, distance, speed):
         super(MazeCorridorAction, self).__init__(radar)
         self.left_or_right = left_or_right
         self.distance = distance
+        self.speed = speed
         if self.left_or_right == MazeCorridorAction.RIGHT:
             self.a1 = 45
             self.a2 = 90
@@ -158,6 +159,29 @@ class MazeCorridorAction(MazeAction):
         left_angle, left_front_distance = calculateAngleAndFrontDistance(self.radar[315], self.radar[270], self.radar[225])
         right_angle, right_front_distance = calculateAngleAndFrontDistance(self.radar[45], self.radar[90], self.radar[135])
 
+        gain = 60
+        offset = 150
+
+        if right_angle > 40:
+            distance = -offset
+        elif right_angle < -40:
+            distance = offset
+        elif right_angle > 0:
+            distance = 40 - right_angle
+            distance *= -gain
+
+            distance -= offset
+        else:
+            distance = 40 + right_angle
+            distance *= gain
+            distance += offset
+
+        distance = int(distance)
+
+        log(DEBUG_LEVEL_INFO, "Distance is " + str(distance))
+
+        pyroslib.publish("move/steer", str(distance) + " " + str(self.speed))
+
         pyroslib.publish("canyons/feedback/corridor",
                          str(int(self.radar[0])) +
                          " " + str(int(self.radar[180])) +
@@ -166,7 +190,6 @@ class MazeCorridorAction(MazeAction):
                          " " + str(int(left_front_distance)) +
                          " " + str(int(right_front_distance))
                          )
-
         return self
 
     def getActionName(self):
@@ -268,14 +291,9 @@ class CanyonsOfMarsAgent:
 
             self.running = True
 
-            distance = int((float(data[0]) / 360) * 4096)
+            speed = int(data[0])
 
-            # self.move_forward_on_odo.setRequiredOdo(distance)
-            # self.nextAction(self.move_forward_on_odo)
-
-            self.nextAction(MazeCorridorAction(self.radar, MazeCorridorAction.RIGHT, 250))
-
-            log(DEBUG_LEVEL_ALWAYS, "Started driving... for  " + str(distance) + " (" + str(self.move_forward_on_odo.required_odo) + ")")
+            self.nextAction(MazeCorridorAction(self.radar, MazeCorridorAction.RIGHT, 300, speed))
 
 
 if __name__ == "__main__":
@@ -288,7 +306,7 @@ if __name__ == "__main__":
 
         print("Started canyons-of-mars agent.")
 
-        pyroslib.forever(0.02, canyonsOfMarsAgent.execute)
+        pyroslib.forever(0.1, canyonsOfMarsAgent.execute)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

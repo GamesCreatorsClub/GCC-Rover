@@ -58,7 +58,7 @@ class CanyonsOfMars:
 
     def start(self):
         self.running = True
-        pyros.publish("canyons/command", "start " + str(360 * 20))
+        pyros.publish("canyons/command", "start " + str(60))
         self.onOffButton.on()
 
     def stop(self):
