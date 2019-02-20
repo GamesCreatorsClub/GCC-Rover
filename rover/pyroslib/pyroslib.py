@@ -132,6 +132,19 @@ def unsubscribe(topic):
         del _regexTextToLambda[regex]
 
 
+def subscribedMethod(topic):
+    regexString = "^" + topic.replace("+", "([^/]+)").replace("#", "(.*)") + "$"
+    regex = re.compile(regexString)
+
+    if regex in _regexTextToLambda:
+        return _regexTextToLambda[regex]
+
+    if regex in _regexBinaryToLambda:
+        return _regexBinaryToLambda[regex]
+
+    return None
+
+
 def _sendStats():
     msg = ""
     for stat in _stats:
@@ -204,28 +217,39 @@ def _onMessage(mqttClient, data, msg):
             if matching:
                 payload = str(msg.payload, 'utf-8')
 
-                (has_groups, method) = _regexTextToLambda[regex]
+                invokeHandler(topic, payload, matching.groups(), _regexTextToLambda[regex])
 
-                if has_groups:
-                    method(topic, payload, matching.groups())
-                else:
-                    method(topic, payload)
+                # (has_groups, method) = _regexTextToLambda[regex]
+                # if has_groups:
+                #     method(topic, payload, matching.groups())
+                # else:
+                #     method(topic, payload)
 
                 return
 
         for regex in _regexBinaryToLambda:
             matching = regex.match(topic)
             if matching:
-                (has_groups, method) = _regexBinaryToLambda[regex]
+                invokeHandler(topic, msg.payload, matching.groups(), _regexBinaryToLambda[regex])
 
-                if has_groups:
-                    method(topic, msg.payload, matching.groups())
-                else:
-                    method(topic, msg.payload)
-                return
+                # (has_groups, method) = _regexBinaryToLambda[regex]
+                # if has_groups:
+                #     method(topic, msg.payload, matching.groups())
+                # else:
+                #     method(topic, msg.payload)
+                # return
 
     except Exception as ex:
         print("ERROR: Got exception in on message processing; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
+
+def invokeHandler(topic, message, groups, details):
+    has_groups, method = details
+
+    if has_groups:
+        method(topic, message, groups)
+    else:
+        method(topic, message)
 
 
 def _reconnect():
@@ -338,22 +362,28 @@ def sleep(deltaTime):
 def loop(deltaTime, inner=None):
     global _received
 
+    def client_loop():
+        try:
+            client.loop(_client_loop)  # wait for 0.5 ms
+        except BaseException as ex:
+            print("MQTT Client Loop Exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
     currentTime = time.time()
 
     _received = False
-    client.loop(_client_loop)  # wait for 0.5 ms
+    client_loop()
 
     until = currentTime + deltaTime
     while currentTime < until:
         if _received:
             _received = False
-            client.loop(_client_loop)  # wait for 0.1 ms
+            client_loop()
             currentTime = time.time()
         else:
             time.sleep(_loop_sleep)  # wait for 2 ms
             currentTime = time.time()
             if currentTime + _client_loop < until:
-                client.loop(_client_loop)  # wait for 0.1 ms
+                client_loop()
                 currentTime = time.time()
 
 
