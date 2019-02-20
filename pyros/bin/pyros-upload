@@ -13,6 +13,7 @@ import pyroscommon as pc
 service = False
 restart = False
 tail = False
+executable = None
 
 args = pc.processCommonHostSwitches(pc.args)
 
@@ -23,6 +24,7 @@ def printHelp(rc):
     print("    -h                    help message")
     print("    -s|--service          uploaded code is supposed to be service.")
     print("    -r|--restart          restarts uploaded service.")
+    print("    -e|--exec <exec>      sets executable to be used to start program. If omitted 'python3' is used by default.")
     print("    -f|--tail             'tail' messages out of process.")
     print("    <processId>           id process is going to be known from this point on.")
     print("    <file>                python file name to be uploaded.")
@@ -31,7 +33,7 @@ def printHelp(rc):
 
 
 def processSwitches(arguments):
-    global service, restart, tail
+    global service, restart, tail, executable
 
     while len(arguments) > 0 and arguments[0].startswith("-"):
         if arguments[0] == "-h":
@@ -48,6 +50,15 @@ def processSwitches(arguments):
         elif arguments[0] == "-f" or arguments[0] == "--tail":
             tail = True
             del arguments[0]
+
+        elif arguments[0] == "-e" or arguments[0] == "--exec":
+            if len(arguments) < 2:
+                print("Error: missing parameter after -e/--exec option")
+                printHelp(-1)
+            else:
+                del arguments[0]
+                executable = arguments[0]
+                del arguments[0]
 
     return arguments
 
@@ -127,6 +138,9 @@ def executeCommand(client):
     if service:
         client.publish("exec/" + processId, "make-service")
         client.publish("exec/" + processId, "enable-service")
+
+    if executable is not None:
+        client.publish("exec/" + processId, "set-executable " + executable)
 
     for extra_file in extra_files:
         if os.path.isdir(extra_file):

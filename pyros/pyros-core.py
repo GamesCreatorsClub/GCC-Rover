@@ -273,7 +273,19 @@ def runProcess(processId):
         else:
             new_env["PYTHONPATH"] = ".."
 
-        process = subprocess.Popen(["python3", "-u", processId + ".py", processId],
+        processDef = processes[processId]
+
+        if "exec" in processDef:
+            exec = processDef["exec"]
+        else:
+            exec = "python3"
+
+        if exec.startswith("python"):
+            command = [exec, "-u", processId + ".py", processId]
+        else:
+            command = [exec, "-u", processId, processId]
+
+        process = subprocess.Popen(command,
                                    env=new_env,
                                    bufsize=0,
                                    stdout=subprocess.PIPE,
@@ -345,6 +357,9 @@ def storeCode(processId, payload):
 
     if "type" not in processes[processId]:
         processes[processId]["type"] = "process"
+
+    if "exec" not in processes[processId]:
+        processes[processId]["exec"] = "python3"
 
     filename = processFilename(processId)
     initFilename = processInitFilename(processId)
@@ -505,11 +520,26 @@ def makeServiceProcess(processId):
             processes[processId]["type"] = "service"
             processes[processId]["enabled"] = "True"
 
-            properties = {"type": "service", "enabled": "True"}
+            properties = loadServiceFile(processId)
+            properties["type"] = "service"
+            properties["enabled"] = "True"
             saveServiceFile(processId, properties)
             output(processId, "PyROS: made " + processId + " service")
     else:
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
+
+
+def setExecutableProcess(processId, args):
+    if len(args) > 0:
+        if processId in processes:
+            properties = loadServiceFile(processId)
+            processes[processId]["exec"] = args[0]
+            properties["exec"] = args[0]
+            saveServiceFile(processId, properties)
+        else:
+            output(processId, "PyROS ERROR: process " + processId + " does not exist.")
+    else:
+        output(processId, "PyROS ERROR: set executable for " + processId + " missing argument.")
 
 
 def unmakeServiceProcess(processId):
@@ -569,7 +599,9 @@ def makeAgentProcess(processId):
             processes[processId]["enabled"] = "True"
             processes[processId]["lastPing"] = time.time()
 
-            properties = {"type": "agent", "enabled": "True"}
+            properties = loadServiceFile(processId)
+            properties["type"] = "agent"
+            properties["enabled"] = "True"
             saveServiceFile(processId, properties)
             output(processId, "PyROS: made " + processId + " an agent")
     else:
@@ -675,8 +707,10 @@ def stopPyrosCommand(commandId, arguments):
         thread.start()
 
 
-def processCommand(processId, command):
-    trace("Processing received comamnd " + command)
+def processCommand(processId, message):
+    trace("Processing received comamnd " + message)
+    params = message.split(" ")
+    command = params[0]
     if "stop" == command:
         stopProcess(processId)
     elif "start" == command:
@@ -697,6 +731,8 @@ def processCommand(processId, command):
         enableServiceProcess(processId)
     elif "make-agent" == command:
         makeAgentProcess(processId)
+    elif "set-executable" == command:
+        setExecutableProcess(processId, params[1:])
     elif "ping" == command:
         pingProcess(processId)
     else:
@@ -807,7 +843,10 @@ def startupServices():
                 if "type" not in properties:
                     properties["type"] = "process"
 
-                processes[programDir] = {"type": properties["type"]}
+                if "exec" not in properties:
+                    properties["exec"] = "python3"
+
+                processes[programDir] = {"type": properties["type"], "exec": properties["exec"]}
                 if isService(programDir):
                     if "enabled" in properties and properties["enabled"] == "True":
                         processes[programDir]["enabled"] = "True"
