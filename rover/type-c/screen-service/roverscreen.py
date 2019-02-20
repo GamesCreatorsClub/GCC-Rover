@@ -803,6 +803,7 @@ class ShutdownConfirmationScreen(ScreenComponent):
     @staticmethod
     def startShutdownButtonClick(button, pos):
         pyroslib.publish("system/shutdown", "secret_message_now")
+        pyroslib.publish("screen/say", "Shutdown, initiated, , ,  Waiting for wheels to stop.")
 
 
 class ShutdownScreen(ScreenComponent):

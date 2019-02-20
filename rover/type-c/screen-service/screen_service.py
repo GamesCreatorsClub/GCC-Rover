@@ -14,6 +14,7 @@ import roverscreen
 import subprocess
 import spidev
 import time
+import threading
 import traceback
 
 import RPi.GPIO as GPIO
@@ -38,6 +39,9 @@ font = None
 smallFont = None
 
 uptime_updated = 0
+
+wheel_status = None
+joystick_status = None
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -222,6 +226,67 @@ def startPyGame():
     working = True
 
 
+def handleSay(topic, message, groups):
+    say(message)
+
+
+def say(message):
+    def doSay(message):
+        print("Saying: " + message)
+        # new_env = os.environ.copy()
+        # proc = subprocess.Popen(["/usr/bin/flite", "-v", "-voice", "/home/pi/cmu_us_ljm.flitevox", "--setf duration_stretch=1.3", "--setf int_f0_target_stddev=70", "\"" + message + "\""],
+        #                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ.copy(), shell=False)
+        # stdout, stderr = proc.communicate()
+        # print("Said: " + str(stdout) + ", error: " + str(stderr))
+        os.system("/usr/bin/flite -v -voice /home/pi/cmu_us_eey.flitevox --setf duration_stretch=1.2 --setf int_f0_target_stddev=70 \"" + message.replace("\"", "") + "\"")
+
+    threading.Thread(target=doSay, args=(message,), daemon=True).start()
+
+
+def handleWheelsStatus(topic, message, group):
+    global wheel_status
+
+    # print("Got wheels status \"" + message + "\", old status \"" + str(wheel_status) + "\"")
+    if message != wheel_status:
+        if message == "running":
+            say("Wheels, engaged.")
+        elif message == "stopped":
+            say("Wheels, disengaged.")
+
+        wheel_status = message
+
+    if oldHandleWheelsStatus is not None:
+        pyroslib.invokeHandler(topic, message, group, oldHandleWheelsStatus)
+
+
+def handleJoystickStatus(topic, message, group):
+    global joystick_status
+
+    # print("Got joystick status \"" + message + "\", old status \"" + str(joystick_status) + "\"")
+    if message != joystick_status:
+        if message == "connected":
+            say("Controller, attached.")
+        elif message == "none" and joystick_status is not None:
+            say("Controller, detached.")
+
+        joystick_status = message
+
+    if oldHandleJoystickStatus is not None:
+        pyroslib.invokeHandler(topic, message, group, oldHandleJoystickStatus)
+
+
+def handleUptimeStatus(topic, message, group):
+    if message == "00:10":
+        say("Time: ten minutes.")
+    elif message == "00:20":
+        say("Time: twenty minutes.")
+    elif message == "00:30":
+        say("Time, Warning! Thirty minutes.")
+
+    if oldHandleUptimeStatus is not None:
+        pyroslib.invokeHandler(topic, message, group, oldHandleUptimeStatus)
+
+
 def mainLoop():
     global uptime_updated
 
@@ -235,7 +300,6 @@ def mainLoop():
 
             pygame.display.flip()
 
-            uptime_updated = 0
             now = time.time()
             if uptime_updated + 60 < now:
                 now = time.time()
@@ -249,9 +313,10 @@ def mainLoop():
                 else:
                     uptime = os.popen('uptime').readline().split(" ")[0][:5]
 
-                pyroslib.publish("rover/status/uptime", uptime)
+                pyroslib.publish("rover/status/uptime", str(uptime))
 
                 uptime_updated = now
+
     except Exception as ex:
         print("MainLoop Exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
@@ -265,7 +330,7 @@ if __name__ == "__main__":
         print("  set up mixer volume to max.")
 
         pyroslib.init("screen", unique=True, onConnected=connected)
-
+        pyroslib.subscribe("screen/say", handleSay)
         print("Started screen service.")
 
         startPyGame()
@@ -277,6 +342,13 @@ if __name__ == "__main__":
         touchHandler = TouchHandler(uiAdapter)
 
         roverscreen.init(uiFactory, uiAdapter, font, smallFont)
+
+        oldHandleWheelsStatus = pyroslib.subscribedMethod("wheel/feedback/status")
+        oldHandleJoystickStatus = pyroslib.subscribedMethod("joystick/status")
+        oldHandleUptimeStatus = pyroslib.subscribedMethod("rover/status/uptime")
+        pyroslib.subscribe("wheel/feedback/status", handleWheelsStatus)
+        pyroslib.subscribe("joystick/status", handleJoystickStatus)
+        pyroslib.subscribe("rover/status/uptime", handleUptimeStatus)
 
         pyroslib.forever(0.04, mainLoop)
 
