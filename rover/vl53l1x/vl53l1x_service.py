@@ -58,23 +58,29 @@ radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'timestamp'
 # noinspection PyTypeChecker
 def readSensors(i2c_address, sensor1_angle, sensor2_angle):
 
-    def readOneSensor(sensor: VL53L1X, sensor_angle):
+    def readOneSensor(sensor: VL53L1X, sensor_angle, adjusted_distance):
         if sensor.data_ready():
             measurement_data = sensor.get_measurement_data()
             sensor.clear_interrupt()
 
             if measurement_data.is_valid:
-                radar[sensor_angle] = measurement_data.distance
+                radar[sensor_angle] = measurement_data.distance + adjusted_distance
             else:
                 print("Measurement error " + sensor.name + ": " + measurement_data.get_range_status_description() + " d=" + str(measurement_data.distance))
                 if measurement_data.distance > 0:
-                    radar[sensor_angle] = measurement_data.distance
+                    radar[sensor_angle] = measurement_data.distance + adjusted_distance
+
+    def adjustDistance(angle):
+        if int(angle) % 90 == 0:
+            return 53  # ?! it was supposed to be 83
+        else:
+            return 91  # ?! it was supposed to be 121
 
     try:
         i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2c_address)
 
-        readOneSensor(sensorsMap[i2c_address][1]['vl53l1x'], sensor1_angle)
-        readOneSensor(sensorsMap[i2c_address][2]['vl53l1x'], sensor2_angle)
+        readOneSensor(sensorsMap[i2c_address][1]['vl53l1x'], sensor1_angle, adjustDistance(sensor1_angle))
+        readOneSensor(sensorsMap[i2c_address][2]['vl53l1x'], sensor2_angle, adjustDistance(sensor2_angle))
 
     except BaseException as e:
         if DEBUG:
