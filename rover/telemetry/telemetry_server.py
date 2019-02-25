@@ -175,12 +175,23 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
         response_topic, from_timestamp, to_timestamp = payload.split(",")
         if stream_name in self.streams:
             stream = self.streams[stream_name]
+            if DEBUG:
+                print("Asked to retrieve from stream " + stream_name + ", from " + str(float(from_timestamp)) + " to " + str(float(to_timestamp)))
             self.stream_storage.retrieve(stream, float(from_timestamp), float(to_timestamp), lambda records: self._sendRecords(response_topic, records))
+        else:
+            if DEBUG:
+                print("Asked to retrieve from unknown stream " + stream_name)
 
     def _sendRecords(self, topic, records):
         if len(records) > 0:
+            if DEBUG:
+                print("Sending " + str(len(records)) + " records out...")
             self.pub_method(topic, functools.reduce(lambda x, y: x + y, [r[1] for r in records]))
+            if DEBUG:
+                print("Sent " + str(len(records)) + " records out.")
         else:
+            if DEBUG:
+                print("Sending empty message")
             self.pub_method(topic, b'')
             print("*** got zero records")
 
