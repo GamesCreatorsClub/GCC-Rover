@@ -7,15 +7,15 @@
 
 import time
 
-DEBUG_LEVEL_OFF = 0  # To be used when setting up level
-DEBUG_LEVEL_ALWAYS = 1  # To be used when logging or setting up level
-DEBUG_LEVEL_ERROR = 1  # To be used when logging or setting up level
-DEBUG_LEVEL_INFO = 2  # To be used when logging or setting up level
-DEBUG_LEVEL_DEBUG = 3  # To be used when logging or setting up level
-DEBUG_LEVEL_TRACE = 4  # To be used when logging or setting up level
-DEBUG_LEVEL_ALL = 10  # To be used when setting up level
+LOG_LEVEL_OFF = 0  # To be used when setting up level
+LOG_LEVEL_ALWAYS = 1  # To be used when logging or setting up level
+LOG_LEVEL_ERROR = 1  # To be used when logging or setting up level
+LOG_LEVEL_INFO = 2  # To be used when logging or setting up level
+LOG_LEVEL_DEBUG = 3  # To be used when logging or setting up level
+LOG_LEVEL_TRACE = 4  # To be used when logging or setting up level
+LOG_LEVEL_ALL = 10  # To be used when setting up level
 
-DEBUG_LEVEL = DEBUG_LEVEL_ALL
+LOG_LEVEL = LOG_LEVEL_ALL
 
 
 def formatArgL(label, value, fieldSize):
@@ -33,7 +33,17 @@ def formatArgR(label, value, fieldSize):
 
 
 def log(level, what):
-    if level <= DEBUG_LEVEL:
+    if level <= LOG_LEVEL:
+        print(what)
+
+
+def info(what):
+    if LOG_LEVEL_INFO <= LOG_LEVEL:
+        print(what)
+
+
+def debug(what):
+    if LOG_LEVEL_DEBUG <= LOG_LEVEL:
         print(what)
 
 
@@ -41,4 +51,4 @@ def logArgs(*msg):
     tnow = time.time()
 
     logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
-    log(DEBUG_LEVEL_DEBUG, logMsg)
+    log(LOG_LEVEL_DEBUG, logMsg)

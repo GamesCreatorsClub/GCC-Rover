@@ -16,14 +16,9 @@ import spidev
 import time
 import threading
 import traceback
+from pyroslib.logging import log, LOG_LEVEL_ALWAYS, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG
 
 import RPi.GPIO as GPIO
-
-DEBUG_LEVEL_OFF = 0
-DEBUG_LEVEL_INFO = 1
-DEBUG_LEVEL_DEBUG = 2
-DEBUG_LEVEL_ALL = 3
-DEBUG_LEVEL = DEBUG_LEVEL_ALL
 
 working = False
 
@@ -42,6 +37,7 @@ uptime_updated = 0
 
 wheel_status = None
 joystick_status = None
+sound_level = 'all'
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -146,18 +142,6 @@ def formatArgR(label, value, fieldSize):
         return str(value).rjust(fieldSize)
 
 
-def log(level, what):
-    if level <= DEBUG_LEVEL:
-        print(what)
-
-
-def logArgs(*msg):
-    tnow = time.time()
-
-    logMsg = formatArgR("", int(tnow * 1000) % 100000, 7) + " " + " ".join(msg)
-    log(DEBUG_LEVEL_DEBUG, logMsg)
-
-
 def connected():
     # pyroslib.publish("sensor/gyro/continuous", "calibrate,50")
     pass
@@ -166,7 +150,7 @@ def connected():
 def startPyGame():
     global working, screen, font, smallFont
 
-    log(DEBUG_LEVEL_ALL, "Started driving...")
+    log(LOG_LEVEL_ALWAYS, "Started driving...")
 
     def disable_text_cursor_blinking():
         command_to_run = ["/usr/bin/sudo", "sh", "-c", "echo 0 > /sys/class/graphics/fbcon/cursor_blink"]
@@ -203,7 +187,6 @@ def startPyGame():
         print("No surface at this moment")
 
     try:
-        # screen = pygame.display.set_mode((480, 320), pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.FULLSCREEN)
         screen = pygame.display.set_mode((320, 480))
     except BaseException as e:
         print("Got exception trying to set display mode " + str(e))
@@ -217,9 +200,6 @@ def startPyGame():
 
     pygame.mouse.set_visible(False)
 
-    # screen.fill((128, 128, 0))
-    # pygame.display.flip()
-
     font = pygame.font.Font("garuda.ttf", 20)
     smallFont = pygame.font.Font("garuda.ttf", 16)
 
@@ -230,15 +210,17 @@ def handleSay(topic, message, groups):
     say(message)
 
 
-def say(message):
-    def doSay(message):
-        print("Saying: " + message)
+def say(message, level=LOG_LEVEL_INFO):
+    def doSay(_message):
+        print("Saying: " + _message)
+
         # new_env = os.environ.copy()
         # proc = subprocess.Popen(["/usr/bin/flite", "-v", "-voice", "/home/pi/cmu_us_ljm.flitevox", "--setf duration_stretch=1.3", "--setf int_f0_target_stddev=70", "\"" + message + "\""],
         #                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ.copy(), shell=False)
         # stdout, stderr = proc.communicate()
         # print("Said: " + str(stdout) + ", error: " + str(stderr))
-        os.system("/usr/bin/flite -v -voice /home/pi/cmu_us_eey.flitevox --setf duration_stretch=1.2 --setf int_f0_target_stddev=70 \"" + message.replace("\"", "") + "\"")
+
+        os.system("/usr/bin/flite -v -voice /home/pi/cmu_us_eey.flitevox --setf duration_stretch=1.2 --setf int_f0_target_stddev=70 \"" + _message.replace("\"", "") + "\"")
 
     threading.Thread(target=doSay, args=(message,), daemon=True).start()
 
@@ -281,7 +263,9 @@ def handleUptimeStatus(topic, message, group):
     elif message == "00:20":
         say("Time: twenty minutes.")
     elif message == "00:30":
-        say("Time, Warning! Thirty minutes.")
+        say("Time, Warning! Thirty minutes.", level=LOG_LEVEL_ALWAYS)
+    elif message == "00:40":
+        say("Time, Warning! Fourty minutes.", level=LOG_LEVEL_ALWAYS)
 
     if oldHandleUptimeStatus is not None:
         pyroslib.invokeHandler(topic, message, group, oldHandleUptimeStatus)
