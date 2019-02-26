@@ -65,8 +65,13 @@ I2C_VL53L1X_ADDRESS_1 = 0x31
 I2C_VL53L1X_ADDRESS_2 = 0x32
 XSHUT_PIN = 4
 
+WHEEL_STEER_CURRENT = 300  # mAh
+WHEEL_DRIVE_CURRENT = 200  # mAh
+WHEEL_IDLE_CURRENT = 150  # mAh
+
 last_status_broadcast = 0
 status_broadcast_time = 5  # every 5 seconds
+service_started_time = 0
 
 i2cBus = smbus.SMBus(I2C_BUS)
 
@@ -112,6 +117,7 @@ PROTOTYPE_PID_CALIBRATION = {
 wheelMap = {}
 wheelCalibrationMap = {}
 wheelMap["servos"] = {}
+WHEEL_NAMES = ['fl', 'fr', 'bl', 'br']
 
 STOP_OVERHEAT = bytes('SO', 'ASCII')
 STOP_NO_DATA = bytes('SN', 'ASCII')
@@ -233,7 +239,13 @@ def initWheel(wheelName):
         's_mod': 1,
         'gen': None,
         'name': wheelName,
-        'pid': PID(0.7, 0.29, 0.01, 1.0, 1)
+        'pid': PID(0.7, 0.29, 0.01, 1.0, 1),
+        'deg_lt': 0,  # deg last time
+        'speed_lt': 0,  # speed last time
+        'deg_pwm': 0,  # pwm duty cycle
+        'speed_pwm': 0,  # pwm
+        'dmAh': 0,  # deg mAh
+        'smAh': 0   # speed mAh
     }
 
 
@@ -433,9 +445,21 @@ def interpolate(value, zerostr, maxstr):
 
 
 def steerWheel(wheelName, curDeg, status):
+    def updateCurrent(duty_cycle):
+        last_time = wheel['deg_lt']
+        t = time.time()
+        if t - last_time < 1:
+            last_pwm = wheel['deg_pwm']
+            mAh = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_STEER_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
+            old_mAh = wheel['dmAh']
+            wheel['dmAh'] = old_mAh + mAh
+        wheel['deg_lt'] = t
+        wheel['deg_pwm'] = duty_cycle
+
     def stopAll():
         GPIO.output(enPin, GPIO.LOW)
         motor_pwm.ChangeDutyCycle(0)
+        updateCurrent(0)
 
     wheel = wheelMap[wheelName]
     enPin = int(wheelCalibrationMap[wheelName]['steer']['en_pin'])
@@ -508,12 +532,14 @@ def steerWheel(wheelName, curDeg, status):
         if forward:
             GPIO.output(enPin, GPIO.LOW)
             motor_pwm.ChangeDutyCycle(speed)
+            updateCurrent(speed)
             steer_logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
             if DEBUG_TURN:
                 print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
         else:
             GPIO.output(enPin, GPIO.HIGH)
             motor_pwm.ChangeDutyCycle(100.0 - speed)
+            updateCurrent(100.0 - speed)
             steer_logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
             if DEBUG_TURN:
                 print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
@@ -574,6 +600,17 @@ def prepareAndSteerWheel(wheelName):
 
 
 def prepareAndDriveWheel(wheelName):
+    def updateCurrent(duty_cycle):
+        last_time = wheel['speed_lt']
+        t = time.time()
+        if t - last_time < 1:
+            last_pwm = wheel['speed_pwm']
+            mAh = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_DRIVE_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
+            old_mAh = wheel['smAh']
+            wheel['smAh'] = old_mAh + mAh
+        wheel['speed_lt'] = t
+        wheel['speed_pwm'] = duty_cycle
+
     wheel = wheelMap[wheelName]
     wheelSpeedCalMap = wheelCalibrationMap[wheelName]['speed']
 
@@ -596,9 +633,11 @@ def prepareAndDriveWheel(wheelName):
         speed = None
 
     if speed is not None:
+        updateCurrent(abs(speed))
         send_speed = int(127 - (speed * 127 / 300))
 
         data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
+
         nRF2401.swithToTX()
         done = nRF2401.sendDataAndSwitchRx(data, 0.015)
         if done:
@@ -748,7 +787,19 @@ def wheelsAllStop(topic, payload, groups):
 
 
 def broadcastWheelsStatus():
-    pyroslib.publish('wheel/feedback/status', "stopped" if all_stop else "running")
+    smAh = 0
+    dmAh = 0
+    for wheel_name in WHEEL_NAMES:
+        wheel = wheelMap[wheel_name]
+        # print("Wheel: " + str(wheelMap))
+        smAh += wheel['smAh']
+        dmAh += wheel['dmAh']
+
+    total_idle = (time.time() - service_started_time) * WHEEL_IDLE_CURRENT / 3600
+
+    status = ("s:stopped" if all_stop else "s:running")
+    status += " dmAh:" + str(int(dmAh)) + " smAh:" + str(int(smAh)) + " wtmAh:" + str(int(dmAh + smAh + total_idle))
+    pyroslib.publish('wheel/feedback/status', status)
 
 
 def wheelsCombined(topic, payload, groups):
@@ -778,9 +829,42 @@ def handleShutdownAnnounced(topic, payload, groups):
     stopAllWheels()
 
 
+def handleUptime(topic, payload, groups):
+    global service_started_time
+
+    if len(payload) > 6:
+        uptime_secs = float(payload[6:])
+    else:
+        uptime_secs = 0
+
+    uptime_minutes = int(payload[3:5])
+    uptime_hours = int(payload[0:2])
+
+    uptime = uptime_secs + uptime_minutes * 60 + uptime_hours * 3600
+    uptime_started_time = time.time() - uptime
+
+    if abs(service_started_time - uptime_started_time) > 1.0:
+        service_started_time = uptime_started_time
+        print("Fixed started time on reciving uptime \"" + payload + "\" to " + str(uptime) + " seconds ago.")
+
+
+def stopCallback():
+    print("Asked to stop!")
+    stopAllWheels()
+
+
+def readUptime():
+    with open("/proc/uptime", 'r') as fh:
+        return float(float(fh.read().split(" ")[0]))
+
+
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
+        already_up_for_seconds = readUptime()
+        service_started_time = time.time() - already_up_for_seconds
+        print("  set started time " + str(already_up_for_seconds) + " seconds ago.")
+
         print("    initialising wheels...")
         initWheels()
 
@@ -794,7 +878,8 @@ if __name__ == "__main__":
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
         pyroslib.subscribe("shutdown/announce", handleShutdownAnnounced)
-        pyroslib.init("wheels-service")
+        pyroslib.subscribe("power/uptime", handleUptime)
+        pyroslib.init("wheels-service", onStop=stopCallback)
 
         print("  Loading storage details...")
         loadStorage()
