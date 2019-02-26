@@ -9,31 +9,16 @@ import math
 import os
 import pygame
 import pyroslib
+import roverscreencomponents
 import subprocess
 import time
 from functools import partial
 from pygame import Rect
-
-OFF = 10
-XOFF = 0
-YOFF = 15
-
-STATUS_ERROR_I2C_WRITE = 1
-STATUS_ERROR_I2C_READ = 2
-STATUS_ERROR_MOTOR_OVERHEAT = 4
-STATUS_ERROR_MAGNET_HIGH = 8
-STATUS_ERROR_MAGNET_LOW = 16
-STATUS_ERROR_MAGNET_NOT_DETECTED = 32
-STATUS_ERROR_RX_FAILED = 64
-STATUS_ERROR_TX_FAILED = 128
-
-wheelImage = None
-wheelOdoImage = None
-wheelRects = {'fl': None, 'fr': None, 'bl': None, 'br': None}
+from roverscreencomponents import WheelComponent, WheelStatusComponent, Radar, CPUComponent, TemperatureComponent, StatusBarComponent, StatsGraph, Stats
 
 received = False
 
-radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+_radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
 
 angle = 0.0
 
@@ -44,10 +29,26 @@ _smallFont = None
 screensComponent = None
 topComponent = None
 statusBarComponent = None
+systemStatusScreen = None
 _slaves_shutdown = False
 _main_screen_image = None
 _backgrounds = {}
 _sounds = {}
+_wheelRects = {'fl': None, 'fr': None, 'bl': None, 'br': None}
+
+_stats = {'mAh': Stats(), 'wtmAh': Stats(), 'rpimAh': Stats(), 'dmAh': Stats(), 'smAh': Stats(), 'ebp': Stats(), 'cpu_load': Stats(), 'cpu_temp': Stats()}
+
+_stats_details_order = ['mAh', 'wtmAh', 'rpimAh', 'dmAh', 'smAh', 'ebp', 'cpu_load', 'cpu_temp']
+_stats_details = {
+    'mAh': {'name': 'mAh', 'units': 'mAh', 'max': 3000, 'warning': 1200, 'critical': 1600},
+    'wtmAh': {'name': 'Wheels mAh', 'units': 'mAh', 'max': 3000},
+    'rpimAh': {'name': 'RPis mAh', 'units': 'mAh', 'max': 3000},
+    'dmAh': {'name': 'Steer mAh', 'units': 'mAh', 'max': 3000},
+    'smAh': {'name': 'Drive mAh', 'units': 'mAh', 'max': 3000},
+    'ebp': {'name': 'Battery %', 'units': '%', 'max': 100, 'warning': 40, 'critical': 20},
+    'cpu_load': {'name': 'CPU Load', 'units': '%', 'max': 100, 'warning': 60, 'critical': 80},
+    'cpu_temp': {'name': 'CPU Temp', 'units': 'ºC', 'max': 100, 'warning': 70, 'critical': 75}
+}
 
 
 def _createTemplateWheel(distance_index):
@@ -61,43 +62,27 @@ def _createTemplateWheel(distance_index):
     }
 
 
-wheelsMap = {'fl': _createTemplateWheel(0), 'fr': _createTemplateWheel(2), 'bl': _createTemplateWheel(4), 'br': _createTemplateWheel(6), 'pid': {}}
+_wheelsMap = {'fl': _createTemplateWheel(0), 'fr': _createTemplateWheel(2), 'bl': _createTemplateWheel(4), 'br': _createTemplateWheel(6), 'pid': {}}
 
 
 def stopAllButtonClick(button, pos):
-    # pyroslib.publish("wheel/fr/deg", "-")
-    # pyroslib.publish("wheel/fl/deg", "-")
-    # pyroslib.publish("wheel/br/deg", "-")
-    # pyroslib.publish("wheel/bl/deg", "-")
     pyroslib.publish("wheel/stop", "toggle")
 
 
 def initGui():
-    global wheelImage, wheelOdoImage
-
     pygame.mixer.pre_init()
     pygame.mixer.init()
 
     screen_rect = _uiAdapter.getScreen().get_rect()
 
-    wheelImage = pygame.image.load("graphics/wheel.png")
-    wheelOdoImage = pygame.image.load("graphics/wheel-odo.png")
-
-    imageWidth = wheelImage.get_width() // 2
-    imageHeight = wheelImage.get_height() // 2
-
-    wheelRects['fl'] = wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, -imageHeight - OFF + YOFF)
-    wheelRects['fr'] = wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, -imageHeight - OFF + YOFF)
-    wheelRects['bl'] = wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, imageHeight + OFF + YOFF)
-    wheelRects['br'] = wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, imageHeight + OFF + YOFF)
-    wheelRects['middle'] = wheelImage.get_rect(center=screen_rect.center).move(XOFF, -YOFF)
+    roverscreencomponents.init(_uiFactory, _uiAdapter, _font, _smallFont, screen_rect, _wheelsMap, _wheelRects, _radar)
 
 
 def handleWheelPositions(topic, message, groups):
     global received  # , angle
 
     def updateWheel(wheelName, _values, index):
-        wheel = wheelsMap[wheelName]
+        wheel = _wheelsMap[wheelName]
         odoStr = _values[index]
         statusStr = _values[index + 1]
         wheel['speed_status'] = int(statusStr)
@@ -119,14 +104,14 @@ def handleDistances(topic, message, groups):
     values = {int(v[0]): int(v[1]) for v in [v.split(":") for v in message.split(" ")] if v[0] != 'timestamp'}
 
     for a in values:
-        radar[a] = values[a]
+        _radar[a] = values[a]
 
 
 def handleWheelOrientations(topic, message, groups):
     global received  # , angle
 
     def updateWheel(wheelName, _values, index):
-        wheel = wheelsMap[wheelName]
+        wheel = _wheelsMap[wheelName]
         angleStr = _values[index]
         statusStr = _values[index + 1]
         wheel['deg_status'] = int(statusStr)
@@ -152,7 +137,7 @@ def handleStorageWrite(topic, message, groups):
     wheelName = topics[0]
 
     if 'pid' == wheelName:
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         try:
             # noinspection PyTypeChecker
             pid[topics[1]] = float(message)
@@ -160,7 +145,7 @@ def handleStorageWrite(topic, message, groups):
             pid[topics[1]] = message
 
     else:
-        wheel = wheelsMap[wheelName]['cal']
+        wheel = _wheelsMap[wheelName]['cal']
 
         if topics[1] not in wheel:
             wheel[topics[1]] = {}
@@ -182,7 +167,9 @@ def handleShutdown(topic, message, groups):
 
 
 def handleWheelsStatus(topic, message, groups):
-    statusBarComponent.setWheelsStatus(message)
+    status = {s[0]: s[1] for s in [s.split(":") for s in message.split(" ")]}
+    if 's' in status:
+        statusBarComponent.setWheelsStatus(status['s'])
 
 
 def handleJoystickStatus(topic, message, groups):
@@ -191,6 +178,64 @@ def handleJoystickStatus(topic, message, groups):
 
 def handleUptimeStatus(topic, message, groups):
     statusBarComponent.setUptime(message)
+
+
+def handleCurrentStatus(topic, message, groups):
+
+    status = {s[0]: s[1] for s in [s.split(":") for s in message.split(" ")]}
+    mAh = None
+
+    if 't' in status:
+        mAh = int(float(status['t']))
+        last_mAh = _stats['mAh'].lastValue()
+        _stats['mAh'].add(mAh)
+
+    if 'wtmAh' in status:
+        wtmAh = int(float(status['wtmAh']))
+        _stats['wtmAh'].add(wtmAh)
+        if mAh is not None:
+            _stats['rpimAh'].add(mAh - wtmAh)
+
+    if 'dmAh' in status:
+        _stats['dmAh'].add(int(float(status['dmAh'])))
+
+    if 'smAh' in status:
+        _stats['smAh'].add(int(float(status['smAh'])))
+
+    if 'ebp' in status:
+        ebp = int(float(status['ebp']))
+        _stats['ebp'].add(ebp)
+        statusBarComponent.setBatteryPercentage(ebp)
+
+    if 'bs' in status:
+        bs = status['bs']
+        statusBarComponent.setBatteryStatus(bs)
+
+    systemStatusScreen.updateCurrent(_stats)
+
+
+def handleCPUStatus(topic, message, groups):
+    status = {s[0]: s[1] for s in [s.split(":") for s in message.split(" ")]}
+    if 'temp' in status:
+        temp = int(float(status['temp']))
+        last_temp = _stats['cpu_temp'].lastValue()
+        _stats['cpu_temp'].add(temp)
+        statusBarComponent.setTemperature(temp)
+        systemStatusScreen.setTemperature(temp)
+        if temp >= 70 and temp < 75 and (last_temp is None or last_temp < 70):
+            statusBarComponent.setTemperatureStatus('warning')
+            systemStatusScreen.setTemperatureStatus('warning')
+        elif temp >= 75 and (last_temp is None or last_temp < 75):
+            statusBarComponent.setTemperatureStatus('critical')
+            systemStatusScreen.setTemperatureStatus('critical')
+        elif temp < 70 and (last_temp is None or last_temp >= 70):
+            statusBarComponent.setTemperatureStatus('nominal')
+            systemStatusScreen.setTemperatureStatus('nominal')
+
+        if 'load' in status:
+            cpu_load = int(float(status['load']))
+            _stats['cpu_load'].add(cpu_load)
+            systemStatusScreen.setCPULoad(cpu_load)
 
 
 def handleScreenImage(topic, message, groups):
@@ -252,7 +297,7 @@ def playScreenSound(soundName):
 
 def hasCalibrationLoaded():
     def hasCalibrationLoadedWheel(wheelName):
-        wheel = wheelsMap[wheelName]['cal']
+        wheel = _wheelsMap[wheelName]['cal']
         if 'deg' in wheel:
             deg = wheel['deg']
 
@@ -261,7 +306,7 @@ def hasCalibrationLoaded():
         return False
 
     def hasCalibrationLoadedPID():
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         return 'p' in pid and 'i' in pid and 'd' in pid and 'd' in pid and 'g' in pid and 'deadband' in pid
 
     return hasCalibrationLoadedWheel('fr') and \
@@ -269,367 +314,6 @@ def hasCalibrationLoaded():
         hasCalibrationLoadedWheel('br') and \
         hasCalibrationLoadedWheel('bl') and \
         hasCalibrationLoadedPID()
-
-
-class WheelStatus:
-    NORM = 0
-    WAS_WARN = 1
-    WARN = 2
-    WAR_ERR = 3
-    ERR = 4
-
-    def __init__(self, label=None):
-        self.duration = 0
-        self.old_text = ''
-        self.overall_status = WheelStatus.NORM
-        self.label = label
-        self.colour = (255, 255, 255, 255)
-
-    def _updateLabelColour(self):
-        if self.label is not None:
-            self.label.colour = self.colour
-            self.label.invalidateSurface()
-
-    def _updateLabelText(self, text):
-        if self.label is not None:
-            self.label.setText(text)
-
-    def getKind(self):
-        if self.overall_status == WheelStatus.NORM:
-            pass
-
-    def updateI2CStatus(self, _status):
-        self._update(("2W", WheelStatus.ERR) if _status & STATUS_ERROR_I2C_WRITE else (("2R", WheelStatus.ERR) if _status & STATUS_ERROR_I2C_READ else ("", WheelStatus.NORM)))
-
-    def updateRadioStatus(self, _status):
-        self._update(("RX", WheelStatus.WARN) if _status & STATUS_ERROR_RX_FAILED else (("TX", WheelStatus.ERR) if _status & STATUS_ERROR_TX_FAILED else ("", WheelStatus.NORM)))
-
-    def updateMagnetStatus(self, _status):
-        self._update(("MH", WheelStatus.WARN) if _status & STATUS_ERROR_MAGNET_HIGH else (("ML", WheelStatus.WARN) if _status & STATUS_ERROR_MAGNET_LOW else (("ND", WheelStatus.ERR) if _status & STATUS_ERROR_MAGNET_NOT_DETECTED == 0 else ("", WheelStatus.NORM))))
-
-    def updateControlStatus(self, _status):
-        self._update(("O", WheelStatus.ERR) if _status & STATUS_ERROR_MOTOR_OVERHEAT else ("", WheelStatus.NORM))
-
-    def _update(self, status):
-        old_text = self.old_text
-        text = status[0]
-        kind = status[1]
-        duration = self.duration
-        if old_text == text:
-            if kind == self.NORM:
-                if duration > -1000:
-                    duration -= 1
-                    self.duration = duration
-            else:
-                duration += 1
-                self.duration = duration
-
-            if duration > 10:
-                self.colour = pygame.color.THECOLORS['red']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.ERR
-            if duration < -15:
-                self._updateLabelText('')
-                self.overall_status = WheelStatus.NORM
-            elif duration < -12:
-                self.colour = pygame.color.THECOLORS['orange4']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.WAS_WARN
-            elif duration < -9:
-                self.colour = pygame.color.THECOLORS['orange3']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.WAS_WARN
-            elif duration < -6:
-                self.colour = pygame.color.THECOLORS['orange2']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.WAS_WARN
-            elif duration < -3:
-                self.colour = pygame.color.THECOLORS['orange1']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.WAS_WARN
-            elif duration < 0:
-                self.colour = pygame.color.THECOLORS['orange']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.WAS_WARN
-
-        else:
-            self.old_text = text
-            if kind == self.NORM:
-                self.colour = pygame.color.THECOLORS['orange']
-                self._updateLabelColour()
-                self.overall_status = WheelStatus.NORM
-            elif kind == self.WARN:
-                self.colour = pygame.color.THECOLORS['orange']
-                self._updateLabelColour()
-                self._updateLabelText(text)
-                self.overall_status = WheelStatus.WARN
-            else:
-                self.colour = pygame.color.THECOLORS['red']
-                self._updateLabelText(text)
-                self.overall_status = WheelStatus.ERR
-            self.duration = 0
-
-    def combineOverallStatus(self, overall_status):
-        return max(self.overall_status, overall_status)
-
-
-class WheelComponent(gccui.Collection):
-    def __init__(self, rect, wheel_name, draw_angle):
-        super(WheelComponent, self).__init__(rect)
-        self.i2c_status = WheelStatus()
-        self.radio_status = WheelStatus()
-        self.magnet_status = WheelStatus()
-        self.control_status = WheelStatus()
-        self.wheel_name = wheel_name
-        self.draw_angle = draw_angle
-        self.image = _uiFactory.image(rect, None, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.addComponent(self.image)
-        self.angle_text = _uiFactory.label(self.rect,
-                                          "",
-                                          h_alignment=gccui.ALIGNMENT.CENTER,
-                                          v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                          colour=pygame.color.THECOLORS['black'])
-
-        self.addComponent(self.angle_text)
-
-        if not self.draw_angle:
-            self.angle_text.setVisible(False)
-
-        self.redefineRect(self.rect)
-
-        self.wheelImageAlpha = wheelImage.copy()
-        self.wheelImageAlpha.fill((0, 0, 0, 255), None, pygame.BLEND_RGBA_MULT)
-
-        def makeColourImage(colour):
-            image = self.wheelImageAlpha.copy()
-            image.fill(colour, None, pygame.BLEND_RGBA_ADD)
-            return image
-
-        self.wheelGreenImage = makeColourImage((0, 255, 0, 0))
-        self.wheelYellowImage = makeColourImage((200, 255, 0, 0))
-        self.wheelOrangeImage = makeColourImage((255, 220, 0, 0))
-        self.wheelRedImage = makeColourImage((255, 0, 0, 0))
-
-    def redefineRect(self, rect):
-        self.rect = rect
-        self.image.redefineRect(rect)
-        self.angle_text.redefineRect(Rect(rect.x, rect.centery - self.angle_text.font.get_height() // 2, rect.width, self.angle_text.font.get_height()))
-
-    def draw(self, surface):
-        wheel = wheelsMap[self.wheel_name]
-
-        selectedWheelImage = wheelImage
-        status = wheel['deg_status'] | wheel['speed_status']
-
-        self.i2c_status.updateI2CStatus(status)
-        self.radio_status.updateRadioStatus(status)
-        self.magnet_status.updateMagnetStatus(status)
-        self.control_status.updateControlStatus(status)
-
-        overall_status = self.i2c_status.overall_status
-        overall_status = self.radio_status.combineOverallStatus(overall_status)
-        overall_status = self.magnet_status.combineOverallStatus(overall_status)
-        overall_status = self.control_status.combineOverallStatus(overall_status)
-
-        if overall_status == WheelStatus.NORM:
-            selectedWheelImage = self.wheelGreenImage
-        elif overall_status == WheelStatus.WAS_WARN:
-            selectedWheelImage = self.wheelYellowImage
-        elif overall_status == WheelStatus.WARN or overall_status == WheelStatus.WAR_ERR:
-            selectedWheelImage = self.wheelOrangeImage
-        else:
-            selectedWheelImage = self.wheelRedImage
-
-        _angle = float(wheel['angle'])
-
-        rotatedWheelImage = pygame.transform.rotate(selectedWheelImage, -_angle)
-        rotatedWheelImage.get_rect(center=self.rect.center)
-        self.image._surface = rotatedWheelImage
-
-        if self.draw_angle:
-            self.angle_text.setText(str(wheel['angle']))
-
-        super(WheelComponent, self).draw(surface)
-
-
-class WheelStatusComponent(gccui.Collection):
-    def __init__(self, rect, wheel_name):
-        super(WheelStatusComponent, self).__init__(rect)
-        self.wheel_name = wheel_name
-        self.odo_image = _uiFactory.image(rect, wheelOdoImage, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.margin = (rect.width - wheelOdoImage.get_rect().width) // 2
-
-        self.odo_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['white'])
-
-        self.i2c_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.LEFT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
-
-        self.radio_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
-
-        self.control_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.LEFT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
-
-        self.magnet_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
-
-        self.i2c_status = WheelStatus(self.i2c_text)
-        self.radio_status = WheelStatus(self.radio_text)
-        self.control_status = WheelStatus(self.control_text)
-        self.magnet_status = WheelStatus(self.magnet_text)
-
-        self.addComponent(self.odo_image)
-        self.addComponent(self.odo_text)
-
-        self.addComponent(self.i2c_text)
-        self.addComponent(self.magnet_text)
-        self.addComponent(self.radio_text)
-        self.addComponent(self.control_text)
-
-        self.redefineRect(self.rect)
-
-    def redefineRect(self, rect):
-        self.rect = rect
-        self.odo_image.redefineRect(rect)
-        self.odo_text.redefineRect(rect.move(-self.margin - 5, 0))
-
-        self.i2c_text.redefineRect(Rect(rect.x, rect.y, self.margin // 2, rect.height))
-        self.radio_text.redefineRect(Rect(rect.x + self.margin // 2, rect.y, self.margin // 2, rect.height))
-
-        self.control_text.redefineRect(Rect(rect.right - self.margin, rect.y, self.margin // 2, rect.height))
-        self.magnet_text.redefineRect(Rect(rect.right - self.margin + self.margin // 2, rect.y, self.margin // 2, rect.height))
-
-    def draw(self, surface):
-        wheel = wheelsMap[self.wheel_name]
-
-        status = wheel['deg_status'] | wheel['speed_status']
-        self.i2c_status.updateI2CStatus(status)
-        self.radio_status.updateRadioStatus(status)
-        self.control_status.updateControlStatus(status)
-        self.magnet_status.updateMagnetStatus(status)
-
-        self.odo_text.setText(str(wheel['odo']))
-
-        super(WheelStatusComponent, self).draw(surface)
-
-
-class Radar(gccui.Component):
-    def __init__(self, rect, limit_distance):
-        super(Radar, self).__init__(rect)
-        self.limit_distance = limit_distance
-        self.gray = pygame.color.THECOLORS['gray48']
-
-    def draw(self, surface):
-        def limit(d):
-            if d < 0:
-                d = 0
-            if d > self.limit_distance:
-                d = self.limit_distance
-
-            size = min(self.rect.width, self.rect.height)
-            return - (int(size * 0.8) - d / 20.0)
-
-        pi8 = math.pi / 8
-
-        WHITE = pygame.color.THECOLORS['white']
-
-        pygame.draw.circle(surface, self.gray, self.rect.center, int(self.rect.width / 2.3), 1)
-        pygame.draw.circle(surface, self.gray, self.rect.center, int(self.rect.width / 2.9), 1)
-        pygame.draw.circle(surface, self.gray, self.rect.center, int(self.rect.width / 3.9), 1)
-        pygame.draw.circle(surface, self.gray, self.rect.center, int(self.rect.width / 6), 1)
-        pygame.draw.circle(surface, self.gray, self.rect.center, int(self.rect.width / 12), 1)
-        for d in [pi8, pi8 * 3, pi8 * 5, pi8 * 7, pi8 * 9, pi8 * 11, pi8 * 13, pi8 * 15]:
-            x1 = math.cos(d) * int(self.rect.width / 2.3) + self.rect.centerx
-            y1 = math.sin(d) * int(self.rect.width / 2.3) + self.rect.centery
-            x2 = math.cos(d) * int(self.rect.width / 12) + self.rect.centerx
-            y2 = math.sin(d) * int(self.rect.width / 12) + self.rect.centery
-            pygame.draw.line(surface, self.gray, (x1, y1), (x2, y2))
-
-        pygame.draw.arc(_uiAdapter.getScreen(), (255, 0, 255), self.rect.inflate(limit(radar[0]), limit(radar[0])), pi8 * 3, pi8 * 5)  # 0º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[45]), limit(radar[45])), pi8 * 1, pi8 * 3)  # 45º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[90]), limit(radar[90])), pi8 * 15, pi8 * 1)  # 90º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[135]), limit(radar[135])), pi8 * 13, pi8 * 15)  # 135º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[180]), limit(radar[180])), pi8 * 11, pi8 * 13)  # 180º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[225]), limit(radar[225])), pi8 * 9, pi8 * 11)  # 225º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[270]), limit(radar[270])), pi8 * 7, pi8 * 9)  # 270º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(radar[315]), limit(radar[315])), pi8 * 5, pi8 * 7)  # 315º
-
-
-class StatusBarComponent(gccui.Collection):
-    def __init__(self, rect):
-        super(StatusBarComponent, self).__init__(rect)
-
-        self.battery_gray_image = pygame.image.load("graphics/battery-gray.png")
-        self.stop_image = pygame.image.load("graphics/pause.png")
-        self.stop_black_image = pygame.image.load("graphics/play.png")
-        self.joystick_white_image = pygame.image.load("graphics/joystick-white.png")
-        self.joystick_black_image = pygame.image.load("graphics/joystick-black.png")
-        self.battery_component = _uiFactory.image(rect, self.battery_gray_image)
-        self.stop_component = _uiFactory.image(rect, self.stop_image)
-        self.joystick_component = _uiFactory.image(rect, self.joystick_black_image)
-        self.uptime_component = _uiFactory.label(rect, "--:--", colour=pygame.color.THECOLORS['lightgray'], h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.addComponent(self.stop_component)
-        self.addComponent(self.battery_component)
-        self.addComponent(self.joystick_component)
-        self.addComponent(self.uptime_component)
-        self.redefineRect(rect)
-
-    def redefineRect(self, rect):
-        self.rect = rect
-        self.battery_component.redefineRect(Rect(rect.right - self.battery_gray_image.get_width() - 8, rect.y, self.battery_gray_image.get_width(), self.battery_gray_image.get_height()))
-        self.uptime_component.redefineRect(Rect(self.battery_component.rect.x - 60, rect.y, 50, 24))  # font size is bodge to make it render to right place
-        self.joystick_component.redefineRect(Rect(self.uptime_component.rect.x - self.joystick_white_image.get_width() - 10, rect.y, self.joystick_white_image.get_width(), self.joystick_white_image.get_height()))
-        self.stop_component.redefineRect(Rect(rect.x + 20, rect.y, self.stop_image.get_width(), self.stop_image.get_height()))
-
-    # def draw(self, surface):
-    #     super(StatusBarComponent, self).draw(surface)
-
-    def setWheelsStatus(self, status):
-        if status == 'stopped':
-            self.stop_component.setImage(self.stop_image)
-            self.stop_component.setVisible(True)
-        elif status == 'running':
-            self.stop_component.setImage(self.stop_black_image)
-            self.stop_component.setVisible(True)
-        else:
-            self.stop_component.setVisible(False)
-
-    def setJoystickStatus(self, status):
-        if status == 'connected':
-            self.joystick_component.setImage(self.joystick_white_image)
-            self.joystick_component.setVisible(True)
-        elif status == 'none':
-            self.joystick_component.setImage(self.joystick_black_image)
-            self.joystick_component.setVisible(True)
-        else:
-            self.joystick_component.setVisible(False)
-
-    def setUptime(self, uptime):
-        self.uptime_component.setText(uptime)
-
-    def setBatteryStatus(self, status):
-        pass
 
 
 def returnToStatusButtonClick(button, pos):
@@ -655,6 +339,9 @@ class ScreenComponent(gccui.Collection):
     def selectScreenButtonClick(self, name, button, pos):
         self.selectScreen(name)
 
+    def selectScreenCallback(self, screen_name):
+        return partial(self.selectScreenButtonClick, screen_name)
+
     @staticmethod
     def selectScreen(name):
         selectedCardName = screensComponent.selectedCardName()
@@ -677,7 +364,7 @@ class MainScreen(ScreenComponent):
         self.image.setVisible(False)
         self.addComponent(self.image)
         self.addComponent(_uiFactory.text_button(Rect(20, 410, 120, 50), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(Rect(180, 410, 120, 50), "MENU", partial(self.selectScreenButtonClick, 'menu')))
+        self.addComponent(_uiFactory.text_button(Rect(180, 410, 120, 50), "MENU", self.selectScreenCallback('main_menu')))
         self.redefineRect(rect)
 
     def redefineRect(self, rect):
@@ -728,11 +415,11 @@ class WheelsScreen(ScreenComponent):
         super(WheelsScreen, self).__init__(rect)
 
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "MENU", partial(self.selectScreenButtonClick, 'menu')))
-        self.addComponent(WheelComponent(wheelRects['fr'], 'fr', True))
-        self.addComponent(WheelComponent(wheelRects['fl'], 'fl', True))
-        self.addComponent(WheelComponent(wheelRects['br'], 'br', True))
-        self.addComponent(WheelComponent(wheelRects['bl'], 'bl', True))
+        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "MENU", self.selectScreenCallback('main_menu')))
+        self.addComponent(WheelComponent(_wheelRects['fr'], 'fr', True))
+        self.addComponent(WheelComponent(_wheelRects['fl'], 'fl', True))
+        self.addComponent(WheelComponent(_wheelRects['br'], 'br', True))
+        self.addComponent(WheelComponent(_wheelRects['bl'], 'bl', True))
         self.addComponent(WheelStatusComponent(Rect(5, 38, 152, 32), 'fl'))
         self.addComponent(WheelStatusComponent(Rect(163, 38, 152, 32), 'fr'))
         self.addComponent(WheelStatusComponent(Rect(5, 74, 152, 32), 'bl'))
@@ -743,10 +430,10 @@ class WheelsScreen(ScreenComponent):
         super(WheelsScreen, self).redefineRect(rect)
         self.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
         self.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
-        self.components[2].redefineRect(Rect(wheelRects['fr'].move(rect.x, rect.y)))
-        self.components[3].redefineRect(Rect(wheelRects['fl'].move(rect.x, rect.y)))
-        self.components[4].redefineRect(Rect(wheelRects['br'].move(rect.x, rect.y)))
-        self.components[5].redefineRect(Rect(wheelRects['bl'].move(rect.x, rect.y)))
+        self.components[2].redefineRect(Rect(_wheelRects['fr'].move(rect.x, rect.y)))
+        self.components[3].redefineRect(Rect(_wheelRects['fl'].move(rect.x, rect.y)))
+        self.components[4].redefineRect(Rect(_wheelRects['br'].move(rect.x, rect.y)))
+        self.components[5].redefineRect(Rect(_wheelRects['bl'].move(rect.x, rect.y)))
         self.components[6].redefineRect(Rect(rect.x + 5, rect.y + 38, 152, 32))
         self.components[7].redefineRect(Rect(rect.x + 163, rect.y + 38, 152, 32))
         self.components[8].redefineRect(Rect(rect.x + 5, rect.y + 74, 152, 32))
@@ -764,25 +451,61 @@ class WheelsScreen(ScreenComponent):
 
 
 class MenuScreen(ScreenComponent):
-    def __init__(self, rect):
+    def __init__(self, rect, backButtonClick):
         super(MenuScreen, self).__init__(rect)
+        self.menu_items = []
+        self.addComponent(_uiFactory.text_button(Rect(50, 430, 220, 40), "BACK", backButtonClick))
 
-        self.addComponent(_uiFactory.text_button(Rect(50, 60, 220, 40), "WHEELS", partial(self.selectScreenButtonClick, 'wheels')))
-        self.addComponent(_uiFactory.text_button(Rect(50, 110, 220, 40), "RADAR", partial(self.selectScreenButtonClick, 'radar')))
-        self.addComponent(_uiFactory.text_button(Rect(50, 160, 220, 40), "CAL WHEELS", partial(self.selectScreenButtonClick, 'calibrateWheel')))
-        self.addComponent(_uiFactory.text_button(Rect(50, 210, 220, 40), "CAL PID", partial(self.selectScreenButtonClick, 'calibratePID')))
-        self.addComponent(_uiFactory.text_button(Rect(50, 380, 220, 40), "SHUTDOWN", partial(self.selectScreenButtonClick, 'shutdownConfirmation'), hint=gccui.UI_HINT.WARNING))
-        self.addComponent(_uiFactory.text_button(Rect(50, 430, 220, 40), "MAIN", self.backToMainScreenButtonClick))
-        self.redefineRect(rect)
+    def addMenuItem(self, label, callback=None):
+        if isinstance(label, str):
+            component = _uiFactory.text_button(Rect(50, 60, 220, 40), label, callback)
+        elif isinstance(label, gccui.Label):
+            component = _uiFactory.button(Rect(50, 60, 220, 40), label, callback)
+        else:
+            component = label
+
+        self.menu_items.append(component)
+        self.addComponent(component)
 
     def redefineRect(self, rect):
         super(MenuScreen, self).redefineRect(rect)
-        self.components[0].redefineRect(Rect(rect.x + 50, rect.y + 60, 220, 40))
-        self.components[1].redefineRect(Rect(rect.x + 50, rect.y + 110, 220, 40))
-        self.components[2].redefineRect(Rect(rect.x + 50, rect.y + 160, 220, 40))
-        self.components[3].redefineRect(Rect(rect.x + 50, rect.y + 210, 220, 40))
-        self.components[4].redefineRect(Rect(rect.x + 50, rect.bottom - 100, 220, 40))
-        self.components[5].redefineRect(Rect(rect.x + 50, rect.bottom - 50, 220, 40))
+        self.components[0].redefineRect(Rect(rect.x + 50, rect.bottom - 50, 220, 40))
+        y = 60
+        for item in self.menu_items:
+            item.redefineRect(Rect(rect.x + 50, rect.y + y, 220, 40))
+            y += 50
+
+
+class MainMenuScreen(MenuScreen):
+    def __init__(self, rect):
+        super(MainMenuScreen, self).__init__(rect, self.backToMainScreenButtonClick)
+        self.addMenuItem("WHEELS", partial(self.selectScreenButtonClick, 'wheels'))
+        self.addMenuItem("RADAR", partial(self.selectScreenButtonClick, 'radar'))
+        self.addMenuItem("STATUS", partial(self.selectScreenButtonClick, 'system_status'))
+        self.addMenuItem("CALIBRATION", partial(self.selectScreenButtonClick, 'calibration_menu'))
+        self.addMenuItem("PREFERENCES", partial(self.selectScreenButtonClick, 'prefernces'))
+        self.shutdown_button = _uiFactory.text_button(Rect(50, 380, 220, 40), "SHUTDOWN", self.selectScreenCallback('shutdown_confirmation'), hint=gccui.UI_HINT.WARNING)
+        self.addComponent(self.shutdown_button)
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        super(MainMenuScreen, self).redefineRect(rect)
+        self.shutdown_button.redefineRect(Rect(rect.x + 50, rect.bottom - 100, 220, 40))
+
+
+class CalibrationMenuScreen(MenuScreen):
+    def __init__(self, rect):
+        super(CalibrationMenuScreen, self).__init__(rect, self.selectScreenCallback('main_menu'))
+        self.addMenuItem("CAL WHEELS", self.selectScreenCallback('calibrate_wheel'))
+        self.addMenuItem("CAL PID", self.selectScreenCallback('calibratePID'))
+        self.redefineRect(rect)
+
+
+class SystemMenuScreen(MenuScreen):
+    def __init__(self, rect):
+        super(SystemMenuScreen, self).__init__(rect, self.selectScreenCallback('main_menu'))
+        self.addMenuItem("WHEELS", self.selectScreenCallback('wheels'))
+        self.redefineRect(rect)
 
 
 class ShutdownConfirmationScreen(ScreenComponent):
@@ -838,16 +561,16 @@ class CalibrateWheelScreen(ScreenComponent):
 
     @staticmethod
     def back_deco():
-        return CalibrateWheelScreen.RectangleDecoration(pygame.color.THECOLORS['gray24'])
+        return CalibrateWheelScreen.RectangleDecoration(pygame.color.THECOLORS['grey24'])
 
     @staticmethod
     def over_deco():
-        return CalibrateWheelScreen.RectangleDecoration(pygame.color.THECOLORS['gray64'])
+        return CalibrateWheelScreen.RectangleDecoration(pygame.color.THECOLORS['grey64'])
 
     def createWheelButton(self, name):
-        return gccui.Button(wheelRects[name],
+        return gccui.Button(_wheelRects[name],
                             partial(self.selectWheelButtonClick, name),
-                            label=WheelComponent(wheelRects[name], name, False),
+                            label=WheelComponent(_wheelRects[name], name, False),
                             background_decoration=self.back_deco(),
                             mouse_over_decoration=self.over_deco())
 
@@ -864,7 +587,7 @@ class CalibrateWheelScreen(ScreenComponent):
         self.card.selectCard('select')
 
         self.select.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.select.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.select.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.selectScreenCallback('calibration_menu')))
         self.select.addComponent(self.createWheelButton('fr'))
         self.select.addComponent(self.createWheelButton('fl'))
         self.select.addComponent(self.createWheelButton('br'))
@@ -874,7 +597,7 @@ class CalibrateWheelScreen(ScreenComponent):
         self.calibrate.addComponent(self.wheel_name_label)
         self.calibrate.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.calibrate.addComponent(_uiFactory.text_button(Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationWheelButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.selectScreenCallback('calibration_menu')))
         self.calibrate.addComponent(_uiFactory.text_button(Rect(8, 170, 80, 40), "<", partial(self.moveWheelClick, -1)))
         self.calibrate.addComponent(_uiFactory.text_button(Rect(8, 240, 80, 40), "<<", partial(self.moveWheelClick, -10)))
         self.calibrate.addComponent(_uiFactory.text_button(Rect(232, 170, 80, 40), ">", partial(self.moveWheelClick, 1)))
@@ -886,11 +609,11 @@ class CalibrateWheelScreen(ScreenComponent):
         self.calibrate.addComponent(self.steerToggleButton)
         self.calibrate.addComponent(self.speedToggleButton)
 
-        self.wheel = WheelComponent(wheelRects['middle'], '', True)
+        self.wheel = WheelComponent(_wheelRects['middle'], '', True)
         self.calibrate.addComponent(self.wheel)
 
         self.loading.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.selectScreenCallback('calibration_menu')))
         self.loading.addComponent(_uiFactory.label(self.rect, "Loading calibration", h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE))
 
         self.selected_wheel_name = None
@@ -901,10 +624,10 @@ class CalibrateWheelScreen(ScreenComponent):
         self.card.redefineRect(rect)
         self.select.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
         self.select.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
-        self.select.components[2].redefineRect(wheelRects['fr'].move(rect.x, rect.y))
-        self.select.components[3].redefineRect(wheelRects['fl'].move(rect.x, rect.y))
-        self.select.components[4].redefineRect(wheelRects['br'].move(rect.x, rect.y))
-        self.select.components[5].redefineRect(wheelRects['bl'].move(rect.x, rect.y))
+        self.select.components[2].redefineRect(_wheelRects['fr'].move(rect.x, rect.y))
+        self.select.components[3].redefineRect(_wheelRects['fl'].move(rect.x, rect.y))
+        self.select.components[4].redefineRect(_wheelRects['br'].move(rect.x, rect.y))
+        self.select.components[5].redefineRect(_wheelRects['bl'].move(rect.x, rect.y))
 
         self.calibrate.components[0].redefineRect(Rect(rect.x + 10, rect.y + 50, 310, 20))
         self.calibrate.components[1].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
@@ -917,7 +640,7 @@ class CalibrateWheelScreen(ScreenComponent):
         self.calibrate.components[8].redefineRect(Rect(rect.x + 20, rect.y + 330, 80, 40))
         self.calibrate.components[9].redefineRect(Rect(rect.x + 120, rect.y + 330, 80, 40))
         self.calibrate.components[10].redefineRect(Rect(rect.x + 220, rect.y + 330, 80, 40))
-        self.calibrate.components[11].redefineRect(wheelRects['middle'].move(rect.x, rect.y))
+        self.calibrate.components[11].redefineRect(_wheelRects['middle'].move(rect.x, rect.y))
 
         self.loading.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
         self.loading.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
@@ -938,9 +661,9 @@ class CalibrateWheelScreen(ScreenComponent):
     def setSelectedWheelName(self, selected_wheel_name):
         self.selected_wheel_name = selected_wheel_name
         self.wheel.wheel_name = selected_wheel_name
-        self._updateToggleButton(self.degToggleButton, 'A', wheelsMap[selected_wheel_name]['cal']['deg']['dir'])
-        self._updateToggleButton(self.steerToggleButton, 'S', wheelsMap[selected_wheel_name]['cal']['steer']['dir'])
-        self._updateToggleButton(self.speedToggleButton, 'D', wheelsMap[selected_wheel_name]['cal']['speed']['dir'])
+        self._updateToggleButton(self.degToggleButton, 'A', _wheelsMap[selected_wheel_name]['cal']['deg']['dir'])
+        self._updateToggleButton(self.steerToggleButton, 'S', _wheelsMap[selected_wheel_name]['cal']['steer']['dir'])
+        self._updateToggleButton(self.speedToggleButton, 'D', _wheelsMap[selected_wheel_name]['cal']['speed']['dir'])
         self.wheel_name_label.setText("Wheel " + selected_wheel_name.upper())
 
     def draw(self, surface):
@@ -953,34 +676,34 @@ class CalibrateWheelScreen(ScreenComponent):
         toggleButton.getLabel().setText(kind + ": <---" if direction < 0 else kind + ": --->")
 
     def degToggleButtonClick(self, button, pos):
-        wheel = wheelsMap[self.selected_wheel_name]
-        direction = wheelsMap[self.selected_wheel_name]['cal']['deg']['dir']
+        wheel = _wheelsMap[self.selected_wheel_name]
+        direction = _wheelsMap[self.selected_wheel_name]['cal']['deg']['dir']
         direction = -direction
-        wheelsMap[self.selected_wheel_name]['cal']['deg']['dir'] = direction
+        _wheelsMap[self.selected_wheel_name]['cal']['deg']['dir'] = direction
         print("Old value " + str(-direction) + ", new value " + str(direction))
         pyroslib.publish("storage/write/wheels/cal/" + self.selected_wheel_name + "/deg/dir", str(direction))
         self._updateToggleButton(self.degToggleButton, 'A', direction)
 
     def steerToggleButtonClick(self, button, pos):
-        wheel = wheelsMap[self.selected_wheel_name]
-        direction = wheelsMap[self.selected_wheel_name]['cal']['steer']['dir']
+        wheel = _wheelsMap[self.selected_wheel_name]
+        direction = _wheelsMap[self.selected_wheel_name]['cal']['steer']['dir']
         direction = -direction
-        wheelsMap[self.selected_wheel_name]['cal']['steer']['dir'] = direction
+        _wheelsMap[self.selected_wheel_name]['cal']['steer']['dir'] = direction
         print("Old value " + str(-direction) + ", new value " + str(direction))
         pyroslib.publish("storage/write/wheels/cal/" + self.selected_wheel_name + "/steer/dir", str(direction))
         self._updateToggleButton(self.steerToggleButton, 'S', direction)
 
     def speedToggleButtonClick(self, button, pos):
-        wheel = wheelsMap[self.selected_wheel_name]
-        direction = wheelsMap[self.selected_wheel_name]['cal']['speed']['dir']
+        wheel = _wheelsMap[self.selected_wheel_name]
+        direction = _wheelsMap[self.selected_wheel_name]['cal']['speed']['dir']
         direction = -direction
-        wheelsMap[self.selected_wheel_name]['cal']['speed']['dir'] = direction
+        _wheelsMap[self.selected_wheel_name]['cal']['speed']['dir'] = direction
         print("Old value " + str(-direction) + ", new value " + str(direction))
         pyroslib.publish("storage/write/wheels/cal/" + self.selected_wheel_name + "/speed/dir", str(direction))
         self._updateToggleButton(self.speedToggleButton, 'D', direction)
 
     def saveCalibrationWheelButtonClick(self, button, pos):
-        wheel = wheelsMap[self.selected_wheel_name]
+        wheel = _wheelsMap[self.selected_wheel_name]
         calDeg = wheel['cal']['deg']['0']
         _angle = wheel['angle']
         value = _angle + calDeg
@@ -999,7 +722,7 @@ class CalibrateWheelScreen(ScreenComponent):
         screensComponent.selectCard('main')
 
     def moveWheel(self, deltaAngle):
-        wheel = wheelsMap[self.selected_wheel_name]
+        wheel = _wheelsMap[self.selected_wheel_name]
         if 'wanted' in wheel:
             wanted = wheel['wanted']
             wanted += deltaAngle
@@ -1054,7 +777,7 @@ class PIDUIComponent(gccui.Collection):
         self.components[8].redefineRect(Rect(rect.right - 30, rect.y, 30, 40))
 
     def draw(self, surace):
-        value = wheelsMap['pid'][self.name]
+        value = _wheelsMap['pid'][self.name]
 
         s = "{0:.2f}".format(value)
         i = s.index('.')
@@ -1066,37 +789,37 @@ class PIDUIComponent(gccui.Collection):
         super(PIDUIComponent, self).draw(surace)
 
     def onClickPlus1(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value += 1.0
         pid[self.name] = value
 
     def onClickMinus1(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value -= 1.0
         pid[self.name] = value
 
     def onClickPlus01(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value += 0.1
         pid[self.name] = value
 
     def onClickMinus01(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value -= 0.1
         pid[self.name] = value
 
     def onClickPlus001(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value += 0.01
         pid[self.name] = value
 
     def onClickMinus001(self, button, pos):
-        pid = wheelsMap['pid']
+        pid = _wheelsMap['pid']
         value = pid[self.name]
         value -= 0.01
         pid[self.name] = value
@@ -1116,7 +839,7 @@ class CalibratePIDScreen(ScreenComponent):
 
         self.calibrate.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.calibrate.addComponent(_uiFactory.text_button(Rect(120, 430, 90, 40), "SAVE", self.saveCalibrationPIDButtonClick))
-        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
+        self.calibrate.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('calibration_menu')))
         self.calibrate.addComponent(PIDUIComponent(Rect(10, 72, 300, 50), 'p', 'p'))
         self.calibrate.addComponent(PIDUIComponent(Rect(10, 122, 300, 50), 'i', 'i'))
         self.calibrate.addComponent(PIDUIComponent(Rect(10, 172, 300, 50), 'd', 'd'))
@@ -1125,7 +848,7 @@ class CalibratePIDScreen(ScreenComponent):
 
         self.loading.addComponent(_uiFactory.label(self.rect, "Loading calibration", h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE))
         self.loading.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.backToMainScreenButtonClick))
+        self.loading.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "CANCEL", self.selectScreenCallback('calibration_menu')))
 
         self.redefineRect(rect)
 
@@ -1159,11 +882,11 @@ class CalibratePIDScreen(ScreenComponent):
 
     @staticmethod
     def saveCalibrationPIDButtonClick(button, pos):
-        pyroslib.publish("storage/write/wheels/cal/pid/p", str(wheelsMap['pid']['p']))
-        pyroslib.publish("storage/write/wheels/cal/pid/i", str(wheelsMap['pid']['i']))
-        pyroslib.publish("storage/write/wheels/cal/pid/d", str(wheelsMap['pid']['d']))
-        pyroslib.publish("storage/write/wheels/cal/pid/g", str(wheelsMap['pid']['g']))
-        pyroslib.publish("storage/write/wheels/cal/pid/deadband", str(wheelsMap['pid']['deadband']))
+        pyroslib.publish("storage/write/wheels/cal/pid/p", str(_wheelsMap['pid']['p']))
+        pyroslib.publish("storage/write/wheels/cal/pid/i", str(_wheelsMap['pid']['i']))
+        pyroslib.publish("storage/write/wheels/cal/pid/d", str(_wheelsMap['pid']['d']))
+        pyroslib.publish("storage/write/wheels/cal/pid/g", str(_wheelsMap['pid']['g']))
+        pyroslib.publish("storage/write/wheels/cal/pid/deadband", str(_wheelsMap['pid']['deadband']))
 
         # returnToStatusButtonClick(button, pos)
 
@@ -1172,7 +895,7 @@ class RadarScreen(ScreenComponent):
     def __init__(self, rect):
         super(RadarScreen, self).__init__(rect)
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
-        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.backToMainScreenButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('main_menu')))
         y_off = 100
         self.addComponent(Radar(Rect(50, 50, 220, 220), 1300))
         self.distance_labels = {
@@ -1210,8 +933,8 @@ class RadarScreen(ScreenComponent):
         self.components[11].redefineRect(Rect(rect.x + 290, rect.y + y_off + 250, 0, 0))
 
     def draw(self, surface):
-        for a in radar:
-            self.distance_labels[a].setText(str(radar[a]))
+        for a in _radar:
+            self.distance_labels[a].setText(str(_radar[a]))
 
         super(RadarScreen, self).draw(surface)
 
@@ -1224,9 +947,125 @@ class RadarScreen(ScreenComponent):
         pyroslib.unsubscribe("distance/deg")
 
 
+class SystemStatusScreen(ScreenComponent):
+    def __init__(self, rect):
+        super(SystemStatusScreen, self).__init__(rect)
+        self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
+        self.addComponent(_uiFactory.text_button(Rect(10, 430, 900, 40), "SELECT", self.startSelectingGraph))
+        self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('main_menu')))
+
+        self.temperature_component = TemperatureComponent(Rect(256, 30, 64, 200))
+        self.cpu_component = CPUComponent(Rect(0, 30, 64, 200))
+        self.addComponent(self.temperature_component)
+        self.addComponent(self.cpu_component)
+
+        self.table = [[None, None, None], [None, None, None], [None, None, None], [None, None, None]]
+        self.table[0][1] = _uiFactory.label(None, "mAh", colour=pygame.color.THECOLORS['gray'], font=_smallFont, h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.TOP)
+
+        self.table[1][0] = _uiFactory.label(None, "Wheels", colour=pygame.color.THECOLORS['gray'], font=_smallFont, h_alignment=gccui.ALIGNMENT.LEFT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.table[2][0] = _uiFactory.label(None, "RPis", colour=pygame.color.THECOLORS['gray'], font=_smallFont, h_alignment=gccui.ALIGNMENT.LEFT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.table[3][0] = _uiFactory.label(None, "Total:", colour=pygame.color.THECOLORS['gray'], font=_smallFont, h_alignment=gccui.ALIGNMENT.LEFT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+
+        self.table[1][1] = _uiFactory.label(None, "-", colour=pygame.color.THECOLORS['white'], font=_font, h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.table[2][1] = _uiFactory.label(None, "-", colour=pygame.color.THECOLORS['white'], font=_font, h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.table[3][1] = _uiFactory.label(None, "-", colour=pygame.color.THECOLORS['white'], font=_font, h_alignment=gccui.ALIGNMENT.RIGHT, v_alignment=gccui.ALIGNMENT.MIDDLE)
+
+        for row in self.table:
+            for cell in row:
+                if cell is not None:
+                    self.addComponent(cell)
+
+        self.stats_graph = StatsGraph(rect)
+        self.addComponent(self.stats_graph)
+
+        self.graph_label = _uiFactory.label(None, _stats_details['mAh']['name'], h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.addComponent(self.graph_label)
+        self.graph_menu = _uiFactory.menu(Rect(0, 0, 150, 200), background_colour=pygame.color.THECOLORS['black'])
+        for stats_id in _stats_details_order:
+            details = _stats_details[stats_id]
+            self.graph_menu.addMenuItem(details['name'], partial(self.selectGraph, stats_id), height=40)
+        self.addComponent(self.graph_menu)
+
+        self.selectGraph('mAh', None, None)
+
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        # super(SystemStatusScreen, self).redefineRect(rect)
+        self.rect = rect
+        self.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.components[1].redefineRect(Rect(rect.x + 115, rect.bottom - 50, 90, 40))
+        self.components[2].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
+        self.graph_menu.redefineRect(Rect(rect.x + 85, rect.bottom - 60 - self.graph_menu.size()[1], self.graph_menu.size()[0], self.graph_menu.size()[1]))
+        self.temperature_component.redefineRect(Rect(rect.right - 64, rect.y + 30, 64, 200))
+        self.cpu_component.redefineRect(Rect(rect.x, rect.y + 30, 64, 195))
+        self.graph_label.redefineRect(Rect(rect.x + 10, rect.bottom - 265, rect.width - 20, 30))
+        self.stats_graph.redefineRect(Rect(rect.x + 10, rect.bottom - 235, rect.width - 20, 180))
+        for r in range(0, 4):
+            for c in range(0, 2):
+                if r != 0 or c != 0:
+                    cell = self.table[r][c]
+                    cell.redefineRect(Rect(rect.x + 64 * c + 100, rect.y + 30 * r + 80, 50, 30))
+
+    def setTemperatureStatus(self, status):
+        self.temperature_component.setTemperatureStatus(status)
+
+    def setTemperature(self, temp):
+        self.temperature_component.setTemperature(temp)
+
+    def setCPULoad(self, cpu_load):
+        self.cpu_component.setCPULoad(cpu_load)
+
+    def updateCurrent(self, _stats):
+        def updateLabel(row, stat_name):
+            stat = _stats[stat_name]
+            last_value = stat.lastValue()
+            total_label = row[1]
+            if last_value is None:
+                total_label.setText("-")
+            else:
+                total_label.setText(str(int(last_value)))
+
+        updateLabel(self.table[1], 'wtmAh')
+        updateLabel(self.table[2], 'rpimAh')
+        updateLabel(self.table[3], 'mAh')
+
+    def draw(self, surface):
+        super(SystemStatusScreen, self).draw(surface)
+
+    def enter(self):
+        super(SystemStatusScreen, self).enter()
+
+    def leave(self):
+        super(SystemStatusScreen, self).leave()
+
+    def startSelectingGraph(self, button, pos):
+        self.graph_menu.show()
+
+    def selectGraph(self, stats_id, button, pos):
+        print("Selecting graph " + str(stats_id))
+        stats_details = _stats_details[stats_id]
+        self.stats_graph.setStats(_stats[stats_id])
+        self.stats_graph.setUnits(stats_details['units'])
+        self.stats_graph.setMaxValue(stats_details['max'])
+        self.graph_menu.hide()
+        self.graph_label.setText(stats_details['name'])
+        if 'warning' in stats_details:
+            self.stats_graph.setWarningValue(stats_details['warning'])
+        else:
+            self.stats_graph.setWarningValue(-1)
+        if 'critical' in stats_details:
+            self.stats_graph.setCriticalValue(stats_details['critical'])
+        else:
+            self.stats_graph.setCriticalValue(-1)
+
+
 def init(uiFactory, uiAdapter, font, smallFont):
-    global _uiFactory, _uiAdapter, screensComponent, topComponent, statusBarComponent, _font, _smallFont
+    global _uiFactory, _uiAdapter, screensComponent, topComponent, statusBarComponent, systemStatusScreen, _font, _smallFont
     _uiFactory = uiFactory
+
+    roverscreencomponents._uiFactory = uiFactory
+
     _uiAdapter = uiAdapter
     _font = font
     _smallFont = smallFont
@@ -1236,7 +1075,9 @@ def init(uiFactory, uiAdapter, font, smallFont):
     pyroslib.subscribe("storage/write/wheels/cal/#", handleStorageWrite)
     pyroslib.subscribe("wheel/feedback/status", handleWheelsStatus)
     pyroslib.subscribe("joystick/status", handleJoystickStatus)
-    pyroslib.subscribe("rover/status/uptime", handleUptimeStatus)
+    pyroslib.subscribe("power/uptime", handleUptimeStatus)
+    pyroslib.subscribe("power/current", handleCurrentStatus)
+    pyroslib.subscribe("power/cpu", handleCPUStatus)
     pyroslib.subscribe("shutdown/announce", handleShutdown)
 
     initGui()
@@ -1247,15 +1088,19 @@ def init(uiFactory, uiAdapter, font, smallFont):
     statusBarComponent = StatusBarComponent(Rect(0, 0, screen_rect.width, 20))
     topComponent.addComponent(statusBarComponent)
 
+    systemStatusScreen = SystemStatusScreen(screen_rect)
     screensComponent = gccui.CardsCollection(screen_rect)
     screensComponent.addCard('main', MainScreen(screen_rect))
+    screensComponent.addCard('main_menu', MainMenuScreen(screen_rect))
+    screensComponent.addCard('system_status', systemStatusScreen)
     screensComponent.addCard('wheels', WheelsScreen(screen_rect))
-    screensComponent.addCard('menu', MenuScreen(screen_rect))
-    screensComponent.addCard('calibrateWheel', CalibrateWheelScreen(screen_rect))
-    screensComponent.addCard('calibratePID', CalibratePIDScreen(screen_rect))
     screensComponent.addCard('radar', RadarScreen(screen_rect))
+    screensComponent.addCard('calibration_menu', CalibrationMenuScreen(screen_rect))
+    screensComponent.addCard('calibrate_wheel', CalibrateWheelScreen(screen_rect))
+    screensComponent.addCard('calibratePID', CalibratePIDScreen(screen_rect))
+    screensComponent.addCard('system_menu', SystemMenuScreen(screen_rect))
     screensComponent.addCard('shutdown', ShutdownScreen(screen_rect))
-    screensComponent.addCard('shutdownConfirmation', ShutdownConfirmationScreen(screen_rect))
+    screensComponent.addCard('shutdown_confirmation', ShutdownConfirmationScreen(screen_rect))
     topComponent.addComponent(screensComponent)
 
     main = screensComponent.selectCard('main')

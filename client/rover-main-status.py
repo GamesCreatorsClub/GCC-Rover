@@ -50,9 +50,9 @@ def onKeyUp(key):
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
 # uiFactory = gccui.FlatTheme.FlatThemeFactory()
-uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory()
-uiFactory.font = pyros.gccui.font
 uiAdapter = gccui.UIAdapter(screen)
+uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter)
+uiFactory.font = pyros.gccui.font
 
 roverscreen.init(uiFactory, uiAdapter, font, smallFont)
 roverscreen.topComponent.redefineRect(pygame.Rect(roverscreen.topComponent.rect.x, roverscreen.topComponent.rect.y + 40, roverscreen.topComponent.rect.width, roverscreen.topComponent.rect.height - 40))

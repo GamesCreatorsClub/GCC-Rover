@@ -33,11 +33,10 @@ screen = None
 font = None
 smallFont = None
 
-uptime_updated = 0
-
 wheel_status = None
 joystick_status = None
 sound_level = 'all'
+uptime = None
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -73,10 +72,10 @@ class TouchHandler:
 
             if newY > 0 and newY < 480 and newX > 0 and newX < 320:
                 if not self.touchDown:
-                    self.uiAdapter.mouseDown((self.touchX, self.touchY))
                     self.touchDown = True
                     self.touchX = newX
                     self.touchY = newY
+                    self.uiAdapter.mouseDown((self.touchX, self.touchY))
                 elif newX != self.touchX or newY != self.touchY:
                     self.touchX = newX
                     self.touchY = newY
@@ -228,14 +227,18 @@ def say(message, level=LOG_LEVEL_INFO):
 def handleWheelsStatus(topic, message, group):
     global wheel_status
 
-    # print("Got wheels status \"" + message + "\", old status \"" + str(wheel_status) + "\"")
-    if message != wheel_status:
-        if message == "running":
-            say("Wheels, engaged.")
-        elif message == "stopped":
-            say("Wheels, disengaged.")
+    status = {s[0]: s[1] for s in [s.split(":") for s in message.split(" ")]}
+    if 's' in status:
+        ws = status['s']
 
-        wheel_status = message
+        # print("Got wheels status \"" + ws + "\", old status \"" + str(wheel_status) + "\"")
+        if ws != wheel_status:
+            if ws == "running":
+                say("Wheels, engaged.")
+            elif ws == "stopped":
+                say("Wheels, disengaged.")
+
+            wheel_status = ws
 
     if oldHandleWheelsStatus is not None:
         pyroslib.invokeHandler(topic, message, group, oldHandleWheelsStatus)
@@ -258,22 +261,25 @@ def handleJoystickStatus(topic, message, group):
 
 
 def handleUptimeStatus(topic, message, group):
-    if message == "00:10":
-        say("Time: ten minutes.")
-    elif message == "00:20":
-        say("Time: twenty minutes.")
-    elif message == "00:30":
-        say("Time, Warning! Thirty minutes.", level=LOG_LEVEL_ALWAYS)
-    elif message == "00:40":
-        say("Time, Warning! Fourty minutes.", level=LOG_LEVEL_ALWAYS)
+    global uptime
+
+    if message != uptime:
+        if message == "00:10":
+            say("Time: ten minutes.")
+        elif message == "00:20":
+            say("Time: twenty minutes.")
+        elif message == "00:30":
+            say("Time, Warning! Thirty minutes.", level=LOG_LEVEL_ALWAYS)
+        elif message == "00:40":
+            say("Time, Warning! Fourty minutes.", level=LOG_LEVEL_ALWAYS)
+
+        uptime = message
 
     if oldHandleUptimeStatus is not None:
         pyroslib.invokeHandler(topic, message, group, oldHandleUptimeStatus)
 
 
 def mainLoop():
-    global uptime_updated
-
     try:
         if working and screen is not None:
             screen.fill((0, 0, 0))
@@ -283,23 +289,6 @@ def mainLoop():
             touchHandler.draw(screen)
 
             pygame.display.flip()
-
-            now = time.time()
-            if uptime_updated + 60 < now:
-                now = time.time()
-                if os.path.exists("/proc/uptime"):
-                    with open("/proc/uptime", 'r') as fh:
-                        uptime_minutes = int(float(fh.read().split(" ")[0]) / 60)
-                        uptime_hours = int(uptime_minutes / 60)
-                        uptime_minutes = uptime_minutes % 60
-                        uptime = "{:02d}:{:02d}".format(uptime_hours, uptime_minutes)
-
-                else:
-                    uptime = os.popen('uptime').readline().split(" ")[0][:5]
-
-                pyroslib.publish("rover/status/uptime", str(uptime))
-
-                uptime_updated = now
 
     except Exception as ex:
         print("MainLoop Exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
@@ -319,20 +308,19 @@ if __name__ == "__main__":
 
         startPyGame()
 
-        # uiFactory = gccui.FlatTheme.FlatThemeFactory()
-        uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(font=font)
-
         uiAdapter = gccui.UIAdapter(screen)
+        uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter, font=font)
+
         touchHandler = TouchHandler(uiAdapter)
 
         roverscreen.init(uiFactory, uiAdapter, font, smallFont)
 
         oldHandleWheelsStatus = pyroslib.subscribedMethod("wheel/feedback/status")
         oldHandleJoystickStatus = pyroslib.subscribedMethod("joystick/status")
-        oldHandleUptimeStatus = pyroslib.subscribedMethod("rover/status/uptime")
+        oldHandleUptimeStatus = pyroslib.subscribedMethod("power/uptime")
         pyroslib.subscribe("wheel/feedback/status", handleWheelsStatus)
         pyroslib.subscribe("joystick/status", handleJoystickStatus)
-        pyroslib.subscribe("rover/status/uptime", handleUptimeStatus)
+        pyroslib.subscribe("power/uptime", handleUptimeStatus)
 
         pyroslib.forever(0.04, mainLoop)
 

@@ -52,8 +52,8 @@ pygame.display.set_caption("Pi Wars")
 font = pygame.font.SysFont('Arial', 30)
 
 # uiFactory = FlatTheme.FlatThemeFactory(font)
-uiFactory = BoxBlueSFTheme.BoxBlueSFThemeFactory(font)
 uiAdapter = UIAdapter(screen)
+uiFactory = BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter, font)
 
 running = True
 

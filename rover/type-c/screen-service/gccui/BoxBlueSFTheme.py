@@ -7,9 +7,18 @@
 from gccui.components import *
 
 
-class RectangleDecoration(Component):
+class MenuButtonBackgroundDecoration(Component):
+    def __init__(self, colour):
+        super(MenuButtonBackgroundDecoration, self).__init__(None)  # Call super constructor to store rectable
+        self.colour = colour
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.colour, self.rect)
+
+
+class ButtonRectangleDecoration(Component):
     def __init__(self, colour, background_colour):
-        super(RectangleDecoration, self).__init__(None)  # Call super constructor to store rectable
+        super(ButtonRectangleDecoration, self).__init__(None)  # Call super constructor to store rectable
         self.colour = colour
         self.background_colour = background_colour
         self.strip_width = 5
@@ -19,7 +28,8 @@ class RectangleDecoration(Component):
         self.cut_size = 15
 
     def draw(self, surface):
-        pygame.draw.rect(surface, self.background_colour, self.rect)
+        if self.background_colour is not None:
+            pygame.draw.rect(surface, self.background_colour, self.rect)
 
         x1 = self.rect.x
         x2 = self.rect.right - 1
@@ -40,13 +50,37 @@ class RectangleDecoration(Component):
         ])
 
 
+class BorderDecoration(Component):
+    def __init__(self, rect, colour):
+        super(BorderDecoration, self).__init__(rect)  # Call super constructor to store rectable
+        self.colour = colour
+        self.top_left_cut = 8
+        self.bottom_right_cut = 5
+
+    def draw(self, surface):
+        x1 = self.rect.x
+        x2 = self.rect.right - 1
+        y1 = self.rect.y
+        y2 = self.rect.bottom - 1
+
+        pygame.draw.polygon(surface, self.colour, [
+            (x1 + self.top_left_cut, y1),
+            (x2, y1),
+            (x2, y2 - self.bottom_right_cut),
+            (x2 - self.bottom_right_cut, y2),
+            (x1, y2),
+            (x1, y1 + self.top_left_cut)
+        ], 1)
+
+
 class BoxBlueSFThemeFactory(BaseUIFactory):
-    def __init__(self, font=None,
+    def __init__(self, uiAdapter,
+                 font=None,
                  colour=pygame.color.THECOLORS['cornflowerblue'],
                  background_colour=(0, 0, 0, 255),
                  mouse_over_colour=pygame.color.THECOLORS['yellow'],
                  mouse_over_background_colour=pygame.color.THECOLORS['gray32']):
-        super(BoxBlueSFThemeFactory, self).__init__()
+        super(BoxBlueSFThemeFactory, self).__init__(uiAdapter)
         self.colour = colour
         self.background_colour = background_colour
         self.mouse_over_colour = mouse_over_colour
@@ -83,5 +117,30 @@ class BoxBlueSFThemeFactory(BaseUIFactory):
             mouse_over_background_colour = pygame.color.THECOLORS['darkred']
 
         return Button(rect, onClick, onHover, label,
-                      background_decoration=RectangleDecoration(colour, background_colour),
-                      mouse_over_decoration=RectangleDecoration(mouse_over_colour, mouse_over_background_colour))
+                      background_decoration=ButtonRectangleDecoration(colour, background_colour),
+                      mouse_over_decoration=ButtonRectangleDecoration(mouse_over_colour, mouse_over_background_colour))
+
+    def panel(self, rect, background_colour=None, hint=UI_HINT.NORMAL):
+        if background_colour is None:
+            if hint == UI_HINT.WARNING:
+                background_colour = pygame.color.THECOLORS['orange']
+            elif hint == UI_HINT.ERROR:
+                background_colour = pygame.color.THECOLORS['red']
+        return Panel(rect, background_colour, decoration=BorderDecoration(rect, self.colour))
+
+    def menu(self, rect, background_colour=None, hint=UI_HINT.NORMAL):
+        if background_colour is None:
+            if hint == UI_HINT.WARNING:
+                background_colour = pygame.color.THECOLORS['orange']
+            elif hint == UI_HINT.ERROR:
+                background_colour = pygame.color.THECOLORS['red']
+        return Menu(rect, self, background_colour, decoration=BorderDecoration(rect, self.colour))
+
+    def _menuItemTextButton(self, rect, label, callback):
+        return self._menuItemButton(rect, self.label(None, label, h_alignment=ALIGNMENT.CENTER, v_alignment=ALIGNMENT.MIDDLE), callback)
+
+    def _menuItemButton(self, rect, label, callback):
+        return Button(rect, callback, label=label, mouse_over_decoration=MenuButtonBackgroundDecoration(self.mouse_over_background_colour))
+
+    def border(self, rect, colour=pygame.color.THECOLORS['white']):
+        return BorderDecoration(rect, colour)

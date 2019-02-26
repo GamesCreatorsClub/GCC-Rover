@@ -6,6 +6,7 @@
 #
 
 import pygame
+from pygame import Rect
 
 
 class ALIGNMENT:
@@ -14,7 +15,7 @@ class ALIGNMENT:
     RIGHT = 3
     TOP = 4
     MIDDLE = 5
-    BOTTON = 6
+    BOTTOM = 6
 
 
 class Component:
@@ -52,6 +53,9 @@ class Component:
 
     def mouseUp(self, mousePos):
         pass
+
+    def size(self):
+        return self.rect.width, self.rect.height
 
 
 class Collection(Component):
@@ -118,6 +122,77 @@ class Collection(Component):
             component.mouseOver(mousePos)
 
 
+class Panel(Collection):
+    def __init__(self, rect, background_colour=None, decoration=None):
+        super(Panel, self).__init__(rect)
+        self.bacground_colour = background_colour
+        self.decoration = decoration
+
+    def redefineRect(self, rect):
+        super(Panel, self).redefineRect(rect)
+        if self.decoration is not None:
+            self.decoration.redefineRect(rect)
+
+    def draw(self, surface):
+        if self.bacground_colour is not None:
+            pygame.draw.rect(surface, self.bacground_colour, self.rect)
+        super(Panel, self).draw(surface)
+
+
+class Menu(Panel):
+    def __init__(self, rect, uiFactory, background_colour=None, decoration=None):
+        super(Menu, self).__init__(uiFactory.uiAdapter.getScreen().get_rect())
+        self.draw_rect = rect
+        self.uiFactory = uiFactory
+        self.bacground_colour = background_colour
+        self.decoration = decoration
+        self.menu_items = []
+        self.setVisible(False)
+
+    def redefineRect(self, rect):
+        self.draw_rect = rect
+        self.rect = self.uiFactory.uiAdapter.getScreen().get_rect()
+        self.calcuateHeight()
+        if self.decoration is not None:
+            self.decoration.redefineRect(rect)
+
+    def draw(self, surface):
+        if self.bacground_colour is not None:
+            pygame.draw.rect(surface, self.bacground_colour, self.draw_rect)
+        super(Panel, self).draw(surface)
+        if self.decoration is not None:
+            self.decoration.draw(surface)
+
+    def mouseDown(self, mousePos):
+        if not self.draw_rect.collidepoint(mousePos):
+            self.hide()
+        else:
+            super(Menu, self).mouseOver(mousePos)
+
+    def show(self):
+        self.setVisible(True)
+
+    def hide(self):
+        self.setVisible(False)
+
+    def size(self):
+        return self.draw_rect.width, self.draw_rect.height
+
+    def calcuateHeight(self):
+        y = 5
+        for item in self.menu_items:
+            item.redefineRect(Rect(self.draw_rect.x, y + self.draw_rect.y, self.draw_rect.width, item.rect.height))
+            y += item.rect.height
+        y += 5
+        self.draw_rect.height = y
+
+    def addMenuItem(self, label, callback=None, height=30):
+        component = self.uiFactory.menuItem(Rect(0, 0, 0, height), label, callback)
+        self.menu_items.append(component)
+        self.addComponent(component)
+        self.calcuateHeight()
+
+
 class CardsCollection(Collection):
     def __init__(self, rect):
         super(CardsCollection, self).__init__(rect)
@@ -169,7 +244,7 @@ class Image(Component):
 
             if self.v_alignment == ALIGNMENT.MIDDLE:
                 y = self.rect.centery - self._surface.get_height() // 2
-            elif self.v_alignment == ALIGNMENT.RIGHT:
+            elif self.v_alignment == ALIGNMENT.BOTTOM:
                 y = self.rect.bottom - self._surface.get_height()
 
             surface.blit(self._surface, (x, y))
@@ -188,7 +263,14 @@ class Label(Image):
     def setText(self, text):
         if self._text != text:
             self._text = text
-            self._surface = None
+            self.invalidateSurface()
+
+    def getColour(self):
+        return self.colour
+
+    def setColour(self, colour):
+        self.colour = colour
+        self.invalidateSurface()
 
     def invalidateSurface(self):
         self._surface = None
@@ -290,9 +372,18 @@ class UI_HINT:
     ERROR = 3
 
 
+class BorderDecoration(Component):
+    def __init__(self, rect, colour):
+        super(BorderDecoration, self).__init__(rect)  # Call super constructor to store rectable
+        self.colour = colour
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.colour, self.rect, 1)
+
+
 class BaseUIFactory:
-    def __init__(self):
-        pass
+    def __init__(self, uiAdapter):
+        self.uiAdapter = uiAdapter
 
     def label(self, rect, text, font=None, colour=None, h_alignment=ALIGNMENT.LEFT, v_alignment=ALIGNMENT.TOP, hint=UI_HINT.NORMAL):
         return None
@@ -305,3 +396,28 @@ class BaseUIFactory:
 
     def text_button(self, rect, text, onClick=None, onHover=None, hint=UI_HINT.NORMAL):
         return self.button(rect, onClick, onHover, self.label(None, text, h_alignment=ALIGNMENT.CENTER, v_alignment=ALIGNMENT.MIDDLE), hint=hint)
+
+    def panel(self, rect, background_colour=None, hint=UI_HINT.NORMAL):
+        return None
+
+    def menu(self, rect, background_colour=None, hint=UI_HINT.NORMAL):
+        return None
+
+    def _menuItemTextButton(self, rect, label, callback):
+        return self._menuItemButton(self, rect, self.label(None, label, h_alignment=ALIGNMENT.CENTER, v_alignment=ALIGNMENT.MIDDLE))
+
+    def _menuItemButton(self, rect, label, callback):
+        return Button(rect, callback, label=label)
+
+    def menuItem(self, rect, label, callback):
+        if isinstance(label, str):
+            component = self._menuItemTextButton(rect, label, callback)
+        elif isinstance(label, Label):
+            component = self._menuItemButton(rect, label, callback)
+        else:
+            component = label
+
+        return component
+
+    def border(self, rect, colour=pygame.color.THECOLORS['white']):
+        return BorderDecoration(rect, colour)
