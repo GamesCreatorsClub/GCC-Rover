@@ -33,7 +33,11 @@ sudo systemctl enable mosquitto.service
 
 sudo pip3 install paho-mqtt
 
+power:
+-------
 
+sudo pip3 install psutil
+sudo pip-3.2 install psutil   # ???
 
 .profile:
 ---------
