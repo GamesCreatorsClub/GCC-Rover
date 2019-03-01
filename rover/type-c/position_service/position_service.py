@@ -67,7 +67,7 @@ if __name__ == "__main__":
         ambient_temp = 10
 
         # Choose the calibration files
-        dir_name = os.path.join(os.path.dirname(__file__), 'rover_1')
+        dir_name = os.path.join(os.path.dirname(__file__), 'rover_1_35')
         imu_calibration_filename = os.path.join(dir_name, 'imu_calibration.json')
         decawave_calibration_filename = os.path.join(dir_name, 'decawave_calibration.json')
 

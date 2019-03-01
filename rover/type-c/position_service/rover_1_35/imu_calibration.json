@@ -1,0 +1,14 @@
+{
+  "offset":{
+    "acceleration":{"value":{"x":559.25, "y":35.75, "z":-191.5}, "timestamp":0},
+    "angular_velocity":{"value":{"x":-526, "y":-92, "z":123}, "timestamp":0},
+    "magnetic_field":{"value":{"x":130.0, "y":1900.0, "z":2303.25}, "timestamp":0},
+    "temperature":{"value":-440, "timestamp":0}
+  },
+  "multiplier":{
+    "acceleration":{"value":{"x":6.094680867273087e-05, "y":-6.1058448199539e-05, "z":-6.119951040391677e-05}, "timestamp":0},
+    "angular_velocity":{"value":{"x":0.0003194, "y":-0.0003125, "z":-0.0003055}, "timestamp":0},
+    "magnetic_field":{"value":{"x":0.000148, "y":-0.000148, "z":-0.000148}, "timestamp":0},
+    "temperature":{"value":0.0625, "timestamp":0}
+  }
+}
