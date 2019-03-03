@@ -359,8 +359,11 @@ def sleep(deltaTime):
     loop(deltaTime)
 
 
-def loop(deltaTime, inner=None):
+def loop(deltaTime, inner=None, loop_sleep=None):
     global _received
+
+    if loop_sleep is None:
+        loop_sleep = _loop_sleep
 
     def client_loop():
         try:
@@ -380,14 +383,14 @@ def loop(deltaTime, inner=None):
             client_loop()
             currentTime = time.time()
         else:
-            time.sleep(_loop_sleep)  # wait for 2 ms
+            time.sleep(loop_sleep)  # wait for 2 ms
             currentTime = time.time()
             if currentTime + _client_loop < until:
                 client_loop()
                 currentTime = time.time()
 
 
-def forever(deltaTime, outer=None, inner=None):
+def forever(deltaTime, outer=None, inner=None, loop_sleep=None):
     global _received
 
     currentTime = time.time()
@@ -421,4 +424,4 @@ def forever(deltaTime, outer=None, inner=None):
                 client.loop(_client_loop)  # wait for 0.1 ms
 
         else:
-            loop(sleepTime, inner=inner)
+            loop(sleepTime, inner=inner, loop_sleep=loop_sleep)
