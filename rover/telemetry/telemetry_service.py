@@ -55,6 +55,7 @@ if __name__ == "__main__":
         else:
             telemetryTopic = "telemetry"
 
+        print("  starting telemetry server...")
         server = MQTTLocalPipeTelemetryServer(telemetryTopic)
 
         print("Started telemetry service on topic " + telemetryTopic)

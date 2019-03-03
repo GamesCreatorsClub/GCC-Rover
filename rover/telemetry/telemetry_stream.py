@@ -532,7 +532,7 @@ def streamFromJSON(json):
     # after parsing
     # print("Got: " + str(top))
     if 'id' not in top:
-        raise SyntaxError("Missing 'id' value")
+        return None
     if 'name' not in top:
         raise SyntaxError("Missing 'name' value")
     if 'fields' not in top:

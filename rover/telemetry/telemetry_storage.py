@@ -76,11 +76,9 @@ class MemoryTelemetryStorage(TelemetryStorage):
         if stream.name in self.streams:
             values = self.streams[stream.name]
             if len(values) > 0:
-                return callback(values[0][0])
+                return callback(values[0][0], len(values))
 
-            return callback(time.time())
-        else:
-            return 0
+        return callback(0, 0)
 
 
 class StreamCallback:
