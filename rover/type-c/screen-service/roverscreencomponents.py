@@ -430,6 +430,7 @@ class BatteryComponent(FlashingImage):
                 self.battery_critical = False
                 self.colour = pygame.color.THECOLORS['orange']
                 self.setImage(self.white_image)
+                super(BatteryComponent, self).setFlashing(False)
         elif status == 'critical':
             if not self.battery_critical:
                 self.battery_warning = False
@@ -443,6 +444,7 @@ class BatteryComponent(FlashingImage):
                 self.battery_critical = False
                 self.colour = pygame.color.THECOLORS['white']
                 self.setImage(self.white_image)
+                super(BatteryComponent, self).setFlashing(False)
 
     def draw(self, surface):
         if self.bp >= 0 and self.getFlashState():
@@ -719,7 +721,7 @@ class Stats:
         now = time.time()
         then = now - seconds
         index = 0
-        while self.stats[index][index] < then and index < l:
+        while self.stats[index][0] < then and index < l:
             index += 1
 
         if index >= l:
@@ -821,6 +823,8 @@ class StatsGraph(gccui.Component):
                 for d in data:
                     t = d[0]
                     p = d[1]
+                    if p > self.max_value:
+                        p = self.max_value
                     x = self.inner_rect.x + (t - t0) * self.inner_rect.width / data_width
                     y = self.inner_rect.bottom - p * self.inner_rect.height / self.max_value
                     points.append((x, y))

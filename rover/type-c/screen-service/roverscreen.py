@@ -483,7 +483,7 @@ class MainMenuScreen(MenuScreen):
         self.addMenuItem("RADAR", partial(self.selectScreenButtonClick, 'radar'))
         self.addMenuItem("STATUS", partial(self.selectScreenButtonClick, 'system_status'))
         self.addMenuItem("CALIBRATION", partial(self.selectScreenButtonClick, 'calibration_menu'))
-        self.addMenuItem("PREFERENCES", partial(self.selectScreenButtonClick, 'prefernces'))
+        self.addMenuItem("SYSTEM", partial(self.selectScreenButtonClick, 'prefernces'))
         self.shutdown_button = _uiFactory.text_button(Rect(50, 380, 220, 40), "SHUTDOWN", self.selectScreenCallback('shutdown_confirmation'), hint=gccui.UI_HINT.WARNING)
         self.addComponent(self.shutdown_button)
         self.redefineRect(rect)
@@ -526,7 +526,7 @@ class ShutdownConfirmationScreen(ScreenComponent):
     @staticmethod
     def startShutdownButtonClick(button, pos):
         pyroslib.publish("system/shutdown", "secret_message_now")
-        pyroslib.publish("screen/say", "Shutdown, initiated, , ,  Waiting for wheels to stop.")
+        pyroslib.publish("screen/say", "Shutdown, initiated, , ,  Waiting for satellite pies to stop.")
 
 
 class ShutdownScreen(ScreenComponent):

@@ -36,7 +36,7 @@ smallFont = None
 wheel_status = None
 joystick_status = None
 sound_level = 'all'
-uptime = None
+last_uptime = None
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -219,7 +219,7 @@ def say(message, level=LOG_LEVEL_INFO):
         # stdout, stderr = proc.communicate()
         # print("Said: " + str(stdout) + ", error: " + str(stderr))
 
-        os.system("/usr/bin/flite -v -voice /home/pi/cmu_us_eey.flitevox --setf duration_stretch=1.2 --setf int_f0_target_stddev=70 \"" + _message.replace("\"", "") + "\"")
+        os.system("/usr/bin/flite -v -voice /home/pi/cmu_us_eey.flitevox --setf duration_stretch=1.3 --setf int_f0_target_stddev=70 \"" + _message.replace("\"", "") + "\"")
 
     threading.Thread(target=doSay, args=(message,), daemon=True).start()
 
@@ -261,19 +261,26 @@ def handleJoystickStatus(topic, message, group):
 
 
 def handleUptimeStatus(topic, message, group):
-    global uptime
+    global last_uptime
 
-    if message != uptime:
-        if message == "00:10":
+    received_uptime = message[:5]
+    if received_uptime != last_uptime:
+        if received_uptime == "00:10":
             say("Time: ten minutes.")
-        elif message == "00:20":
+        elif received_uptime == "00:20":
             say("Time: twenty minutes.")
-        elif message == "00:30":
-            say("Time, Warning! Thirty minutes.", level=LOG_LEVEL_ALWAYS)
-        elif message == "00:40":
-            say("Time, Warning! Fourty minutes.", level=LOG_LEVEL_ALWAYS)
+        elif received_uptime == "00:30":
+            say("Time, thirty minutes.", level=LOG_LEVEL_ALWAYS)
+        elif received_uptime == "00:40":
+            say("Time, fourty minutes.", level=LOG_LEVEL_ALWAYS)
+        elif received_uptime == "00:50":
+            say("Time, warning! Fifty minutes.", level=LOG_LEVEL_ALWAYS)
+        elif received_uptime == "01:00":
+            say("Time, warning! One hour.", level=LOG_LEVEL_ALWAYS)
+        elif received_uptime == "01:10":
+            say("Time, warning! One hour and ten minutes.", level=LOG_LEVEL_ALWAYS)
 
-        uptime = message
+        last_uptime = received_uptime
 
     if oldHandleUptimeStatus is not None:
         pyroslib.invokeHandler(topic, message, group, oldHandleUptimeStatus)
@@ -322,7 +329,9 @@ if __name__ == "__main__":
         pyroslib.subscribe("joystick/status", handleJoystickStatus)
         pyroslib.subscribe("power/uptime", handleUptimeStatus)
 
-        pyroslib.forever(0.04, mainLoop)
+        pyroslib.publish("screen/say", "Booting up, , ,  Waiting on wheels to initialize.")
+
+        pyroslib.forever(0.1, mainLoop, loop_sleep=0.01)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
