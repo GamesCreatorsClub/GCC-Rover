@@ -30,9 +30,8 @@ def init(client, filename, agentId=None):
             segments = agentId.split("/")
             agentId = segments[len(segments) - 1]
 
-    file = open(filename)
-    fileContent = file.read()
-    file.close()
+    with open(filename) as file:
+        fileContent = file.read()
 
     _agents.append(agentId)
     _returncodes[agentId] = None

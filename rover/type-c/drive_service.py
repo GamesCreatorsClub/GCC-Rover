@@ -498,7 +498,7 @@ def steer():
     if len(args) > 2:
         angle = - int(float(args[2])) * math.pi / 180
     else:
-        angle = 0 * math.pi / 180
+        angle = 0  # 0 * math.pi / 180
 
     if speed < 0:
         angle = angle + math.pi
