@@ -72,6 +72,7 @@ WHEEL_IDLE_CURRENT = 150  # mAh
 last_status_broadcast = 0
 status_broadcast_time = 5  # every 5 seconds
 service_started_time = 0
+last_time = 0
 
 i2cBus = smbus.SMBus(I2C_BUS)
 
@@ -165,10 +166,17 @@ def smallestAngleChange(old_angle, mod, new_angle):
     elif angle_diff < -90:
         new_diff = 180 + angle_diff
         return normaiseAngle(old_angle + new_diff), -mod
-    # elif real_old_angle == new_angle and real_old_angle != old_angle:
-    #     return old_angle, -mod
     else:
         return normaiseAngle(old_angle + angle_diff), mod
+
+
+def _updaate_service_started_time():
+    global service_started_time
+    with open("/proc/uptime", 'r') as fh:
+        uptime = float(float(fh.read().split(" ")[0]))
+
+        service_started_time = time.time() - uptime
+        print("  set started time " + str(uptime) + " seconds ago.")
 
 
 class PID:
@@ -829,41 +837,30 @@ def handleShutdownAnnounced(topic, payload, groups):
     stopAllWheels()
 
 
-def handleUptime(topic, payload, groups):
-    global service_started_time
-
-    if len(payload) > 6:
-        uptime_secs = float(payload[6:])
-    else:
-        uptime_secs = 0
-
-    uptime_minutes = int(payload[3:5])
-    uptime_hours = int(payload[0:2])
-
-    uptime = uptime_secs + uptime_minutes * 60 + uptime_hours * 3600
-    uptime_started_time = time.time() - uptime
-
-    if abs(service_started_time - uptime_started_time) > 1.0:
-        service_started_time = uptime_started_time
-        print("Fixed started time on reciving uptime \"" + payload + "\" to " + str(uptime) + " seconds ago.")
-
-
 def stopCallback():
     print("Asked to stop!")
     stopAllWheels()
 
 
-def readUptime():
-    with open("/proc/uptime", 'r') as fh:
-        return float(float(fh.read().split(" ")[0]))
+def timeDriftThreadMethod():
+    last_time = time.time()
+    while True:
+        try:
+            now = time.time()
+            if now - last_time > 2:
+                _updaate_service_started_time()
+                last_time = time.time()
+            else:
+                last_time = now
+            time.sleep(1)
+        except Exception as e:
+            time.sleep(1)
 
 
 if __name__ == "__main__":
     try:
         print("Starting wheels service...")
-        already_up_for_seconds = readUptime()
-        service_started_time = time.time() - already_up_for_seconds
-        print("  set started time " + str(already_up_for_seconds) + " seconds ago.")
+        _updaate_service_started_time()
 
         print("    initialising wheels...")
         initWheels()
@@ -878,7 +875,6 @@ if __name__ == "__main__":
         pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
         pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
         pyroslib.subscribe("shutdown/announce", handleShutdownAnnounced)
-        pyroslib.subscribe("power/uptime", handleUptime)
         pyroslib.init("wheels-service", onStop=stopCallback)
 
         print("  Loading storage details...")
@@ -924,6 +920,9 @@ if __name__ == "__main__":
 
         driveThread = threading.Thread(target=driveThreadMain, daemon=True)
         driveThread.start()
+
+        timeDriftThread = threading.Thread(target=timeDriftThreadMethod, daemon=True)
+        timeDriftThread.start()
 
         pyroslib.forever(0.02, steerWheels)
 
