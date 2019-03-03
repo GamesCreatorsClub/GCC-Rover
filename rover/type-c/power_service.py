@@ -33,6 +33,7 @@ last_status_broadcast = 0
 status_broadcast_freq = 5  # every 5 seconds
 
 service_started_time = 0
+last_time = 0
 
 rpimAh = 0
 dmAh = 0
@@ -59,6 +60,13 @@ def handleWheelsStatus(topic, message, groups):
 
 def stopCallback():
     print("Asked to stop!")
+
+
+def _updaate_service_started_time():
+    global service_started_time
+    uptime = readUptime()
+    service_started_time = time.time() - uptime
+    print("  set started time " + str(uptime) + " seconds ago.")
 
 
 def readUptime():
@@ -115,9 +123,16 @@ def broadcastUptimeStatus():
 
 
 def main_loop():
-    global last_status_broadcast, last_uptime_broadcast
+    global last_status_broadcast, last_uptime_broadcast, last_time
 
     now = time.time()
+
+    if now - last_time > 2:  # We had time drift
+        _updaate_service_started_time()
+        last_time = time.time()
+    else:
+        last_time = now
+
     if last_status_broadcast + status_broadcast_freq < now:
         broadcastPowerStatus()
         last_status_broadcast = now
@@ -130,9 +145,7 @@ def main_loop():
 if __name__ == "__main__":
     try:
         print("Starting power service...")
-        already_up_for_seconds = readUptime()
-        service_started_time = time.time() - already_up_for_seconds
-        print("  set started time " + str(already_up_for_seconds) + " seconds ago.")
+        _updaate_service_started_time()
 
         pyroslib.subscribe("wheel/feedback/status", handleWheelsStatus)
 
