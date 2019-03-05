@@ -58,6 +58,15 @@ def create_imu_data_provider() -> DataProvider[NineDoFData]:
     return ImuDataProvider(driver)
 
 
+def pauseServiceAgain():
+    time.sleep(5)
+    pyroslib.publish("position/pause", "")
+    print("  Paused service again")
+    time.sleep(2)
+    pyroslib.publish("position/pause", "")
+    print("  Paused service last time")
+
+
 if __name__ == "__main__":
     try:
         print("Starting position service...")
@@ -101,7 +110,8 @@ if __name__ == "__main__":
             # ProcessDataPump(create_dummy_decawave_provider, 2/decawave_data_frequency, 'Decawave'),
             None,
             MqttClient('position', 'position', 0.01)
-        ).run()
+        )
+        threading.Thread(target=position_serivce.run, daemon=True).start()
         print("  Position finished in {:.1f} seconds".format(time.time() - start))
 
         time.sleep(5)
@@ -109,8 +119,10 @@ if __name__ == "__main__":
         pyroslib.publish("position/pause", "")
         print("  Paused position service.")
 
+        threading.Thread(target=pauseServiceAgain, daemon=True).start()
+
         print("Started position service.")
-        pyroslib.forever(0.5)
+        pyroslib.forever(0.5, loop_sleep=0.01)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
