@@ -5,6 +5,7 @@
 # MIT License
 #
 
+import os
 import time
 import pyros
 
@@ -17,7 +18,23 @@ _agents = []
 _lastPinged = 0
 
 
-def init(client, filename, agentId=None):
+def init(client, filename, optional_files=None, agentId=None):
+    def sendFile(agentId, dest_path, filename):
+        with open(filename, "rb") as file:
+            fileContent = file.read()
+
+            extraName = os.path.join(dest_path, os.path.split(filename)[1])
+
+            client.publish("exec/" + agentId + "/process/" + extraName, fileContent)
+
+    def processDir(agentId, dest_path, dir):
+        for file in os.listdir(dir):
+            if not file.endswith('__pycache__'):
+                if os.path.isdir(file):
+                    processDir(agentId, os.path.join(dest_path, file), os.path.join(dir, file))
+                else:
+                    sendFile(agentId, dest_path, os.path.join(dir, file))
+
     # print("Connected to Rover " + str(client))
     if agentId is None:
         if filename.endswith(".py"):
@@ -40,6 +57,13 @@ def init(client, filename, agentId=None):
     pyros.subscribe("exec/" + str(agentId) + "/status", process)
     pyros.publish("exec/" + str(agentId), "stop")
     pyros.publish("exec/" + str(agentId) + "/process", fileContent)
+    if optional_files is not None:
+        for extra_file in optional_files:
+            if os.path.isdir(extra_file):
+                processDir(agentId, os.path.split(extra_file)[1], extra_file)
+            else:
+                sendFile(agentId, "", extra_file)
+
     pyros.publish("exec/" + str(agentId), "make-agent")
 
 
