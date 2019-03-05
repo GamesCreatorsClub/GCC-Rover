@@ -24,11 +24,38 @@ last_status_broadcast = 0
 status_broadcast_time = 5  # every 5 seconds
 
 max_speed = 100
+max_rot_speed = 100
+
+
+def increase(value):
+    if value < 300:
+        if value >= 150:
+            value += 50
+        elif value >= 100:
+            value += 25
+        elif value >= 50:
+            value += 10
+        else:
+            value += 5
+    return value
+
+
+def decrease(value):
+    if value > 10:
+        if value <= 50:
+            value -= 5
+        elif value <= 100:
+            value -= 10
+        elif value <= 150:
+            value -= 25
+        else:
+            value -= 50
+    return value
 
 
 def loop():
     global joystick, last_presses, trying_counter, last_status_broadcast
-    global max_speed
+    global max_speed, max_rot_speed
 
     try:
         if joystick is None:
@@ -58,13 +85,28 @@ def loop():
 
         else:
             if joystick.connected:
-                joystick.check_presses()
+                presses = joystick.check_presses()
 
                 axes = joystick.axes
                 axes_changed = False
                 for axis_name in joystick.axes.names:
                     if last_axes[axis_name] != joystick[axis_name]:
                         axes_changed = True
+
+                if presses['dup']:
+                    max_speed = increase(max_speed)
+                    axes_changed = True
+                    print("  increased speed to " + str(max_speed))
+                elif presses['ddown']:
+                    max_speed = decrease(max_speed)
+                    axes_changed = True
+                    print("  decreased speed to " + str(max_speed))
+                if presses['dright']:
+                    max_rot_speed = increase(max_rot_speed)
+                    axes_changed = True
+                elif presses['dleft']:
+                    max_rot_speed = decrease(max_rot_speed)
+                    axes_changed = True
 
                 if axes_changed:
                     lx = joystick['lx']
@@ -90,7 +132,7 @@ def loop():
                         ra = math.atan2(rx, ry) * 180 / math.pi
                         pyros.publish("move/drive", str(int(ra)) + " " + str(int(rd * max_speed)))
                     elif rd < 0.1:
-                        pyros.publish("move/rotate", str(int(lx * max_speed)))
+                        pyros.publish("move/rotate", str(int(lx * max_rot_speed)))
                     else:
                         ra = math.atan2(rx, ry) * 180 / math.pi
 
@@ -101,12 +143,12 @@ def loop():
 
                         distance *= 300
 
-                        speed = max(rd, abs(lx))
+                        speed = max(rd * max_speed, abs(lx * max_rot_speed))
 
                         if ra > 90 and ra < 270:
                             speed = -speed
 
-                        pyros.publish("move/steer", str(int(distance)) + " " + str(int(speed * max_speed)) + " " + str(int(ra)))
+                        pyros.publish("move/steer", str(int(distance)) + " " + str(int(speed)) + " " + str(int(ra)))
 
                     for axis_name in joystick.axes.names:
                         last_axes[axis_name] = joystick[axis_name]
@@ -135,7 +177,7 @@ if __name__ == "__main__":
 
         pyros.publish("servo/9", "175")
 
-        pyros.forever(0.1, loop)
+        pyros.forever(0.1, loop, loop_sleep=0.02)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
