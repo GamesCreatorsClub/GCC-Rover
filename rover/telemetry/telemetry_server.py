@@ -12,7 +12,7 @@ import threading
 import traceback
 import uuid
 
-DEBUG = False
+DEBUG = True
 
 
 class TelemetryServer:
