@@ -7,6 +7,7 @@
 #
 
 import os
+import select
 import sys
 import time
 import subprocess
@@ -289,6 +290,7 @@ def runProcess(processId):
                                    env=new_env,
                                    bufsize=0,
                                    stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
                                    shell=False,
                                    universal_newlines=True,
                                    cwd=subprocessDir)
@@ -302,14 +304,26 @@ def runProcess(processId):
     if "old" in processes[processId]:
         del processes[processId]["old"]
 
-    textStream = process.stdout
     process.poll()
+
     while process.returncode is None:
-        line = textStream.readline()
-        output(processId, line)
+        reads = [process.stdout.fileno(), process.stderr.fileno()]
+        ret = select.select(reads, [], [])
+
+        for fd in ret[0]:
+            if fd == process.stdout.fileno():
+                line = process.stdout.readline()
+                output(processId, line)
+            if fd == process.stderr.fileno():
+                line = process.stderr.readline()
+                output(processId, line)
+
         process.poll()
 
-    for line in textStream.readlines():
+    for line in process.stdout.readlines():
+        if len(line) > 0:
+            output(processId, line)
+    for line in process.stderr.readlines():
         if len(line) > 0:
             output(processId, line)
 
@@ -346,6 +360,14 @@ def startProcess(processId):
         output(processId, "PyROS ERROR: process " + processId + " does not exist.")
 
 
+def _sanitise_filename(processId, filename):
+    remove_len = len("code/" + processId + "/")
+    if len(filename) <= remove_len:
+        return filename
+
+    return filename[remove_len:]
+
+
 def storeCode(processId, payload):
     if processId in processes:
         processes[processId]["old"] = True
@@ -370,10 +392,10 @@ def storeCode(processId, payload):
         with open(initFilename, "wt") as textFile:
             textFile.write("from " + processId + "." + processId + " import *\n")
 
-        outputStatus(processId, "stored")
+        outputStatus(processId, "stored " + _sanitise_filename(processId, filename))
     except:
         important("ERROR: Cannot save file " + filename + " (" + os.path.abspath(filename) + "); ")
-        outputStatus(processId, "stored error")
+        outputStatus(processId, "store error")
 
 
 def storeExtraCode(processId, name, payload):
@@ -391,10 +413,10 @@ def storeExtraCode(processId, name, payload):
         with open(filename, "wb") as textFile:
             textFile.write(payload)
 
-        outputStatus(processId, "stored")
+        outputStatus(processId, "stored " + _sanitise_filename(processId, filename))
     except:
         important("ERROR: Cannot save file " + filename + " (" + os.path.abspath(filename) + "); ")
-        outputStatus(processId, "stored error")
+        outputStatus(processId, "store error")
 
 
 def stopProcess(processId, restart=False):

@@ -77,6 +77,8 @@ processId = args[0]
 
 filename = args[1]
 
+files = [processId + ".py"]
+
 del args[0]
 del args[0]
 
@@ -117,6 +119,7 @@ def executeCommand(client):
             fileContent = file.read()
 
             extraName = os.path.join(dest_path, os.path.split(filename)[1])
+            files.append(extraName)
 
             client.publish("exec/" + processId + "/process/" + extraName, fileContent)
 
@@ -163,11 +166,16 @@ def processOut(line, pid):
 def processStatus(line, pid):
     global hadStart
 
-    if line.startswith("stored"):
-        if restart:
-            pyrosClient.publish("exec/" + processId, "restart")
-        else:
-            return False
+    if line.startswith("stored "):
+        file = line[7:]
+        if file in files:
+            i = files.index(file)
+            del files[i]
+            if len(files) == 0:
+                if restart:
+                    pyrosClient.publish("exec/" + processId, "restart")
+                else:
+                    return False
     elif restart and line.startswith("PyROS: started"):
         hadStart = True
         if tail:

@@ -17,6 +17,8 @@ _agents = []
 
 _lastPinged = 0
 
+_agent_files = {}
+
 
 def init(client, filename, optional_files=None, agentId=None):
     def sendFile(agentId, dest_path, filename):
@@ -24,8 +26,9 @@ def init(client, filename, optional_files=None, agentId=None):
             fileContent = file.read()
 
             extraName = os.path.join(dest_path, os.path.split(filename)[1])
+            _agent_files[agentId].append(extraName)
 
-            client.publish("exec/" + agentId + "/process/" + extraName, fileContent)
+            pyros.publish("exec/" + agentId + "/process/" + extraName, fileContent)
 
     def processDir(agentId, dest_path, dir):
         for file in os.listdir(dir):
@@ -53,6 +56,8 @@ def init(client, filename, optional_files=None, agentId=None):
     _agents.append(agentId)
     _returncodes[agentId] = None
 
+    _agent_files[agentId] = [agentId + ".py"]
+
     pyros.subscribe("exec/" + str(agentId) + "/out", process)
     pyros.subscribe("exec/" + str(agentId) + "/status", process)
     pyros.publish("exec/" + str(agentId), "stop")
@@ -79,8 +84,13 @@ def process(topic, message, groups):
             return True
         elif topic.endswith("/status"):
             agentId = topic[5: len(topic) - 7]
-            if message == "stored":
-                pyros.publish("exec/" + str(agentId), "restart")
+            if message.startswith("stored "):
+                filename = message[7:]
+                if filename in _agent_files[agentId]:
+                    i = _agent_files[agentId].index(filename)
+                    del _agent_files[agentId][i]
+                    if len(_agent_files[agentId]) == 0:
+                        pyros.publish("exec/" + str(agentId), "restart")
             elif message.startswith("exit"):
                 if len(message) > 5:
                     _returncodes[agentId] = message[5:]
