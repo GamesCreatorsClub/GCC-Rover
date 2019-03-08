@@ -52,11 +52,24 @@ sensorsMap = {
     8: {1: {'name': 'back', 'adjust': 83}, 2: {'name': 'back_right', 'adjust': 121}}
 }
 
-radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'timestamp': 0.0}
+_angle_to_status_position = {0: 0, 45: 1, 90: 2, 135: 3, 180: 4, 225: 5, 270: 6, 315: 7}
+radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'timestamp': 0.0, 'status': '0000000000000000'}
+
+paused = True
 
 
 # noinspection PyTypeChecker
 def readSensors(i2c_address, sensor1_angle, sensor2_angle):
+    def updateStatus(sensor_angle, status_value):
+        index = _angle_to_status_position[sensor_angle] * 2
+        status_str = hex(status_value)[2:]
+        if len(status_str) < 2:
+            status_str = "0" + status_str
+
+        old_status_str = radar['status']
+        old_status_str = old_status_str[:index] + status_str + old_status_str[index + 2:]
+        # print("Replaced status old=" + radar['status'] + " new=" + old_status_str + " index=" + str(index))
+        radar['status'] = old_status_str
 
     def readOneSensor(sensor: VL53L1X, sensor_angle, adjusted_distance):
         if sensor.data_ready():
@@ -69,6 +82,8 @@ def readSensors(i2c_address, sensor1_angle, sensor2_angle):
                 print("Measurement error " + sensor.name + ": " + measurement_data.get_range_status_description() + " d=" + str(measurement_data.distance))
                 if measurement_data.distance > 0:
                     radar[sensor_angle] = measurement_data.distance + adjusted_distance
+
+            updateStatus(sensor_angle, measurement_data.range_status)
 
     def adjustDistance(angle):
         if int(angle) % 90 == 0:
@@ -88,14 +103,15 @@ def readSensors(i2c_address, sensor1_angle, sensor2_angle):
 
 
 def readAllSensors():
-    readSensors(1, 270, 225)
-    readSensors(2, 0, 315)
-    readSensors(4, 90, 45)
-    readSensors(8, 180, 135)
+    if not paused:
+        readSensors(1, 270, 225)
+        readSensors(2, 0, 315)
+        readSensors(4, 90, 45)
+        readSensors(8, 180, 135)
 
-    radar['timestamp'] = time.time()
+        radar['timestamp'] = time.time()
 
-    pyroslib.publish("sensor/distance", " ".join([":".join([str(v) for v in kv]) for kv in radar.items()]))
+        pyroslib.publish("sensor/distance", " ".join([":".join([str(v) for v in kv]) for kv in radar.items()]))
 
 
 # noinspection PyTypeChecker
@@ -180,6 +196,18 @@ def initDistanceSensors():
         sensor2.start_ranging()
 
 
+def handlePause(topic, message, groups):
+    global paused
+
+    paused = True
+
+
+def handleResume(topic, message, groups):
+    global paused
+
+    paused = False
+
+
 if __name__ == "__main__":
     try:
         print("Starting vl53l1x service...")
@@ -197,6 +225,9 @@ if __name__ == "__main__":
         print("  Initialising distance sensors...")
         initDistanceSensors()
         print("  Distance sensors initiated")
+
+        pyroslib.subscribe("sensor/distance/pause", handlePause)
+        pyroslib.subscribe("sensor/distance/resume", handleResume)
 
         print("Started vl53l1x service.")
 
