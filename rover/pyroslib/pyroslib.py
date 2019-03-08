@@ -26,6 +26,9 @@ _client_loop = 0.0005
 _loop_sleep = 0.002
 
 DEBUG_SUBSCRIBE = False
+PRIORITY_LOW = 0
+PRIORITY_NORMAL = 1
+PRIORITY_HIGH = 2
 
 
 def doNothing():
@@ -72,6 +75,10 @@ def _addReceivedMessage():
 
 def isConnected():
     return _connected
+
+
+def getConnectionDetails():
+    return _host, _port
 
 
 def publish(topic, message):
@@ -359,11 +366,14 @@ def sleep(deltaTime):
     loop(deltaTime)
 
 
-def loop(deltaTime, inner=None, loop_sleep=None):
+def loop(deltaTime, inner=None, loop_sleep=None, priority=PRIORITY_NORMAL):
     global _received
 
     if loop_sleep is None:
-        loop_sleep = _loop_sleep
+        if priority == PRIORITY_LOW:
+            loop_sleep = 0.05
+        else:
+            loop_sleep = _loop_sleep
 
     def client_loop():
         try:
@@ -390,7 +400,7 @@ def loop(deltaTime, inner=None, loop_sleep=None):
                 currentTime = time.time()
 
 
-def forever(deltaTime, outer=None, inner=None, loop_sleep=None):
+def forever(deltaTime, outer=None, inner=None, loop_sleep=None, priority=PRIORITY_NORMAL):
     global _received
 
     currentTime = time.time()
@@ -424,4 +434,4 @@ def forever(deltaTime, outer=None, inner=None, loop_sleep=None):
                 client.loop(_client_loop)  # wait for 0.1 ms
 
         else:
-            loop(sleepTime, inner=inner, loop_sleep=loop_sleep)
+            loop(sleepTime, inner=inner, loop_sleep=loop_sleep, priority=priority)
