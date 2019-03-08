@@ -121,11 +121,11 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
                     if d & 1 == 0:
                         if DEBUG:
                             print("Reading one byte stream id...")
-                        stream_id = struct.unpack('<b', read_pipe(1))[0]
+                        stream_id = struct.unpack('<B', read_pipe(1))[0]
                     else:
                         if DEBUG:
                             print("Reading two bytes stream id...")
-                        stream_id = struct.unpack('<h', read_pipe(2))[0]
+                        stream_id = struct.unpack('<H', read_pipe(2))[0]
 
                     if DEBUG:
                         print("Stream id = " + str(stream_id))
@@ -133,15 +133,15 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
                     if d & 6 == 0:
                         if DEBUG:
                             print("Reading one byte record size...")
-                        record_size = struct.unpack('<b', read_pipe(1))[0]
+                        record_size = struct.unpack('<B', read_pipe(1))[0]
                     elif d & 6 == 1:
                         if DEBUG:
                             print("Reading two bytes record size...")
-                        record_size = struct.unpack('<h', read_pipe(2))[0]
+                        record_size = struct.unpack('<H', read_pipe(2))[0]
                     else:
                         if DEBUG:
                             print("Reading four bytes record size...")
-                        record_size = struct.unpack('<i', read_pipe(4))[0]
+                        record_size = struct.unpack('<I', read_pipe(4))[0]
 
                     if DEBUG:
                         print("Record size = " + str(record_size) + ", reading record...")

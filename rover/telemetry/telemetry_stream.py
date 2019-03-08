@@ -45,6 +45,9 @@ class TelemetryStreamField:
             return self.name == other.name and self.field_type == other.field_type
         return False
 
+    def fromString(self, s):
+        return s
+
 
 class TelemetryStreamByteField(TelemetryStreamField):
     def __init__(self, name, signed=False):
@@ -68,6 +71,9 @@ class TelemetryStreamByteField(TelemetryStreamField):
         if isinstance(other, TelemetryStreamByteField):
             return super(TelemetryStreamByteField, self).__eq__(other) and self.signed == other.signed
         return False
+
+    def fromString(self, s):
+        return int(s)
 
 
 class TelemetryStreamWordField(TelemetryStreamField):
@@ -93,6 +99,9 @@ class TelemetryStreamWordField(TelemetryStreamField):
             return super(TelemetryStreamWordField, self).__eq__(other) and self.signed == other.signed
         return False
 
+    def fromString(self, s):
+        return int(s)
+
 
 class TelemetryStreamIntField(TelemetryStreamField):
     def __init__(self, name, signed=False):
@@ -116,6 +125,9 @@ class TelemetryStreamIntField(TelemetryStreamField):
         if isinstance(other, TelemetryStreamIntField):
             return super(TelemetryStreamIntField, self).__eq__(other) and self.signed == other.signed
         return False
+
+    def fromString(self, s):
+        return int(s)
 
 
 class TelemetryStreamLongField(TelemetryStreamField):
@@ -141,6 +153,9 @@ class TelemetryStreamLongField(TelemetryStreamField):
             return super(TelemetryStreamLongField, self).__eq__(other) and self.signed == other.signed
         return False
 
+    def fromString(self, s):
+        return int(s)
+
 
 class TelemetryStreamFloatField(TelemetryStreamField):
     def __init__(self, name):
@@ -152,6 +167,9 @@ class TelemetryStreamFloatField(TelemetryStreamField):
 
     def packFormat(self):
         return 'f'
+
+    def fromString(self, s):
+        return float(s)
 
 
 class TelemetryStreamDoubleField(TelemetryStreamField):
@@ -165,6 +183,9 @@ class TelemetryStreamDoubleField(TelemetryStreamField):
     def packFormat(self):
         return 'd'
 
+    def fromString(self, s):
+        return float(s)
+
 
 class TelemetryStreamTimestampField(TelemetryStreamField):
     def __init__(self, name):
@@ -176,6 +197,9 @@ class TelemetryStreamTimestampField(TelemetryStreamField):
 
     def packFormat(self):
         return 'd'
+
+    def fromString(self, s):
+        return float(s)
 
 
 class TelemetryStreamStringField(TelemetryStreamField):
@@ -299,23 +323,23 @@ class TelemetryStreamDefinition:
         if self.buildCallback is not None:
             self.buildCallback(self)
 
-        self.header_pack = '<b'
+        self.header_pack = '<B'
         if self.stream_id < 256:
             self.header_byte = STREAM_ID_BYTE
-            self.header_pack += 'b'
+            self.header_pack += 'B'
         else:
             self.header_byte = STREAM_ID_WORD
-            self.header_pack += 'h'
+            self.header_pack += 'H'
 
         if self.fixed_length < 256:
             self.header_byte |= STREAM_SIZE_BYTE
-            self.header_pack += 'b'
+            self.header_pack += 'B'
         elif self.fixed_length < 65536:
             self.header_byte |= STREAM_SIZE_WORD
-            self.header_pack += 'h'
+            self.header_pack += 'H'
         else:
             self.header_byte |= STREAM_SIZE_LONG
-            self.header_pack += 'i'
+            self.header_pack += 'I'
 
         self.header = struct.pack(self.header_pack, self.header_byte, self.stream_id, self.fixed_length)
 
