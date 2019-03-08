@@ -15,8 +15,6 @@ import gccui
 
 
 screen = pyros.gccui.initAll((320, 520), True)
-font = pyros.gccui.font
-smallFont = pyros.gccui.smallFont
 
 
 def onKeyDown(key):
@@ -49,10 +47,13 @@ def onKeyUp(key):
 
 pyros.init("radar-client-#", unique=True, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
+font = pygame.font.Font("garuda.ttf", 20)
+smallFont = pygame.font.Font("garuda.ttf", 16)
+
 # uiFactory = gccui.FlatTheme.FlatThemeFactory()
 uiAdapter = gccui.UIAdapter(screen)
 uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter)
-uiFactory.font = pyros.gccui.font
+uiFactory.font = font
 
 roverscreen.init(uiFactory, uiAdapter, font, smallFont)
 roverscreen.topComponent.redefineRect(pygame.Rect(roverscreen.topComponent.rect.x, roverscreen.topComponent.rect.y + 40, roverscreen.topComponent.rect.width, roverscreen.topComponent.rect.height - 40))

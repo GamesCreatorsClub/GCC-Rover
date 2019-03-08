@@ -5,12 +5,10 @@
 #
 
 import gccui
-import math
 import os
 import pygame
 import pyroslib
 import roverscreencomponents
-import subprocess
 import time
 from functools import partial
 from pygame import Rect
@@ -18,7 +16,11 @@ from roverscreencomponents import WheelComponent, WheelStatusComponent, Radar, C
 
 received = False
 
-_radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+RADAR_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315]
+
+_radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'status': '', 'timestamp': 0.0}
+_last_radar = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0, 'status': '', 'timestamp': 0.0}
+_radar_status = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
 
 angle = 0.0
 
@@ -58,11 +60,33 @@ def _createTemplateWheel(distance_index):
         'speed_status': 0,
         'odo': 0,
         'cal': {},
-        'dindex': distance_index
+        'dindex': distance_index,
+        'deg': {}
     }
 
 
 _wheelsMap = {'fl': _createTemplateWheel(0), 'fr': _createTemplateWheel(2), 'bl': _createTemplateWheel(4), 'br': _createTemplateWheel(6), 'pid': {}}
+
+
+def getRadar():
+    return _radar, _last_radar, _radar_status
+
+
+def getWheelAngleAndStatus(wheel_name):
+    wheel = _wheelsMap[wheel_name]
+
+    status = wheel['deg_status'] | wheel['speed_status']
+    angle = wheel['angle']
+
+    return angle, status
+
+
+def getWheelOdoAndStatus(wheel_name):
+    wheel = _wheelsMap[wheel_name]
+    status = wheel['deg_status'] | wheel['speed_status']
+    odo = wheel['odo']
+
+    return odo, status
 
 
 def stopAllButtonClick(button, pos):
@@ -75,7 +99,23 @@ def initGui():
 
     screen_rect = _uiAdapter.getScreen().get_rect()
 
-    roverscreencomponents.init(_uiFactory, _uiAdapter, _font, _smallFont, screen_rect, _wheelsMap, _wheelRects, _radar)
+    OFF = 10
+    XOFF = 0
+    YOFF = 15
+
+    wheelImage = pygame.image.load("graphics/wheel.png")
+    # wheelOdoImage = pygame.image.load("graphics/wheel-odo.png")
+
+    imageWidth = wheelImage.get_width() // 2
+    imageHeight = wheelImage.get_height() // 2
+
+    _wheelRects['fl'] = wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, -imageHeight - OFF + YOFF)
+    _wheelRects['fr'] = wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, -imageHeight - OFF + YOFF)
+    _wheelRects['bl'] = wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, imageHeight + OFF + YOFF)
+    _wheelRects['br'] = wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, imageHeight + OFF + YOFF)
+    _wheelRects['middle'] = wheelImage.get_rect(center=screen_rect.center).move(XOFF, -YOFF)
+
+    roverscreencomponents.init(_uiFactory, _uiAdapter, _font, _smallFont, screen_rect, _wheelRects)
 
 
 def handleWheelPositions(topic, message, groups):
@@ -101,10 +141,37 @@ def handleWheelPositions(topic, message, groups):
 def handleDistances(topic, message, groups):
     global received  # , angle
 
-    values = {int(v[0]): int(v[1]) for v in [v.split(":") for v in message.split(" ")] if v[0] != 'timestamp'}
+    def convertValue(k, v):
+        if k == 'timestamp':
+            return float(v)
+        elif k == 'status':
+            return str(v)
+        else:
+            return int(v)
+
+    def convertKey(k):
+        if k == 'timestamp':
+            return k
+        elif k == 'status':
+            return k
+        else:
+            return int(k)
+
+    values = {convertKey(v[0]): convertValue(v[0], v[1]) for v in [v.split(":") for v in message.split(" ")]}
+
+    for k, v in _radar.items():
+        _last_radar[k] = v
 
     for a in values:
         _radar[a] = values[a]
+
+    status_str = _radar['status']
+    del _radar['status']
+    i = 0
+    # print("Received status: " + str(status_str))
+    for angle in RADAR_ANGLES:
+        _radar_status[angle] = int(status_str[i:i+2], 16)
+        i += 2
 
 
 def handleWheelOrientations(topic, message, groups):
@@ -413,17 +480,19 @@ class MainScreen(ScreenComponent):
 class WheelsScreen(ScreenComponent):
     def __init__(self, rect):
         super(WheelsScreen, self).__init__(rect)
+        wheelImage = pygame.image.load("graphics/wheel.png")
+        wheelOdoImage = pygame.image.load("graphics/wheel-odo.png")
 
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "MENU", self.selectScreenCallback('main_menu')))
-        self.addComponent(WheelComponent(_wheelRects['fr'], 'fr', True))
-        self.addComponent(WheelComponent(_wheelRects['fl'], 'fl', True))
-        self.addComponent(WheelComponent(_wheelRects['br'], 'br', True))
-        self.addComponent(WheelComponent(_wheelRects['bl'], 'bl', True))
-        self.addComponent(WheelStatusComponent(Rect(5, 38, 152, 32), 'fl'))
-        self.addComponent(WheelStatusComponent(Rect(163, 38, 152, 32), 'fr'))
-        self.addComponent(WheelStatusComponent(Rect(5, 74, 152, 32), 'bl'))
-        self.addComponent(WheelStatusComponent(Rect(163, 74, 152, 32), 'br'))
+        self.addComponent(WheelComponent(_wheelRects['fr'], _uiFactory, wheelImage, partial(getWheelAngleAndStatus, 'fr'), True))
+        self.addComponent(WheelComponent(_wheelRects['fl'], _uiFactory, wheelImage, partial(getWheelAngleAndStatus, 'fl'), True))
+        self.addComponent(WheelComponent(_wheelRects['br'], _uiFactory, wheelImage, partial(getWheelAngleAndStatus, 'br'), True))
+        self.addComponent(WheelComponent(_wheelRects['bl'], _uiFactory, wheelImage, partial(getWheelAngleAndStatus, 'bl'), True))
+        self.addComponent(WheelStatusComponent(Rect(5, 38, 152, 32), _uiFactory, wheelOdoImage, partial(getWheelOdoAndStatus, 'fl')))
+        self.addComponent(WheelStatusComponent(Rect(163, 38, 152, 32), _uiFactory, wheelOdoImage, partial(getWheelOdoAndStatus, 'fr')))
+        self.addComponent(WheelStatusComponent(Rect(5, 74, 152, 32), _uiFactory, wheelOdoImage, partial(getWheelOdoAndStatus, 'bl')))
+        self.addComponent(WheelStatusComponent(Rect(163, 74, 152, 32), _uiFactory, wheelOdoImage, partial(getWheelOdoAndStatus, 'br')))
         self.redefineRect(rect)
 
     def redefineRect(self, rect):
@@ -567,15 +636,17 @@ class CalibrateWheelScreen(ScreenComponent):
     def over_deco():
         return CalibrateWheelScreen.RectangleDecoration(pygame.color.THECOLORS['grey64'])
 
-    def createWheelButton(self, name):
-        return gccui.Button(_wheelRects[name],
-                            partial(self.selectWheelButtonClick, name),
-                            label=WheelComponent(_wheelRects[name], name, False),
+    def createWheelButton(self, wheel_name):
+        return gccui.Button(_wheelRects[wheel_name],
+                            partial(self.selectWheelButtonClick, wheel_name),
+                            label=WheelComponent(_wheelRects[wheel_name], _uiFactory, self.wheel_image, partial(getWheelAngleAndStatus, wheel_name), False),
                             background_decoration=self.back_deco(),
                             mouse_over_decoration=self.over_deco())
 
     def __init__(self, rect):
         super(CalibrateWheelScreen, self).__init__(rect)
+        self.wheel_image = pygame.image.load("graphics/wheel.png")
+        self.wheel_name = ''
         self.card = gccui.CardsCollection(self.rect)
         self.addComponent(self.card)
         self.select = gccui.Collection(self.rect)
@@ -609,7 +680,7 @@ class CalibrateWheelScreen(ScreenComponent):
         self.calibrate.addComponent(self.steerToggleButton)
         self.calibrate.addComponent(self.speedToggleButton)
 
-        self.wheel = WheelComponent(_wheelRects['middle'], '', True)
+        self.wheel = WheelComponent(_wheelRects['middle'], _uiFactory, self.wheel_image, self.getWheelAngleAndStatus, True)
         self.calibrate.addComponent(self.wheel)
 
         self.loading.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
@@ -660,7 +731,7 @@ class CalibrateWheelScreen(ScreenComponent):
 
     def setSelectedWheelName(self, selected_wheel_name):
         self.selected_wheel_name = selected_wheel_name
-        self.wheel.wheel_name = selected_wheel_name
+        self.wheel_name = selected_wheel_name
         self._updateToggleButton(self.degToggleButton, 'A', _wheelsMap[selected_wheel_name]['cal']['deg']['dir'])
         self._updateToggleButton(self.steerToggleButton, 'S', _wheelsMap[selected_wheel_name]['cal']['steer']['dir'])
         self._updateToggleButton(self.speedToggleButton, 'D', _wheelsMap[selected_wheel_name]['cal']['speed']['dir'])
@@ -740,6 +811,14 @@ class CalibrateWheelScreen(ScreenComponent):
     def selectWheelButtonClick(self, wheel_name, button, pos):
         self.card.selectCard('loading')
         self.setSelectedWheelName(wheel_name)
+
+    def getWheelAngleAndStatus(self):
+        wheel = _wheelsMap[self.wheel_name]
+
+        status = wheel['deg_status'] | wheel['speed_status']
+        angle = wheel['angle']
+
+        return angle, status
 
 
 class PIDUIComponent(gccui.Collection):
@@ -892,59 +971,29 @@ class CalibratePIDScreen(ScreenComponent):
 
 
 class RadarScreen(ScreenComponent):
-    def __init__(self, rect):
+    def __init__(self, rect, uiFactory):
         super(RadarScreen, self).__init__(rect)
+        self.uiFactory = uiFactory
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('main_menu')))
-        y_off = 100
-        self.addComponent(Radar(Rect(50, 50, 220, 220), 1300))
-        self.distance_labels = {
-            0: _uiFactory.label(Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            45: _uiFactory.label(Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            90: _uiFactory.label(Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            135: _uiFactory.label(Rect(260, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            180: _uiFactory.label(Rect(160, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            225: _uiFactory.label(Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            270: _uiFactory.label(Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
-            315: _uiFactory.label(Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        }
-        for a in self.distance_labels:
-            self.addComponent(self.distance_labels[a])
-
-        self.right_distance_label = _uiFactory.label(Rect(290, 290, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.addComponent(self.right_distance_label)
-        self.redefineRect(rect)
+        self.addComponent(Radar(Rect(50, 50, 220, 220), self.uiFactory, getRadar, 1300))
 
     def redefineRect(self, rect):
         super(RadarScreen, self).redefineRect(rect)
-        y_off = 100
-        self.components[0].redefineRect(Rect(rect.x + 10, rect.bottom - 50, 90, 40))
+        self.components[0].redefineRect(Rect(rect.x, rect.bottom - 50, 90, 40))
         self.components[1].redefineRect(Rect(rect.right - 100, rect.bottom - 50, 90, 40))
 
-        self.components[2].redefineRect(Rect(rect.x + 50, rect.y + y_off + 10, 220, 220))
-        self.components[3].redefineRect(Rect(rect.x + 160, rect.y + y_off, 0, 0))
-        self.components[4].redefineRect(Rect(rect.x + 260, rect.y + y_off + 30, 0, 0))
-        self.components[5].redefineRect(Rect(rect.x + 290, rect.y + y_off + 120, 0, 0))
-        self.components[6].redefineRect(Rect(rect.x + 260, rect.y + y_off + 220, 0, 0))
-        self.components[7].redefineRect(Rect(rect.x + 160, rect.y + y_off + 250, 0, 0))
-        self.components[8].redefineRect(Rect(rect.x + 70, rect.y + y_off + 220, 0, 0))
-        self.components[9].redefineRect(Rect(rect.x + 40, rect.y + y_off + 120, 0, 0))
-        self.components[10].redefineRect(Rect(rect.x + 70, rect.y + y_off + 30, 0, 0))
-        self.components[11].redefineRect(Rect(rect.x + 290, rect.y + y_off + 250, 0, 0))
-
-    def draw(self, surface):
-        for a in _radar:
-            self.distance_labels[a].setText(str(_radar[a]))
-
-        super(RadarScreen, self).draw(surface)
+        self.components[2].redefineRect(Rect(rect.x + 10, rect.y + 70, 300, 300))
 
     def enter(self):
         super(RadarScreen, self).enter()
         pyroslib.subscribe("sensor/distance", handleDistances)
+        pyroslib.publish("sensor/distance/resume", "")
 
     def leave(self):
         super(RadarScreen, self).leave()
         pyroslib.unsubscribe("distance/deg")
+        pyroslib.publish("sensor/distance/pause", "")
 
 
 class SystemStatusScreen(ScreenComponent):
@@ -954,7 +1003,7 @@ class SystemStatusScreen(ScreenComponent):
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 900, 40), "SELECT", self.startSelectingGraph))
         self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('main_menu')))
 
-        self.temperature_component = TemperatureComponent(Rect(256, 30, 64, 200))
+        self.temperature_component = TemperatureComponent(Rect(256, 30, 64, 200), _uiFactory)
         self.cpu_component = CPUComponent(Rect(0, 30, 64, 200))
         self.addComponent(self.temperature_component)
         self.addComponent(self.cpu_component)
@@ -1094,7 +1143,7 @@ def init(uiFactory, uiAdapter, font, smallFont):
     screensComponent.addCard('main_menu', MainMenuScreen(screen_rect))
     screensComponent.addCard('system_status', systemStatusScreen)
     screensComponent.addCard('wheels', WheelsScreen(screen_rect))
-    screensComponent.addCard('radar', RadarScreen(screen_rect))
+    screensComponent.addCard('radar', RadarScreen(screen_rect, uiFactory))
     screensComponent.addCard('calibration_menu', CalibrationMenuScreen(screen_rect))
     screensComponent.addCard('calibrate_wheel', CalibrateWheelScreen(screen_rect))
     screensComponent.addCard('calibratePID', CalibratePIDScreen(screen_rect))

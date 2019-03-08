@@ -64,7 +64,7 @@ class Collection(Component):
         self.components = []
         self._selectedComponent = None
 
-    def addComponent(self, component):
+    def addComponent(self, component, ):
         self.components.append(component)
 
     def removeComponent(self, component):

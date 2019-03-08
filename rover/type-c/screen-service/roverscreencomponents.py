@@ -6,18 +6,14 @@
 
 import gccui
 import math
-import os
 import pygame
-import pyroslib
-import subprocess
 import time
-from functools import partial
 from pygame import Rect
 
 
-OFF = 10
-XOFF = 0
-YOFF = 15
+# OFF = 10
+# XOFF = 0
+# YOFF = 15
 
 STATUS_ERROR_I2C_WRITE = 1
 STATUS_ERROR_I2C_READ = 2
@@ -33,35 +29,20 @@ _uiAdapter = None
 _font = None
 _smallFont = None
 
-_wheelsMap = None
 _wheelImage = None
-_wheelOdoImage = None
 _wheelRects = {'fl': None, 'fr': None, 'bl': None, 'br': None}
-_radar = None
+
+RADAR_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315]
 
 
-def init(uiFactory, uiAdapter, font, smallFont, screen_rect, wheelsMap, wheelRects, radar):
-    global _uiFactory, _uiAdapter, _wheelImage, _wheelOdoImage, _wheelsMap, _radar
+def init(uiFactory, uiAdapter, font, smallFont, screen_rect, wheelRects):
+    global _uiFactory, _uiAdapter
 
     _uiFactory = uiFactory
     _uiAdapter = uiAdapter
     _font = font
     _smallFont = smallFont
-    _wheelsMap = wheelsMap
     _wheelRects = wheelRects
-    _radar = radar
-
-    _wheelImage = pygame.image.load("graphics/wheel.png")
-    _wheelOdoImage = pygame.image.load("graphics/wheel-odo.png")
-
-    imageWidth = _wheelImage.get_width() // 2
-    imageHeight = _wheelImage.get_height() // 2
-
-    _wheelRects['fl'] = _wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, -imageHeight - OFF + YOFF)
-    _wheelRects['fr'] = _wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, -imageHeight - OFF + YOFF)
-    _wheelRects['bl'] = _wheelImage.get_rect(center=screen_rect.center).move(-imageWidth - OFF + XOFF, imageHeight + OFF + YOFF)
-    _wheelRects['br'] = _wheelImage.get_rect(center=screen_rect.center).move(imageWidth + OFF + XOFF, imageHeight + OFF + YOFF)
-    _wheelRects['middle'] = _wheelImage.get_rect(center=screen_rect.center).move(XOFF, -YOFF)
 
 
 class WheelStatus:
@@ -167,21 +148,23 @@ class WheelStatus:
 
 
 class WheelComponent(gccui.Collection):
-    def __init__(self, rect, wheel_name, draw_angle):
+    def __init__(self, rect, uiFactory, wheel_image, get_wheel_angle_and_status_method, draw_angle):
         super(WheelComponent, self).__init__(rect)
+        self.uiFactory = uiFactory
+        self.wheel_image = wheel_image
+        self.get_wheel_angle_and_status_method = get_wheel_angle_and_status_method
         self.i2c_status = WheelStatus()
         self.radio_status = WheelStatus()
         self.magnet_status = WheelStatus()
         self.control_status = WheelStatus()
-        self.wheel_name = wheel_name
         self.draw_angle = draw_angle
-        self.image = _uiFactory.image(rect, None, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.image = uiFactory.image(rect, None, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
         self.addComponent(self.image)
-        self.angle_text = _uiFactory.label(self.rect,
-                                          "",
-                                          h_alignment=gccui.ALIGNMENT.CENTER,
-                                          v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                          colour=pygame.color.THECOLORS['black'])
+        self.angle_text = uiFactory.label(self.rect,
+                                           "",
+                                           h_alignment=gccui.ALIGNMENT.CENTER,
+                                           v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                           colour=pygame.color.THECOLORS['black'])
 
         self.addComponent(self.angle_text)
 
@@ -190,7 +173,7 @@ class WheelComponent(gccui.Collection):
 
         self.redefineRect(self.rect)
 
-        self.wheelImageAlpha = _wheelImage.copy()
+        self.wheelImageAlpha = self.wheel_image.copy()
         self.wheelImageAlpha.fill((0, 0, 0, 255), None, pygame.BLEND_RGBA_MULT)
 
         def makeColourImage(colour):
@@ -209,10 +192,9 @@ class WheelComponent(gccui.Collection):
         self.angle_text.redefineRect(Rect(rect.x, rect.centery - self.angle_text.font.get_height() // 2, rect.width, self.angle_text.font.get_height()))
 
     def draw(self, surface):
-        wheel = _wheelsMap[self.wheel_name]
+        angle, status = self.get_wheel_angle_and_status_method()
 
         selectedWheelImage = _wheelImage
-        status = wheel['deg_status'] | wheel['speed_status']
 
         self.i2c_status.updateI2CStatus(status)
         self.radio_status.updateRadioStatus(status)
@@ -233,59 +215,58 @@ class WheelComponent(gccui.Collection):
         else:
             selectedWheelImage = self.wheelRedImage
 
-        _angle = float(wheel['angle'])
-
-        rotatedWheelImage = pygame.transform.rotate(selectedWheelImage, -_angle)
+        rotatedWheelImage = pygame.transform.rotate(selectedWheelImage, -angle)
         rotatedWheelImage.get_rect(center=self.rect.center)
         self.image._surface = rotatedWheelImage
 
         if self.draw_angle:
-            self.angle_text.setText(str(wheel['angle']))
+            self.angle_text.setText(str(angle))
 
         super(WheelComponent, self).draw(surface)
 
 
 class WheelStatusComponent(gccui.Collection):
-    def __init__(self, rect, wheel_name):
+    def __init__(self, rect, uiFactory, wheelOdoImage, get_wheel_odo_and_status_method):
         super(WheelStatusComponent, self).__init__(rect)
-        self.wheel_name = wheel_name
-        self.odo_image = _uiFactory.image(rect, _wheelOdoImage, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
-        self.margin = (rect.width - _wheelOdoImage.get_rect().width) // 2
+        self.uiFactory = uiFactory
+        self.get_wheel_odo_and_status_method = get_wheel_odo_and_status_method
+        self.odo_image = uiFactory.image(rect, wheelOdoImage, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.margin = (rect.width - wheelOdoImage.get_rect().width) // 2
 
-        self.odo_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['white'])
+        self.odo_text = uiFactory.label(self.rect,
+                                         "",
+                                         font=_smallFont,
+                                         h_alignment=gccui.ALIGNMENT.RIGHT,
+                                         v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                         colour=pygame.color.THECOLORS['white'])
 
-        self.i2c_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.LEFT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
+        self.i2c_text = uiFactory.label(self.rect,
+                                         "",
+                                         font=_smallFont,
+                                         h_alignment=gccui.ALIGNMENT.LEFT,
+                                         v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                         colour=pygame.color.THECOLORS['orange'])
 
-        self.radio_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
+        self.radio_text = uiFactory.label(self.rect,
+                                           "",
+                                           font=_smallFont,
+                                           h_alignment=gccui.ALIGNMENT.RIGHT,
+                                           v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                           colour=pygame.color.THECOLORS['orange'])
 
-        self.control_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.LEFT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
+        self.control_text = uiFactory.label(self.rect,
+                                             "",
+                                             font=_smallFont,
+                                             h_alignment=gccui.ALIGNMENT.LEFT,
+                                             v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                             colour=pygame.color.THECOLORS['orange'])
 
-        self.magnet_text = _uiFactory.label(self.rect,
-                                        "",
-                                        font=_smallFont,
-                                        h_alignment=gccui.ALIGNMENT.RIGHT,
-                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                        colour=pygame.color.THECOLORS['orange'])
+        self.magnet_text = uiFactory.label(self.rect,
+                                            "",
+                                            font=_smallFont,
+                                            h_alignment=gccui.ALIGNMENT.RIGHT,
+                                            v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                            colour=pygame.color.THECOLORS['orange'])
 
         self.i2c_status = WheelStatus(self.i2c_text)
         self.radio_status = WheelStatus(self.radio_text)
@@ -314,24 +295,56 @@ class WheelStatusComponent(gccui.Collection):
         self.magnet_text.redefineRect(Rect(rect.right - self.margin + self.margin // 2, rect.y, self.margin // 2, rect.height))
 
     def draw(self, surface):
-        wheel = _wheelsMap[self.wheel_name]
+        odo, status = self.get_wheel_odo_and_status_method()
 
-        status = wheel['deg_status'] | wheel['speed_status']
         self.i2c_status.updateI2CStatus(status)
         self.radio_status.updateRadioStatus(status)
         self.control_status.updateControlStatus(status)
         self.magnet_status.updateMagnetStatus(status)
 
-        self.odo_text.setText(str(wheel['odo']))
+        self.odo_text.setText(str(odo))
 
         super(WheelStatusComponent, self).draw(surface)
 
 
-class Radar(gccui.Component):
-    def __init__(self, rect, limit_distance):
+class Radar(gccui.Collection):
+    def __init__(self, rect, uiFactory, radar_method, limit_distance, display_delta=False):
         super(Radar, self).__init__(rect)
+        self.display_delta = display_delta
+        self.rrect = rect
+        self.uiFactory = uiFactory
+        self.radar_method = radar_method
         self.limit_distance = limit_distance
         self.grey = pygame.color.THECOLORS['grey48']
+
+        self.distance_labels = {
+            0: uiFactory.label(Rect(160, 40, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            45: uiFactory.label(Rect(260, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            90: uiFactory.label(Rect(290, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            135: uiFactory.label(Rect(260, 0, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            180: uiFactory.label(Rect(160, 0, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            225: uiFactory.label(Rect(70, 260, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            270: uiFactory.label(Rect(40, 160, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE),
+            315: uiFactory.label(Rect(70, 70, 0, 0), '', font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        }
+        for a in self.distance_labels:
+            self.addComponent(self.distance_labels[a])
+
+        self.redefineRect(rect)
+
+    def redefineRect(self, rect):
+        self.rect = rect
+        self.components[0].redefineRect(Rect(rect.x + 150, rect.centery - 120, 0, 20))
+        self.components[1].redefineRect(Rect(rect.x + 250, rect.centery - 90, 0, 20))
+        self.components[2].redefineRect(Rect(rect.x + 280, rect.centery - 10, 0, 20))
+        self.components[3].redefineRect(Rect(rect.x + 250, rect.centery + 70, 0, 20))
+        self.components[4].redefineRect(Rect(rect.x + 150, rect.centery + 100, 0, 20))
+        self.components[5].redefineRect(Rect(rect.x + 60, rect.centery + 70, 0, 20))
+        self.components[6].redefineRect(Rect(rect.x + 30, rect.centery - 10, 0, 20))
+        self.components[7].redefineRect(Rect(rect.x + 60, rect.centery - 90, 0, 20))
+
+        self.rrect = Rect(rect.x, rect.y, int(rect.width * 0.734), int(rect.height * 0.734))
+        self.rrect.center = rect.center
 
     def draw(self, surface):
         def limit(d):
@@ -340,33 +353,54 @@ class Radar(gccui.Component):
             if d > self.limit_distance:
                 d = self.limit_distance
 
-            size = min(self.rect.width, self.rect.height)
+            size = min(self.rrect.width, self.rrect.height)
             return - (int(size * 0.8) - d / 20.0)
 
+        # pygame.draw.rect(surface, (150, 0, 0), self.rect)
         pi8 = math.pi / 8
 
         WHITE = pygame.color.THECOLORS['white']
 
-        pygame.draw.circle(surface, self.grey, self.rect.center, int(self.rect.width / 2.3), 1)
-        pygame.draw.circle(surface, self.grey, self.rect.center, int(self.rect.width / 2.9), 1)
-        pygame.draw.circle(surface, self.grey, self.rect.center, int(self.rect.width / 3.9), 1)
-        pygame.draw.circle(surface, self.grey, self.rect.center, int(self.rect.width / 6), 1)
-        pygame.draw.circle(surface, self.grey, self.rect.center, int(self.rect.width / 12), 1)
+        pygame.draw.circle(surface, self.grey, self.rrect.center, int(self.rrect.width / 2.3), 1)
+        pygame.draw.circle(surface, self.grey, self.rrect.center, int(self.rrect.width / 2.9), 1)
+        pygame.draw.circle(surface, self.grey, self.rrect.center, int(self.rrect.width / 3.9), 1)
+        pygame.draw.circle(surface, self.grey, self.rrect.center, int(self.rrect.width / 6), 1)
+        pygame.draw.circle(surface, self.grey, self.rrect.center, int(self.rrect.width / 12), 1)
         for d in [pi8, pi8 * 3, pi8 * 5, pi8 * 7, pi8 * 9, pi8 * 11, pi8 * 13, pi8 * 15]:
-            x1 = math.cos(d) * int(self.rect.width / 2.3) + self.rect.centerx
-            y1 = math.sin(d) * int(self.rect.width / 2.3) + self.rect.centery
-            x2 = math.cos(d) * int(self.rect.width / 12) + self.rect.centerx
-            y2 = math.sin(d) * int(self.rect.width / 12) + self.rect.centery
+            x1 = math.cos(d) * int(self.rrect.width / 2.3) + self.rrect.centerx
+            y1 = math.sin(d) * int(self.rrect.width / 2.3) + self.rrect.centery
+            x2 = math.cos(d) * int(self.rrect.width / 12) + self.rrect.centerx
+            y2 = math.sin(d) * int(self.rrect.width / 12) + self.rrect.centery
             pygame.draw.line(surface, self.grey, (x1, y1), (x2, y2))
 
-        pygame.draw.arc(_uiAdapter.getScreen(), (255, 0, 255), self.rect.inflate(limit(_radar[0]), limit(_radar[0])), pi8 * 3, pi8 * 5)  # 0º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[45]), limit(_radar[45])), pi8 * 1, pi8 * 3)  # 45º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[90]), limit(_radar[90])), pi8 * 15, pi8 * 1)  # 90º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[135]), limit(_radar[135])), pi8 * 13, pi8 * 15)  # 135º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[180]), limit(_radar[180])), pi8 * 11, pi8 * 13)  # 180º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[225]), limit(_radar[225])), pi8 * 9, pi8 * 11)  # 225º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[270]), limit(_radar[270])), pi8 * 7, pi8 * 9)  # 270º
-        pygame.draw.arc(_uiAdapter.getScreen(), WHITE, self.rect.inflate(limit(_radar[315]), limit(_radar[315])), pi8 * 5, pi8 * 7)  # 315º
+        radar, last_radar, status = self.radar_method()
+
+        if radar is not None:
+            for a in RADAR_ANGLES:
+                dist = radar[a]
+                st = status[a]
+                extra = ""
+                if st == 0:
+                    self.distance_labels[a].setColour(pygame.color.THECOLORS['white'])
+                    if last_radar is not None and self.display_delta:
+                        last_dist = last_radar[a]
+                        extra = "(" + str(dist - last_dist) + ")"
+                else:
+                    self.distance_labels[a].setColour(pygame.color.THECOLORS['orange'])
+                    extra = "({:02x})".format(st)
+
+                self.distance_labels[a].setText(str(dist) + extra)
+
+            pygame.draw.arc(surface, (255, 0, 255), self.rrect.inflate(limit(radar[0]), limit(radar[0])), pi8 * 3, pi8 * 5)  # 0º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[45]), limit(radar[45])), pi8 * 1, pi8 * 3)  # 45º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[90]), limit(radar[90])), pi8 * 15, pi8 * 1)  # 90º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[135]), limit(radar[135])), pi8 * 13, pi8 * 15)  # 135º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[180]), limit(radar[180])), pi8 * 11, pi8 * 13)  # 180º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[225]), limit(radar[225])), pi8 * 9, pi8 * 11)  # 225º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[270]), limit(radar[270])), pi8 * 7, pi8 * 9)  # 270º
+            pygame.draw.arc(surface, WHITE, self.rrect.inflate(limit(radar[315]), limit(radar[315])), pi8 * 5, pi8 * 7)  # 315º
+
+            super(Radar, self).draw(surface)
 
 
 class FlashingImage(gccui.Image):
@@ -500,12 +534,14 @@ class TemperatureStatusComponent(FlashingImage):
 
 
 class TemperatureComponent(gccui.Image):
-    def __init__(self, rect):
+    # noinspection PyArgumentList
+    def __init__(self, rect, uiFactory):
         super(TemperatureComponent, self).__init__(rect, None)
+        self.uiFactory = uiFactory
         self.temp_full_critical_image = pygame.image.load("graphics/temp-full-critical.png")
         self.temp_full_warning_image = pygame.image.load("graphics/temp-full-warning.png")
         self.temp_full_nominal_image = pygame.image.load("graphics/temp-full-nominal.png")
-        self.label = _uiFactory.label(rect, "", colour=pygame.color.THECOLORS['black'], font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
+        self.label = uiFactory.label(rect, "", colour=pygame.color.THECOLORS['black'], font=_smallFont, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
         self.setImage(self.temp_full_nominal_image)
         self.temperature = -1
         self.temperature_warning = False
@@ -717,20 +753,21 @@ class Stats:
         if len(self.stats) == 0:
             return []
 
-        l = len(self.stats)
+        ll = len(self.stats)
         now = time.time()
         then = now - seconds
         index = 0
-        while self.stats[index][0] < then and index < l:
+        while self.stats[index][0] < then and index < ll:
             index += 1
 
-        if index >= l:
+        if index >= ll:
             return []
 
         return self.stats[index:]
 
 
 class StatsGraph(gccui.Component):
+    # noinspection PyArgumentList
     def __init__(self, rect):
         super(StatsGraph, self).__init__(rect)
         self.stats = None
