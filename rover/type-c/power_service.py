@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
         print("Started power service.")
 
-        pyroslib.forever(0.5, main_loop)
+        pyroslib.forever(0.5, main_loop, priority=pyroslib.PRIORITY_LOW)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

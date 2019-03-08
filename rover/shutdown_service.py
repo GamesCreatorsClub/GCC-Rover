@@ -136,7 +136,7 @@ if __name__ == "__main__":
             if switchPin is not None and GPIO.input(switchPin) == 0:
                 prepareToShutdown()
 
-        pyroslib.forever(0.5, checkSwitch)
+        pyroslib.forever(0.5, checkSwitch, priority=pyroslib.PRIORITY_LOW)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

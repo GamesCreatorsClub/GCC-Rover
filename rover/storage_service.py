@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
         print("Started storage service.")
 
-        pyroslib.forever(0.5)
+        pyroslib.forever(0.5, priority=pyroslib.PRIORITY_LOW)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

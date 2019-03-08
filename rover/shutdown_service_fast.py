@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
         print("Started shutdown service.")
 
-        pyroslib.forever(0.5, checkShutdown)
+        pyroslib.forever(0.5, checkShutdown, priority=pyroslib.PRIORITY_LOW)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

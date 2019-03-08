@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
         print("Started wifi service.")
 
-        pyroslib.forever(1)
+        pyroslib.forever(1, priority=pyroslib.PRIORITY_LOW)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
