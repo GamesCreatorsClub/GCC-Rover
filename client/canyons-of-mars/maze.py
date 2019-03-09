@@ -340,12 +340,15 @@ class MazeCorridorAction(MazeAction):
             self.a2 = 270
             self.a3 = 225
 
-        self.left_corner_action = MazeTurnAroundCornerAction(self.rover, self.LEFT, self.distance, self.speed, self)
-        self.right_corner_action = MazeTurnAroundCornerAction(self.rover, self.RIGHT, self.distance, self.speed, self)
+        self.left_corner_action = MazeTurnAroundCornerAction(self.rover, self.LEFT, int(self.distance * 1), self.speed, self)
+        self.right_corner_action = MazeTurnAroundCornerAction(self.rover, self.RIGHT, int(self.distance * 1), self.speed, self)
         # self.right_corner_action = MazeTurnAroundCornerAction(self.odo, self.radar, self.heading, self.RIGHT, self.distance, self.speed, DriverForwardForTimeActoun(10, self.speed, None))
+
+        self.been_in_chicane = False
 
     def start(self):
         super(MazeCorridorAction, self).start()
+        self.been_in_chicane = False
 
     def end(self):
         super(MazeCorridorAction, self).end()
@@ -446,23 +449,37 @@ class MazeCorridorAction(MazeAction):
                             float(state.wheel_orientations.orientations['fl'])
         ))
 
-        if state.left_front_distance_of_wall > 100 and front_distance < 700:
-            expected_diagonal_distance = 0
-            if state.left_wall_angle < 0:
-                expected_diagonal_distance = front_distance * 2 * math.cos(math.pi / 4 + state.left_wall_angle)
-            else:
-                expected_diagonal_distance = front_distance * math.cos(state.left_wall_angle) * SQRT2
+        if state.radar.status[0] != 0 and abs(state.radar.radar_deltas[0]) > 100:
+            log(LOG_LEVEL_INFO, "Front distance not correct: d={:4d} s={:2d} delta={:4d}".format(front_distance, state.radar.status[0], state.radar.radar_deltas[0]))
+        else:
+            if state.left_front_distance_of_wall > 100 and front_distance < 550:
+                expected_diagonal_distance = 0
+                if state.left_wall_angle < 0:
+                    expected_diagonal_distance = front_distance * 2 * math.cos(math.pi / 4 + state.left_wall_angle)
+                else:
+                    expected_diagonal_distance = front_distance * math.cos(state.left_wall_angle) * SQRT2
 
-            if front_distance > 300 and left_diagonal_distance > expected_diagonal_distance * 1.1:
-                log(LOG_LEVEL_INFO, "Found chicane... lfd={: 4d} fd={: 4d} dd={: 4d} ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
-                return ChicaneAction(self.rover, self.LEFT, self.distance, self.speed, next_action=self)
-            else:
-                log(LOG_LEVEL_INFO, "Found corner - turning, lfd={: 4d} fd={: 4d} dd={: 4d}  ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
-                return self.left_corner_action
+                if False and not self.been_in_chicane and front_distance > 300 and left_diagonal_distance > expected_diagonal_distance * 1.2:
+                    log(LOG_LEVEL_INFO, "Found chicane... lfd={: 4d} fd={: 4d} dd={: 4d} ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
+                    self.been_in_chicane = True
+                    return ChicaneAction(self.rover, self.LEFT, self.distance, self.speed, next_action=self)
+                else:
+                    log(LOG_LEVEL_INFO, "Found corner - turning, lfd={: 4d} fd={: 4d} dd={: 4d}  ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
+                    return self.left_corner_action
 
-        if state.right_front_distance_of_wall > 100 and front_distance < 900:
-            log(LOG_LEVEL_INFO, "Found final corner - turning to finish, rfd={: 4d} fd={: 4d} ".format(int(state.right_front_distance_of_wall), int(front_distance)))
-            return self.right_corner_action
+            if front_distance < 550 and state.radar.radar_deltas[0] < 0:
+                left_distances = state.radar.radar[270] + state.radar.radar[315]
+                right_distances = state.radar.radar[90] + state.radar.radar[45]
+                if left_distances > right_distances:
+                    log(LOG_LEVEL_INFO, "Found corner 2 - turning left, fd={: 4d} ld={: 4d} rd={: 4d}".format(int(front_distance), int(left_distances), int(right_distances)))
+                    return self.left_corner_action
+                else:
+                    log(LOG_LEVEL_INFO, "Found corner 2 - turning left, fd={: 4d} ld={: 4d} rd={: 4d}".format(int(front_distance), int(left_distances), int(right_distances)))
+                    return self.right_corner_action
+
+            if state.right_front_distance_of_wall > 100 and state.left_front_distance_of_wall > 100 and front_distance < 700:
+                log(LOG_LEVEL_INFO, "Found final corner - turning to finish, rfd={: 4d} fd={: 4d} ".format(int(state.right_front_distance_of_wall), int(front_distance)))
+                return self.right_corner_action
 
         return self
 
@@ -556,9 +573,9 @@ class MazeTurnAroundCornerAction(MazeAction):
         super(MazeTurnAroundCornerAction, self).start()
         state = self.rover.getRoverState()
         self.start_heading = state.heading.heading
-        self.requested_heading = normaiseAngle(self.start_heading + 90 * -(1 if self.left_or_right == self.RIGHT else -1))
+        self.requested_heading = normaiseAngle(self.start_heading + 80 * -(1 if self.left_or_right == self.RIGHT else -1))
 
-        self.pid = PID(1, 0.0, 0.3, 1, 0, diff_method=angleDiference)
+        self.pid = PID(1, 0.0, 0.05, 1, 0, diff_method=angleDiference)
         self.pid.process(self.requested_heading, self.start_heading)
 
         log(LOG_LEVEL_INFO, "Starting to turn around corner at distance {:04d} at speed {:04d}, start heading {:07.3f}, requested heading {:07.3f}".format(self.distance, self.speed, self.start_heading, self.requested_heading))
@@ -599,15 +616,24 @@ class WaitSensorData(Action):
         super(WaitSensorData, self).__init__()
         self.rover = rover
         self.next_action = next_action
+        self.countdown = 0
+        self.initial_countdown = 4
 
     def start(self):
+        self.countdown = self.initial_countdown
         pyroslib.publish("position/resume", "")
         pyroslib.publish("sensor/distance/resume", "")
         pyroslib.publish("position/heading/start", '{"frequency":20}')
         log(LOG_LEVEL_INFO, "Started a wait for all sensor data to arrive...")
 
     def execute(self):
-        if self.rover.hasCompleteState():
+        if self.rover.hasHeading():
+            if self.countdown == self.initial_countdown:
+                pyroslib.publish("position/calibrate", "")
+            self.countdown -= 1
+
+        if self.rover.hasCompleteState() and self.countdown <= 0:
+            self.rover.start_heading_value = self.rover.heading.heading + self.rover.start_heading_value
             log(LOG_LEVEL_INFO, "Received all sensor data - starting action " + str(self.next_action.getActionName()))
             return self.next_action
 
