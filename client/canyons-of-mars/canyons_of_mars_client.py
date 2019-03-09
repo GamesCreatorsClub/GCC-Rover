@@ -181,7 +181,7 @@ def initGraphics(screens, rect):
 
     canyonsOfMars.right_angle_label = ReflectonAngleWithLabel(Rect(maze_component.rect.x, canyonsOfMars.left_angle_label.rect.bottom + 5, 70, 16), "RA: ", "{:>5d}", canyonsOfMars.rover, "current_state.right_wall_angle", font=uiFactory.font)
     canyonsOfMars.right_front_distance_label = ReflectonValueWithLabel(Rect(canyonsOfMars.right_angle_label.rect.right + 10, canyonsOfMars.right_angle_label.rect.y, 80, 16), "RFD: ", "{:>5d}", canyonsOfMars.rover, "current_state.right_front_distance_of_wall", font=uiFactory.font)
-    canyonsOfMars.right_front_gap_type = ReflectonLookupWithLabel(Rect(canyonsOfMars.right_front_distance_label.rect.right + 10, canyonsOfMars.right_angle_label.rect.y, 100, 16), "LT: ", "{:>7s}", canyonsOfMars.rover, "current_state.right_front_gap_type", ["None", "Corner", "Chicane"], font=uiFactory.font)
+    canyonsOfMars.right_front_gap_type = ReflectonLookupWithLabel(Rect(canyonsOfMars.right_front_distance_label.rect.right + 10, canyonsOfMars.right_angle_label.rect.y, 100, 16), "RT: ", "{:>7s}", canyonsOfMars.rover, "current_state.right_front_gap_type", ["None", "Corner", "Chicane"], font=uiFactory.font)
 
     canyonsOfMars.front_distance_label = ReflectonValueWithLabel(Rect(canyonsOfMars.left_front_gap_type.rect.right + 10, canyonsOfMars.left_front_gap_type.rect.y, 80, 16), "FD: ", "{:>5d}", canyonsOfMars.rover, "current_state.front_wall_distance", font=uiFactory.font)
     canyonsOfMars.back_distance_label = ReflectonValueWithLabel(Rect(canyonsOfMars.right_front_gap_type.rect.right + 10, canyonsOfMars.right_front_gap_type.rect.y, 80, 16), "BD: ", "{:>5d}", canyonsOfMars.rover, "current_state.back_wall_distance", font=uiFactory.font)

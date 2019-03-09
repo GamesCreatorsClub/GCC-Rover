@@ -336,7 +336,7 @@ class HeadingComponent(gccui.components.CardsCollection):
         if self.current_heading != heading:
             self.heading_label.setText("{:7.2f}".format(heading))
 
-            rotatedImage = pygame.transform.rotate(self.arrow_image, -heading)
+            rotatedImage = pygame.transform.rotate(self.arrow_image, heading)
             rotatedImage.get_rect(center=self.rect.center)
             self.image._surface = rotatedImage
             self.current_heading = heading
