@@ -15,6 +15,7 @@ from rover import Rover, WheelOdos, WHEEL_NAMES
 from rover import normaiseAngle, angleDiference
 
 SQRT2 = math.sqrt(2)
+PIhalf = math.pi / 2
 
 
 class PID:
@@ -81,6 +82,213 @@ class PID:
     def to_string(self):
         return "p=" + str(self.p * self.kp) + ", i=" + str(self.i * self.ki) + ", d=" + str(self.d * self.kd) + ", last_delta=" + str(self.last_delta)
 
+
+class MazeAttitude:
+
+    UNKNOWN = 0
+    LEFT_WALL = 1
+    RIGHT_WALL = 2
+    FRONT_WALL = 4
+    BACK_WALL = 8
+
+    NO_GAP = 0
+    FORWARD_GAP = 1
+    SIDE_GAP = 2
+
+    POINTS = [0, 45, 90, 135, 180, 225, 270, 315]
+    WALLS = [90, 270, 0, 180]
+
+    L0_45 = 0
+    L45_90 = 45
+    L90_135 = 90
+    L135_180 = 135
+    L180_225 = 180
+    L225_270 = 225
+    L270_315 = 270
+    L315_0 = 315
+
+    LINES = [L0_45, L45_90, L90_135, L135_180, L180_225, L225_270, L270_315, L315_0]
+
+    ANGLE_TOLLERANCE = 1.075
+
+    @staticmethod
+    def normAngle(a):
+        if a > PIhalf:
+            a = a - math.pi
+        elif a <= -PIhalf:
+            a = a + math.pi
+        return a
+
+    class Line:
+        def __init__(self, line_index, long_point_index, short_point_index, factor, adjust):
+            self.line_index = line_index
+            self.short_point_index = short_point_index
+            self.long_point_index= long_point_index
+            self.factor = factor
+            self.adjust = adjust
+            self.angle = None
+
+        def calcAngle(self, distances):
+            long_distance = distances[self.long_point_index]
+            short_distance = distances[self.short_point_index]
+
+            if long_distance is not None and short_distance is not None:
+                lsqrt2 = long_distance / SQRT2
+                self.angle = MazeAttitude.normAngle(math.atan2(lsqrt2, lsqrt2 - short_distance) * self.factor + self.adjust)
+            else:
+                self.angle = None
+
+    class Wall:
+        def __init__(self, distance_sensor_angle, distance_sensor_index, wall_point_kind, left_mid_point_index, left_point_index, mid_point_index, right_point_index):
+
+            self.ds_angle = distance_sensor_angle
+            self.ds_index = distance_sensor_index
+            self.wall_point_kind = wall_point_kind
+
+            self.left_mid_point_index = left_mid_point_index
+            self.left_point_index = left_point_index
+            self.mid_point_index = mid_point_index
+            self.right_point_index = right_point_index
+
+            self.is_front_or_back = self.ds_angle == 0 or self.ds_angle == 180
+
+            self.selected_line = None
+            self.angle = None
+            self.distance = None
+
+        def setAngle(self, angle, distances):
+            self.angle = angle
+
+            distance = distances[self.mid_point_index]
+            if distance < 1:
+                self.distance = 0
+            else:
+                if self.is_front_or_back:
+                    self.distance = abs(int(math.sin(angle) * distance))
+                else:
+                    self.distance = abs(int(math.cos(angle) * distance))
+
+        def setAngleAndDistance(self, angle, distance):
+            self.angle = angle
+            self.distance = distance
+
+        def tryFindingWall(self, distances, lines, points):
+            lmline = lines[self.left_mid_point_index]
+            lline = lines[self.left_point_index]
+            mline = lines[self.mid_point_index]
+            rline = lines[self.right_point_index]
+
+            dlong1 = distances[lline.long_point_index]
+            dmid = distances[mline.short_point_index]
+            dlong2 = distances[mline.long_point_index]
+
+            plong1 = points[self.left_point_index]
+            pmid = points[self.mid_point_index]
+            plong2 = points[self.right_point_index]
+
+            if dlong1 < dlong2 and plong1 != MazeAttitude.UNKNOWN and lmline.angle * MazeAttitude.ANGLE_TOLLERANCE >= lline.angle >= lmline.angle / MazeAttitude.ANGLE_TOLLERANCE:
+                points[self.mid_point_index] = points[lline.long_point_index]
+                angle = MazeAttitude.normAngle(mline.angle - PIhalf)
+                distance = distances[self.right_point_index] * abs(math.sin(mline.angle) / SQRT2)
+                self.setAngleAndDistance(angle, distance)
+            elif dlong1 >= dlong2 and plong2 != MazeAttitude.UNKNOWN and mline.angle * MazeAttitude.ANGLE_TOLLERANCE >= rline.angle >= mline.angle / MazeAttitude.ANGLE_TOLLERANCE:
+                points[self.mid_point_index] = points[rline.long_point_index]
+                angle = MazeAttitude.normAngle(mline.angle + PIhalf)
+                distance = distances[self.left_point_index] * abs(math.sin(mline.angle) / SQRT2)
+                self.setAngleAndDistance(angle, distance)
+
+            elif lline.angle is not None and mline.angle is not None:
+                if lline.angle * MazeAttitude.ANGLE_TOLLERANCE >= mline.angle >= lline.angle / MazeAttitude.ANGLE_TOLLERANCE:
+                    if plong1 == MazeAttitude.UNKNOWN:
+                        points[self.left_point_index] = self.wall_point_kind
+                    if pmid == MazeAttitude.UNKNOWN:
+                        points[self.mid_point_index] = self.wall_point_kind
+                    if plong2 == MazeAttitude.UNKNOWN:
+                        points[self.right_point_index] = self.wall_point_kind
+                    self.setAngle(mline.angle, distances)
+                else:
+                    if dlong1 < dlong2 and plong1 == MazeAttitude.UNKNOWN and pmid == MazeAttitude.UNKNOWN:
+                        points[self.left_point_index] = self.wall_point_kind
+                        points[self.mid_point_index] = self.wall_point_kind
+                        self.setAngle(lline.angle, distances)
+                    elif dlong1 >= dlong2 and plong2 == MazeAttitude.UNKNOWN and pmid == MazeAttitude.UNKNOWN:
+                        points[self.mid_point_index] = self.wall_point_kind
+                        points[self.right_point_index] = self.wall_point_kind
+                        self.setAngle(mline.angle, distances)
+                    elif plong1 == MazeAttitude.UNKNOWN and pmid == MazeAttitude.UNKNOWN and plong2 != MazeAttitude.UNKNOWN:
+                        points[self.left_point_index] = self.wall_point_kind
+                        points[self.mid_point_index] = self.wall_point_kind
+                        self.setAngle(lline.angle, distances)
+                    elif plong1 != MazeAttitude.UNKNOWN and pmid == MazeAttitude.UNKNOWN and plong2 == MazeAttitude.UNKNOWN:
+                        points[self.mid_point_index] = self.wall_point_kind
+                        points[self.right_point_index] = self.wall_point_kind
+                        self.setAngle(mline.angle, distances)
+
+            elif lline.angle is not None and plong1 == MazeAttitude.UNKNOWN and pmid == MazeAttitude.UNKNOWN:
+                points[self.left_point_index] = self.wall_point_kind
+                points[self.mid_point_index] = self.wall_point_kind
+                self.setAngle(lline.angle, distances)
+
+            elif mline.angle is not None and pmid == MazeAttitude.UNKNOWN and plong2 == MazeAttitude.UNKNOWN:
+                points[self.mid_point_index] = self.wall_point_kind
+                points[self.right_point_index] = self.wall_point_kind
+                self.setAngle(mline.angle, distances)
+
+    def __init__(self):
+        self.lines = {self.L315_0: self.Line(self.L315_0, 315, 0, -1, math.pi), self.L0_45: self.Line(self.L0_45, 45, 0, 1, -math.pi),
+                      self.L45_90: self.Line(self.L45_90, 45, 90, -1, PIhalf), self.L90_135: self.Line(self.L90_135, 135, 90, 1, -PIhalf),
+                      self.L135_180: self.Line(self.L135_180, 135, 180, -1, math.pi), self.L180_225: self.Line(self.L180_225, 225, 180, 1, -math.pi),
+                      self.L225_270: self.Line(self.L225_270, 225, 270, -1, PIhalf), self.L270_315: self.Line(self.L270_315, 315, 270, 1, -PIhalf)}
+        self.right_wall = self.Wall(90, 2, self.RIGHT_WALL, 0, 45, 90, 135)
+        self.left_wall = self.Wall(270, 6, self.LEFT_WALL, 180, 225, 270, 315)
+        self.front_wall = self.Wall(0, 0, self.FRONT_WALL, 270, 315, 0, 45)
+        self.back_wall = self.Wall(180, 4, self.BACK_WALL, 90, 135, 180, 225)
+        self.left_gap = self.NO_GAP
+        self.right_gap = self.NO_GAP
+        self.walls = {self.right_wall.ds_angle: self.right_wall, self.left_wall.ds_angle: self.left_wall, self.front_wall.ds_angle: self.front_wall, self.back_wall.ds_angle: self.back_wall}
+        self.points = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+        self.distances = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+
+    def calculate(self, state):
+        def getPointDistance(state, angle):
+            distance = state.radar.radar[angle]
+            status = state.radar.status[angle]
+            if status == 0:
+                return distance
+
+            last_distance = state.radar.last_radar[angle]
+
+            if abs(distance - last_distance) < 100:
+                return distance
+
+            return None
+
+        def updateUndefinedWall(wall, preferable_wall, wall_adjust, second_wall):
+            if wall.angle is None and self.distances[wall.ds_angle] is not None:
+                if preferable_wall.angle is not None:
+                    wall.setAngleAndDistance(self.normAngle(preferable_wall.angle + wall_adjust), self.distances[wall.mid_point_index])
+                else:
+                    wall.setAngleAndDistance(self.normAngle(second_wall.angle - wall_adjust), self.distances[wall.mid_point_index])
+                self.points[wall.ds_angle] = wall.wall_point_kind
+
+        self.distances = {p: getPointDistance(state, p) for p in self.POINTS}
+
+        for line in self.lines:
+            self.lines[line].calcAngle(self.distances)
+
+        wls = [self.walls[w_ds_angle] for w_ds_angle in self.WALLS if self.distances[w_ds_angle] is not None]
+        wall_processing_order = sorted(wls,
+                                       key=lambda wall: self.distances[wall.ds_angle])
+
+        for wall in wall_processing_order:
+            wall.tryFindingWall(self.distances, self.lines, self.points)
+
+        updateUndefinedWall(self.front_wall, self.right_wall, -PIhalf, self.left_wall)
+        updateUndefinedWall(self.back_wall, self.right_wall, PIhalf, self.left_wall)
+        updateUndefinedWall(self.right_wall, self.front_wall, PIhalf, self.back_wall)
+        updateUndefinedWall(self.left_wall, self.front_wall, -PIhalf, self.back_wall)
+
+        # TODO calc gaps
 
 class Action:
     def __init__(self):
@@ -664,3 +872,71 @@ class DriverForwardForTimeActoun(Action):
             return self
 
         return self.next_action
+
+
+if __name__ == "__main__":
+    from rover import Radar, RoverState
+
+    radar_values = {0: 10, 45: SQRT2 * 10, 90: 10, 135: SQRT2 * 10, 180: 10, 225: SQRT2 * 10, 270: 10, 315: SQRT2 * 10}
+    radar_last_values = {0: 10, 45: SQRT2 * 10, 90: 10, 135: SQRT2 * 10, 180: 10, 225: SQRT2 * 10, 270: 10, 315: SQRT2 * 10}
+    radar_status = {0: 0, 45: 0, 90: 0, 135: 0, 180: 0, 225: 0, 270: 0, 315: 0}
+
+    attitude = MazeAttitude()
+    radar = Radar(0, radar_values, radar_status, Radar(0, radar_last_values, radar_status))
+
+    state = RoverState(None, None, None, radar, None, None)
+
+    def printWallLines(a):
+        if attitude.lines[a].angle is None:
+            print("{:3d} -> point too far - not calculated".format(a))
+        else:
+            angle = int(attitude.lines[a].angle * 180 / math.pi)
+            point = attitude.points[a]
+
+            if point is None:
+                print("{:3d} -> line at {:3d} angle".format(a, angle))
+            else:
+                if point == MazeAttitude.LEFT_WALL:
+                    wall = "left wall"
+                elif point == MazeAttitude.RIGHT_WALL:
+                    wall = "right wall"
+                elif point == MazeAttitude.FRONT_WALL:
+                    wall = "front wall"
+                elif point == MazeAttitude.BACK_WALL:
+                    wall = "back wall"
+                else:
+                    wall = "no wall"
+
+                print("{:3d} -> line at {:3d} angle belogs to {:s}".format(a, angle, wall))
+
+    def printWall(w):
+        if w.angle is None:
+            print("Wall {:3d} -> is too far - not calculated".format(w.ds_angle))
+        else:
+            if w.distance is None:
+                print("Wall {:3d} -> has angle {:3d} but is too far - distance not calculated".format(w.ds_angle, int(w.angle * 180 / math.pi)))
+            else:
+                print("Wall {:3d} -> has angle {:3d} and is at {:3d}".format(w.ds_angle, int(w.angle * 180 / math.pi), w.distance))
+
+    def printWalls():
+        for p in attitude.points:
+            printWallLines(p)
+        for w in attitude.walls:
+            printWall(w)
+        print("----------------------------------------------------------")
+
+    # attitude.calculate(state)
+    # printWalls()
+    #
+    # state.radar.radar[0] = 5
+    # state.radar.radar[45] = SQRT2 * 5 * 0.9
+    # state.radar.radar[315] = SQRT2 * 17
+    # state.radar.radar[270] = SQRT2 * 13
+    # state.radar.radar[225] = SQRT2 * 12
+    # attitude.calculate(state)
+    # printWalls()
+
+    state.radar.radar[180] = 50
+    state.radar.radar[315] = 30
+    attitude.calculate(state)
+    printWalls()

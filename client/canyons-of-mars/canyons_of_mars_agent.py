@@ -225,6 +225,7 @@ class CanyonsOfMarsAgent:
                 self.running = True
                 speed = int(data[1])
                 distance = int(data[2])
+                speed = 140
 
                 # drive_forward_action = DriverForwardForTimeActoun(5, speed, self.stop_action)
                 # corner_action = MazeTurnAroundCornerAction(self.odo, self.radar, self.heading, MazeAction.LEFT, distance, speed,next_action=drive_forward_action)
