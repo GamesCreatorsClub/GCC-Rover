@@ -24,7 +24,7 @@ class MQTTLocalPipeTelemetryLogger(TelemetryLogger):
         print("    waiting for pyros to connect...")
         while not pyroslib.isConnected():
             pyroslib.loop(0.02)
-        print("    pyros to connected.")
+        print("    pyros connected.")
 
         print("    regitering stream " + str(self.name) + "...")
         super(MQTTLocalPipeTelemetryLogger, self).init()

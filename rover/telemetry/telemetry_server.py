@@ -115,48 +115,50 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
                 print("    opened " + str(self.telemetry_fifo) + " fifo file...")
 
                 while True:
-                    d = read_pipe(1)[0]
-                    if DEBUG:
-                        print("Def char " + str(bin(d)))
-                    if d & 1 == 0:
+                    buf = read_pipe(1)
+                    if len(buf) > 0:
+                        d = read_pipe(1)[0]
                         if DEBUG:
-                            print("Reading one byte stream id...")
-                        stream_id = struct.unpack('<B', read_pipe(1))[0]
-                    else:
-                        if DEBUG:
-                            print("Reading two bytes stream id...")
-                        stream_id = struct.unpack('<H', read_pipe(2))[0]
+                            print("Def char " + str(bin(d)))
+                        if d & 1 == 0:
+                            if DEBUG:
+                                print("Reading one byte stream id...")
+                            stream_id = struct.unpack('<B', read_pipe(1))[0]
+                        else:
+                            if DEBUG:
+                                print("Reading two bytes stream id...")
+                            stream_id = struct.unpack('<H', read_pipe(2))[0]
 
-                    if DEBUG:
-                        print("Stream id = " + str(stream_id))
-
-                    if d & 6 == 0:
                         if DEBUG:
-                            print("Reading one byte record size...")
-                        record_size = struct.unpack('<B', read_pipe(1))[0]
-                    elif d & 6 == 1:
-                        if DEBUG:
-                            print("Reading two bytes record size...")
-                        record_size = struct.unpack('<H', read_pipe(2))[0]
-                    else:
-                        if DEBUG:
-                            print("Reading four bytes record size...")
-                        record_size = struct.unpack('<I', read_pipe(4))[0]
+                            print("Stream id = " + str(stream_id))
 
-                    if DEBUG:
-                        print("Record size = " + str(record_size) + ", reading record...")
+                        if d & 6 == 0:
+                            if DEBUG:
+                                print("Reading one byte record size...")
+                            record_size = struct.unpack('<B', read_pipe(1))[0]
+                        elif d & 6 == 1:
+                            if DEBUG:
+                                print("Reading two bytes record size...")
+                            record_size = struct.unpack('<H', read_pipe(2))[0]
+                        else:
+                            if DEBUG:
+                                print("Reading four bytes record size...")
+                            record_size = struct.unpack('<I', read_pipe(4))[0]
 
-                    record = read_pipe(record_size)
-                    if DEBUG:
-                        print("Got record of size = " + str(len(record)) + ", storing record...")
-
-                    if stream_id in self.stream_ids:
-                        stream = self.stream_ids[stream_id]
-                        self.stream_storage.store(stream, stream.extractTimestamp(record), record)
                         if DEBUG:
-                            print("Stored record for stream id " + str(stream_id))
-                    else:
-                        print("Got unknown stream id! stream_id=" + str(stream_id) + ",  record_id=" + str(record_size) + ", def=" + str(bin(d)))
+                            print("Record size = " + str(record_size) + ", reading record...")
+
+                        record = read_pipe(record_size)
+                        if DEBUG:
+                            print("Got record of size = " + str(len(record)) + ", storing record...")
+
+                        if stream_id in self.stream_ids:
+                            stream = self.stream_ids[stream_id]
+                            self.stream_storage.store(stream, stream.extractTimestamp(record), record)
+                            if DEBUG:
+                                print("Stored record for stream id " + str(stream_id))
+                        else:
+                            print("Got unknown stream id! stream_id=" + str(stream_id) + ",  record_id=" + str(record_size) + ", def=" + str(bin(d)))
             except Exception as ex:
                 print("Exception while handing pipe stream; " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
