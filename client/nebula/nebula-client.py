@@ -44,6 +44,7 @@ class NebulaClient:
         self.telemetry = TelemetryUtil()
 
         self.found = {'45': None, '135': None, '225': None, '315': None}
+        self.speed = 80
 
         self.rawImage = pygame.Surface((80, 64), 24)
         self.rawImageBig = pygame.Surface((320, 256), 24)
@@ -177,12 +178,19 @@ class NebulaClient:
         del self.processedImages[:]
         del self.processedBigImages[:]
         self.updateSelected()
-
-    def scan(self):
         self.found_colours = False
         for p in self.found:
             self.found[p] = None
+
+    def scan(self):
+        self.clear()
         pyros.publish("nebula/command", "start scan")
+        self.started_scanning_time = time.time()
+        self.scan_time = "-"
+
+    def corner(self):
+        self.clear()
+        pyros.publish("nebula/command", "start corner")
         self.started_scanning_time = time.time()
         self.scan_time = "-"
 
@@ -190,7 +198,10 @@ class NebulaClient:
         pyros.publish("nebula/command", "start warmup")
 
     def start(self):
-        pass
+        self.clear()
+        pyros.publish("nebula/command", "start nebula " + str(self.speed))
+        self.started_scanning_time = time.time()
+        self.scan_time = "-"
 
     def updateSelected(self):
         self.selected = str(self.ptr) + " of " + str(len(self.processedImages))
@@ -328,6 +339,8 @@ def onKeyDown(key):
         nebula.scan()
     elif key == pygame.K_w:
         nebula.warmup()
+    elif key == pygame.K_c:
+        nebula.corner()
     elif key == pygame.K_r:
         nebula.record = not nebula.record
     elif key == pygame.K_x:
@@ -341,7 +354,7 @@ def onKeyDown(key):
     elif key == pygame.K_4:
         pyros.publish("camera/camera1/raw/fetch", "")
     elif key == pygame.K_RETURN:
-        pyros.publish("nebula/command", "start nebula")
+        nebula.start()
     elif key == pygame.K_SPACE:
         nebula.stop()
     elif key == pygame.K_LEFT:
@@ -378,7 +391,7 @@ def initGraphics(screens, rect):
 
     screens.selectCard("status")
 
-    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, nebula.run_log, nebula.stop, [("Run", nebula.start), ("WarmUp", nebula.warmup), ("Scan", nebula.scan)])
+    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, nebula.run_log, nebula.stop, [("Run", nebula.start), ("WarmUp", nebula.warmup), ("Scan", nebula.scan), ("Corner", nebula.corner)])
     statusComponents.addComponent(runButtons)
     nebula.runButtons = runButtons
 
