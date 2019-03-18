@@ -13,76 +13,11 @@ import time
 from pyroslib.logging import log, LOG_LEVEL_ALWAYS, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG
 from rover import WheelOdos, WHEEL_NAMES
 from rover import normaiseAngle, angleDiference
-from challenge_utils import Action
+from challenge_utils import Action, PID
 
 
 SQRT2 = math.sqrt(2)
 PIhalf = math.pi / 2
-
-
-class PID:
-    def __init__(self, _kp, _ki, _kd, gain, dead_band, diff_method=None):
-        self.set_point = 0.0
-        self.p = 0.0
-        self.i = 0.0
-        self.d = 0.0
-        self.kp = _kp
-        self.ki = _ki
-        self.kd = _kd
-        self.kg = gain
-        self.dead_band = dead_band
-        self.last_error = 0.0
-        self.last_time = 0.0
-        self.last_output = 0.0
-        self.last_delta = 0.0
-        self.first = True
-        self.diff_method = diff_method if diff_method is not None else self.subtract
-
-    def process(self, set_point, current):
-        now = time.time()
-
-        error = self.diff_method(set_point, current)
-        if abs(error) <= self.dead_band:
-            error = 0.0
-
-        if self.first:
-            self.first = False
-            self.set_point = set_point
-            self.last_error = error
-            self.last_time = now
-            return 0
-        else:
-            delta_time = now - self.last_time
-
-            self.p = error
-            if (self.last_error < 0 and error > 0) or (self.last_error > 0 and error < 0):
-                self.i = 0.0
-            elif abs(error) <= 0.1:
-                self.i = 0.0
-            else:
-                self.i += error * delta_time
-
-            if delta_time > 0:
-                self.d = (error - self.last_error) / delta_time
-
-            output = self.p * self.kp + self.i * self.ki + self.d * self.kd
-
-            output *= self.kg
-
-            self.set_point = set_point
-            self.last_output = output
-            self.last_error = error
-            self.last_time = now
-            self.last_delta = delta_time
-
-        return output
-
-    @staticmethod
-    def subtract(set_point, current):
-        return set_point - current
-
-    def to_string(self):
-        return "p=" + str(self.p * self.kp) + ", i=" + str(self.i * self.ki) + ", d=" + str(self.d * self.kd) + ", last_delta=" + str(self.last_delta)
 
 
 class MazeAttitude:
