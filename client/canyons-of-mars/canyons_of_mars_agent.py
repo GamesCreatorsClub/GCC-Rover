@@ -6,16 +6,15 @@
 #
 
 import math
-import telemetry
-import time
 import traceback
 
 import pyroslib
 import pyroslib.logging
 
-from pyroslib.logging import log, LOG_LEVEL_INFO
-from rover import Rover, RoverState
-from maze import DoNothing, StopAction, MazeAction, MoveForwardOnOdo, MazeCorridorAction, WaitSensorData, MazeTurnAroundCornerAction, MazeTurnOnSpotWithDistanceAction
+from pyroslib.logging import LOG_LEVEL_INFO
+from rover import Rover
+from maze import MazeAction, MazeCorridorAction, MazeTurnAroundCornerAction
+from challenge_utils import AgentClass, WaitSensorData
 
 
 SQRT2 = math.sqrt(2)
@@ -151,63 +150,12 @@ class Odo:
                 self.wheel_orientation[WHEEL_NAMES[i]] = new_deg
 
 
-class CanyonsOfMarsAgent:
+class CanyonsOfMarsAgent(AgentClass):
     def __init__(self):
+        super(CanyonsOfMarsAgent, self).__init__("canyons")
         self.running = False
         self.rover = Rover()
-        self.time_to_send_compact_data = 0
         self.last_execution_time = 0
-
-        self.do_nothing = DoNothing()
-        self.stop_action = StopAction(self)
-        self.move_forward_on_odo = MoveForwardOnOdo(self.rover)
-        self.current_action = self.do_nothing
-
-    def connected(self):
-        pyroslib.subscribe("canyons/command", self.handleAgentCommands)
-        pyroslib.subscribe("wheel/speed/status", self.rover.handleOdo)
-        pyroslib.subscribe("wheel/deg/status", self.rover.handleWheelOrientation)
-        pyroslib.subscribe("sensor/distance", self.rover.handleRadar)
-        pyroslib.subscribeBinary("sensor/heading/data", self.rover.handleHeading)
-        pyroslib.publish("canyons/feedback/action", self.current_action.getActionName())
-        pyroslib.publish("canyons/feedback/running", self.running)
-
-    def handleAgentCommands(self, topic, message, groups):
-        data = message.split(" ")
-
-        log(LOG_LEVEL_INFO, "Got command " + message)
-
-        cmd = data[0]
-        if cmd == "stop":
-            self.stop()
-        elif cmd == "start":
-            self.start(data[1:])
-
-    def sendCompactData(self):
-        pass
-
-    def nextAction(self, action):
-        if action != self.current_action:
-            self.current_action.end()
-            self.current_action = action
-            action.start()
-            pyroslib.publish("canyons/feedback/action", action.getActionName())
-
-    def execute(self):
-        state = self.rover.nextState()
-        state.calculate()
-        next_action = self.current_action.execute()
-        if next_action is None:
-            next_action = self.stop_action
-        self.nextAction(next_action)
-
-        if self.running:
-            state.log(state_logger, self.current_action.getActionName()[:12])
-
-        now = time.time()
-        if now >= self.time_to_send_compact_data:
-            self.time_to_send_compact_data = now + 0.1
-            self.sendCompactData()
 
     def stop(self):
         self.running = False
@@ -239,32 +187,21 @@ class CanyonsOfMarsAgent:
                 distance = int(data[2])
 
                 self.nextAction(WaitSensorData(self.rover, MazeTurnAroundCornerAction(self.rover, MazeAction.LEFT, distance, speed)))
-            elif data[0] == 'turn180':
-                self.running = True
-                speed = int(data[1])
-                distance = int(data[2])
-
-                self.nextAction(WaitSensorData(self.rover, MazeTurnOnSpotWithDistanceAction(self.rover, distance, speed)))
 
 
 if __name__ == "__main__":
     try:
         print("Starting canyons-of-mars agent...")
 
-        print("  creating logger...")
-
-        state_logger = RoverState.defineLogger(telemetry.MQTTLocalPipeTelemetryLogger('rover-state'))
-
         canyonsOfMarsAgent = CanyonsOfMarsAgent()
 
         pyroslib.init("canyons-of-mars-agent", unique=True, onConnected=canyonsOfMarsAgent.connected)
 
-        print("  initialising logger...")
-        state_logger.init()
+        canyonsOfMarsAgent.register_logger()
 
         print("Started canyons-of-mars agent.")
 
-        pyroslib.forever(0.1, canyonsOfMarsAgent.execute)
+        pyroslib.forever(0.1, canyonsOfMarsAgent.mainLoop)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))

@@ -19,7 +19,8 @@ import time
 from pygame import Rect
 from client_utils import TelemetryUtil, RunLog
 from rover import Rover
-from canyon_compponents import MazeCorridorComponent, RunButtons, HeadingComponent, ReflectonValueWithLabel, ReflectonAngleWithLabel, ReflectonLookupWithLabel, WheelsStatus
+from canyon_compponents import MazeCorridorComponent
+from agent_components import RunButtons, HeadingComponent, ReflectonValueWithLabel, ReflectonAngleWithLabel, ReflectonLookupWithLabel, WheelsStatus
 from roverscreencomponents import Radar
 
 sqrt2 = math.sqrt(2)
@@ -30,7 +31,7 @@ screen = pyros.gccui.initAll(screen_size, True)
 
 def connected():
     print("Starting agent... ", end="")
-    pyros.agent.init(pyros.client, "canyons_of_mars_agent.py", optional_files=["rover.py", "maze.py"])
+    pyros.agent.init(pyros.client, "canyons_of_mars_agent.py", optional_files=["../common/rover.py", "maze.py"])
     print("Done.")
 
 
@@ -101,7 +102,7 @@ class CanyonsOfMars:
             return radar.radar, radar.last_radar, radar.status
         return None, None, None
 
-    def getWheelStatus(self, wheel_name):
+    def _getWheelStatus(self, wheel_name):
         state = self.rover.getRoverState()
 
         if state.wheel_orientations is not None:
@@ -121,7 +122,7 @@ class CanyonsOfMars:
         angle = 0
         status = 0
         if state.wheel_orientations is not None:
-            status = self.getWheelStatus(wheel_name)
+            status = self._getWheelStatus(wheel_name)
             angle = state.wheel_orientations.orientations[wheel_name]
 
         return angle, status
@@ -131,7 +132,7 @@ class CanyonsOfMars:
         odo = 0
         status = 0
         if state.wheel_odos is not None:
-            status = self.getWheelStatus(wheel_name)
+            status = self._getWheelStatus(wheel_name)
             odo = state.wheel_odos.odos[wheel_name]
 
         return odo, status
@@ -232,8 +233,8 @@ pyros.subscribeBinary("sensor/heading/data", canyonsOfMars.rover.handleHeading)
 pyros.subscribe("canyons/feedback/action", canyonsOfMars.handleAction)
 pyros.subscribe("canyons/feedback/running", canyonsOfMars.handleRunning)
 
-font = pygame.font.Font("garuda.ttf", 18)
-smallFont = pygame.font.Font("garuda.ttf", 12)
+font = pygame.font.Font("../common/garuda.ttf", 18)
+smallFont = pygame.font.Font("../common/garuda.ttf", 12)
 
 uiAdapter = gccui.UIAdapter(screen)
 uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter)

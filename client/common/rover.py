@@ -9,8 +9,6 @@ import math
 import time
 import struct
 
-import telemetry
-
 
 WHEEL_CIRCUMFERENCE = 68 * math.pi
 WHEEL_NAMES = ['fl', 'fr', 'bl', 'br']
@@ -126,9 +124,10 @@ class Radar:
 
 
 class Heading:
-    def __init__(self, heading_time, heading_value, old_heading: 'Heading' = None):
+    def __init__(self, heading_time, heading_value, heading_status, old_heading: 'Heading' = None):
         self.time = heading_time
         self.heading = heading_value
+        self.status = heading_status
         self.last_heading = heading_value if old_heading is None else old_heading.heading
         self.last_time = heading_time if old_heading is None else old_heading.time
         self.heading_delta = None
@@ -165,7 +164,7 @@ class RoverCommand:
         if self.distance == 0:
             self.display = "move/rotate s={:>3d}".format(int(self.speed))
         elif self.speed == 0:
-            self.display = "move/drive a={:>3d} 0".format(int(self.angle) + " 0")  # Orient wheels only
+            self.display = "move/drive a={:>3d} 0 0".format(int(self.angle))  # Orient wheels only
         elif self.distance >= 32000 or self.distance <= -32000:
             self.display = "move/drive a={:>3d} s={:>3d}".format(int(self.angle), int(self.speed))
         else:
@@ -250,7 +249,7 @@ class RoverState:
 
     def log(self, logger, selection):
         selection_str = selection + "                                  "
-        selection_str = selection_str[0:18]
+        selection_str = selection_str[0:17]
 
         if selection_str.endswith("\n"):
             selection_str = selection_str[0:len(selection_str) - 1] + " "
@@ -296,11 +295,12 @@ class RoverState:
             int(self.radar.last_radar[180]), int(self.radar.last_radar[225]), int(self.radar.last_radar[270]), int(self.radar.last_radar[315]),
 
             # 54
-            float(self.heading.time), int(self.heading.heading), int(self.heading.last_time), int(self.heading.last_heading),
+            float(self.heading.time), int(self.heading.heading), int(self.heading.status), int(self.heading.last_time), int(self.heading.last_heading),
 
-            # 58
+            # 59
             float(self.last_command.time if self.last_command.time is not None else 0), int(self.last_command.speed), int(self.last_command.angle), int(self.last_command.distance),
-            # 61
+
+            # 62
             bytes(selection_str, 'ascii')
         ]
 
@@ -333,7 +333,7 @@ class RoverState:
         radar = {0: data[29], 45: data[30], 90: data[31], 135: data[32],
                  180: data[33], 225: data[34], 270: data[35], 315: data[36]}
         radar_status = {0: data[37], 45: data[38], 90: data[39], 135: data[40],
-                 180: data[41], 225: data[42], 270: data[43], 315: data[44]}
+                        180: data[41], 225: data[42], 270: data[43], 315: data[44]}
         last_radar_time = data[45]
         last_radar = {0: data[46], 45: data[47], 90: data[48], 135: data[49],
                       180: data[50], 225: data[51], 270: data[52], 315: data[53]}
@@ -343,21 +343,22 @@ class RoverState:
 
         heading_time = data[54]
         heading_value = data[55]
-        last_heading_time = data[56]
-        last_heading = data[57]
-        prev_heading = Heading(last_heading_time, last_heading)
+        heading_status = data[56]
+        last_heading_time = data[57]
+        last_heading = data[58]
+        prev_heading = Heading(last_heading_time, last_heading, 0)
         self.heading = Heading(heading_time, heading_value, prev_heading)
 
-        cmd_time = data[58]
-        cmd_speed = data[59]
-        cmd_angle = data[60]
-        cmd_dist = data[61]
+        cmd_time = data[59]
+        cmd_speed = data[60]
+        cmd_angle = data[61]
+        cmd_dist = data[62]
         self.last_command = RoverCommand(cmd_speed, cmd_angle, cmd_dist)
         if cmd_time != 0:
             self.last_command.time = cmd_time
             self.last_command.updateDisplayValue()
 
-        self.selection = str(data[62])
+        self.selection = str(data[63])
 
     @staticmethod
     def defineLogger(logger):
@@ -423,17 +424,18 @@ class RoverState:
         logger.addWord('last_radar_315')  # 128 bytes (24)
 
         logger.addDouble('heading_time')
-        logger.addWord('heading')  # 138 (10)
+        logger.addWord('heading')  #
+        logger.addByte('heading_s')  # 139 (11)
 
         logger.addDouble('last_heading_time')
-        logger.addWord('last_heading')  # 148 (10)
+        logger.addWord('last_heading')  # 149 (10)
 
         logger.addDouble('cmd_time')
         logger.addWord('cmd_speed', signed=True)
         logger.addWord('cmd_angle', signed=True)
-        logger.addWord('cmd_dist', signed=True)  # 162 (14)
+        logger.addWord('cmd_dist', signed=True)  # 163 (14)
 
-        logger.addFixedString('selection', 18)  # 180 (18)
+        logger.addFixedString('selection', 17)  # 180 (18)
 
         return logger
 
@@ -468,21 +470,22 @@ class Rover:
         self.wheel_odos = WheelOdos(0, EMPTY_WHEEL_DATA, EMPTY_WHEEL_DATA)
         self.wheel_orientations = WheelOrientations(0, EMPTY_WHEEL_DATA, EMPTY_WHEEL_DATA)
         self.radar = Radar(0, EMPTY_RADAR_DATA, EMPTY_RADAR_DATA)
-        self.heading = Heading(0, 0)
+        self.heading = Heading(0, 0, 0)
         self.last_command = RoverCommand(0, 0, 0)
         self.start_heading_value = None
 
     def handleHeading(self, topic, message, groups):
-        heading_data = struct.unpack('>ffff', message)
+        heading_data = struct.unpack('>fffBf', message)
 
-        heading_time = heading_data[3]
+        heading_time = heading_data[4]
         heading_time = time.time()
+        heading_status = heading_data[3]
         new_heading = normaiseAngle(heading_data[2])
 
         if self.start_heading_value is None:
             self.start_heading_value = new_heading
 
-        self.heading = Heading(heading_time, normaiseAngle(new_heading - self.start_heading_value), self.heading)
+        self.heading = Heading(heading_time, normaiseAngle(new_heading - self.start_heading_value), heading_status, self.heading)
 
     def handleRadar(self, topic, message, groups):
         values = [v.split(":") for v in message.split(" ")]
@@ -569,4 +572,3 @@ class Rover:
         cmd = RoverCommand(speed, angle, distance)
         cmd.send(publish_method)
         self.last_command = cmd
-
