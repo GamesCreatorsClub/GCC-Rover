@@ -5,424 +5,333 @@
 # MIT License
 #
 
-import sys
-import time
+import gccui
 import pygame
 import pyros
 import pyros.gcc
 import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
+import sys
+import time
+
+from pygame import Rect
 from PIL import Image
-
-
-MAX_PING_TIMEOUT = 1
-MAX_PICTURES = 400
-pingLastTime = 0
+from rover import Rover
+from client_utils import TelemetryUtil, RunLog
+from agent_components import RunButtons, HeadingComponent, Border, BorderImage, ReflectonValueWithLabel, ReflectonAngleWithLabel, ReflectonLookupWithLabel, WheelsStatus
+from roverscreencomponents import Radar
 
 
 screen_size = (1024, 800)
 
 screen = pyros.gccui.initAll(screen_size, True)
 
-cameraImage = Image.new("L", [80, 64])
 
-rawImage = pygame.Surface((80, 64), 24)
-rawImageBig = pygame.Surface((320, 256), 24)
-
-arrow_image = pygame.image.load("arrow.png")
-arrow_image = pygame.transform.scale(arrow_image, (50, 50))
-
-
-completeRawImage = None
-lastImage = None
-
-processedImages = []
-processedBigImages = []
-
-forwardSpeed = 5
-
-running = False
-
-lights = False
 resubscribe = time.time()
 lastReceivedTime = time.time()
 frameTime = ""
 
 receivedFrameTime = ""
 
-feedback = {
-    "angle": "",
-    "turnDistance": "",
-    "action": "",
-    "left": "",
-    "right": ""
-}
-
-imgNo = 0
-
-ptr = -1
 size = (80, 64)
 
-record = False
-continuous = False
 
-
-localFPS = 0
-lastProcessed = time.time()
-renewContinuous = time.time()
-
-distanceDeg1 = -1
-distanceDeg2 = -1
-distance1 = -1
-distance2 = -1
-avgDistance1 = -1
-avgDistance2 = -1
-
-gyroAngle = 0
-
-
-def connected():
-    print("Starting agent... ", end="")
-    pyros.agent.init(pyros.client, "nebula-agent.py")
-    print("Done.")
-
-    # pyros.publish("camera/processed/fetch", "")
-    pyros.publish("camera/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
-    pyros.publish("camera/wheels/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
-    pyros.publish("camera/camera1/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
-    pyros.publish("camera/camera2/format", "RGB " + str(size[0]) + "," + str(size[1]) + " False")
-
-
-def toPILImage(imageBytes):
-    pilImage = Image.frombytes("RGB", size, imageBytes)
-    return pilImage
-
-
-def toPyImage(pilImage):
-    pyImage = pygame.image.fromstring(pilImage.tobytes("raw"), size, "RGB")
-    return pyImage
-
-
-def handleImageDetails(topic, message, groups):
-    global rawImage, rawImageBig, completeRawImage
-
-    results = []
-
-    for line in message.split("\n"):
-        split = line.split(",")
-        if len(split) == 3:
-            result = int(split[0]), int(split[1]), split[2].lower(), 10
-            results.append(result)
-        elif len(split) >= 4:
-            result = int(split[0]), int(split[1]), split[2].lower(), int(split[3])
-            results.append(result)
-
-    print("Got details " + str(results) + " from: \n" + message)
-
-    for result in results:
-        if "red" == result[2]:
-            drawTarget(completeRawImage, result, pyros.gccui.RED, "red", result[3])
-        if "green" == result[2]:
-            drawTarget(completeRawImage, result, pyros.gccui.GREEN, "green", result[3])
-        if "yellow" == result[2]:
-            drawTarget(completeRawImage, result, pyros.gccui.YELLOW, "yellow", result[3])
-        if "blue" == result[2]:
-            drawTarget(completeRawImage, result, pyros.gccui.BLUE, "blue", result[3])
-
-    if completeRawImage is not None:
-        rawImage = pygame.transform.scale(completeRawImage, (80, 64))
-        rawImageBig = pygame.transform.scale(completeRawImage, (320, 256))
-
-        if record:
-            processedImages.append(rawImage)
-            processedBigImages.append(rawImageBig)
-
-
-def handleCameraRaw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS, completeRawImage
-
-    handleCameraProcessed(topic, message, groups)
-    completeRawImage = lastImage
-
-
-def handleCameraWheelsRaw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS, completeRawImage
-
-    handleCameraProcessed(topic, message, groups)
-    completeRawImage = lastImage
-
-
-def handleCamera1Raw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS, completeRawImage
-
-    handleCameraProcessed(topic, message, groups)
-    completeRawImage = lastImage
-
-
-def handleCamera2Raw(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS, completeRawImage
-
-    handleCameraProcessed(topic, message, groups)
-    completeRawImage = lastImage
-
-
-def handleCameraProcessed(topic, message, groups):
-    global rawImage, rawImageBig, lastProcessed, localFPS, lastImage
-
-    n = time.time()
-    delta = n - lastProcessed
-    lastProcessed = n
-
-    if delta < 5:
-        localFPS = "%.2f" % round(1 / delta, 2)
-    else:
-        localFPS = "-"
-
-    pilImage = toPILImage(message)
-
-    processedPilImage = processImage(pilImage)
-    image = toPyImage(processedPilImage)
-
-    # image = toPyImage(pilImage)
-    lastImage = image
-
-    # if "red" in result:
-    #     drawTarget(image, result["red"], pyros.gccui.RED, "red")
-    # if "green" in result:
-    #     drawTarget(image, result["green"], pyros.gccui.GREEN, "green")
-    # if "yellow" in result:
-    #     drawTarget(image, result["yellow"], pyros.gccui.YELLOW, "yellow")
-    # if "blue" in result:
-    #     drawTarget(image, result["blue"], pyros.gccui.BLUE, "blue")
-    #
-    rawImage = pygame.transform.scale(lastImage, (80, 64))
-    rawImageBig = pygame.transform.scale(lastImage, (320, 256))
-
-    if record:
-        processedImages.append(rawImage)
-        processedBigImages.append(rawImageBig)
-    #
-    # if sequence and not continuous:
-    #     pyros.publish("camera/raw/fetch", "")
-
-
-def processImage(image):
-
-    red_pixels = []
-    green_pixels = []
-    blue_pixels = []
-    yellow_pixels = []
-
-    for y in range(0, 64):
-        for x in range(0, 80):
-            p = image.getpixel((x, y))
-            if isRed(p):
-                red_pixels.append((x, y))
-            if isGreen(p):
-                green_pixels.append((x, y))
-            if isBlue(p):
-                blue_pixels.append((x, y))
-            if isYellow(p):
-                yellow_pixels.append((x, y))
-
-    result = {}
-
-    if len(red_pixels) > 20:
-        centre = calculateCentre(red_pixels)
-        result["red"] = centre
-
-        drawSpot(image, centre[0], centre[1], (255, 64, 64), "red")
-
-    if len(green_pixels) > 20:
-        centre = calculateCentre(green_pixels)
-        result["green"] = centre
-
-        drawSpot(image, centre[0], centre[1], (64, 255, 64), "green")
-
-    if len(blue_pixels) > 20:
-        centre = calculateCentre(blue_pixels)
-        result["blue"] = centre
-
-        drawSpot(image, centre[0], centre[1], (64, 64, 255), "blue")
-
-    if len(yellow_pixels) > 20:
-        centre = calculateCentre(yellow_pixels)
-        result["yellow"] = centre
-
-        drawSpot(image, centre[0], centre[1], (255, 255, 64), "yellow")
-
-    processedImage = image
-    return processedImage
-
-
-def isRed(p):
-    return p[0] > 64 and distance(p[0], p[1]) > 1.2 and distance(p[0], p[1]) > 1.2 and 0.8 < distance(p[1], p[2]) < 1.2
-
-
-def isGreen(p):
-    return p[1] > 64 and distance(p[1], p[0]) > 1.2 and distance(p[1], p[2]) > 1.2 and 0.8 < distance(p[0], p[2]) < 1.2
-
-
-def isBlue(p):
-    return p[2] > 64 and distance(p[2], p[0]) > 1.2 and distance(p[2], p[1]) > 1.2 and 0.8 < distance(p[0], p[1]) < 1.2
-
-
-def isYellow(p):
-    return p[0] > 64 and p[1] > 128 and 0.8 < distance(p[0], p[1]) < 1.2 and distance(p[0], p[2]) > 1.2 and distance(p[1], p[2]) > 1.2
-
-
-def distance(x, y):
-    if y != 0:
-        return x / y
-    else:
-        return x / 256
-
-
-def calculateCentre(pixels):
-    cx = 0
-    cy = 0
-    for p in pixels:
-        cx = cx + p[0]
-        cy = cy + p[1]
-
-    cx = int(cx / len(pixels))
-    cy = int(cy / len(pixels))
-    return cx, cy
-
-
-def drawTarget(image, centre, colour, text, radius=20):
-    if radius < 16:
-        radius = 16
-
-    x = centre[0] - radius / 4
-    if x < 0:
-        x = 0
-
-    y = centre[1] - radius / 4
-    if y < 0:
-        y = 0
-
-    w = radius - 1
-    h = radius - 1
-
-    tl = 13
-    tl1 = 12
-
-    # pygame.draw.rect(image, pyros.gccui.WHITE, pygame.Rect(x + 2, y + 2, w - 2, h - 2), 1)
-
-    pygame.draw.line(image, pyros.gccui.WHITE, (x, y), (x + tl, y))
-    pygame.draw.line(image, pyros.gccui.WHITE, (x, y), (x, y + tl))
-    pygame.draw.line(image, colour, (x + 1, y + 1), (x + 1, y + tl1))
-    pygame.draw.line(image, colour, (x + 1, y + 1), (x + tl1, y + 1))
-
-    pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x + tl, y + h))
-    pygame.draw.line(image, pyros.gccui.WHITE, (x, y + h), (x, y + h - tl))
-    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + 1, y + h - tl1))
-    pygame.draw.line(image, colour, (x + 1, y + h - 1), (x + tl1, y + h - 1))
-
-    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y), (x + w - tl, y))
-    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y), (x + w, y + tl))
-    pygame.draw.line(image, colour, (x + w - 1, y + 1), (x + w - 1, y + tl1))
-    pygame.draw.line(image, colour, (x + w - 1, y + 1), (x + w - tl1, y + 1))
-
-    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y + h), (x + w - tl, y + h))
-    pygame.draw.line(image, pyros.gccui.WHITE, (x + w, y + h), (x + w, y + h - tl))
-    pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - 1, y + h - tl1))
-    pygame.draw.line(image, colour, (x + w - 1, y + h - 1), (x + w - tl1, y + h - 1))
-
-    tdist = 30
-
-    left = False
-    if x > tdist:
-        tx = x - tdist
-        lx = x - 2
-        left = True
-    elif x + w < image.get_width() - tdist:
-        tx = x + w + tdist
-        lx = x + w + 2
-    else:
-        tx = centre[0]
-        lx = centre[0]
-
-    if y > tdist:
-        ty = y - tdist
-        ly = y - 2
-    elif y + h < image.get_height() - tdist:
-        ty = y + h + tdist
-        ly = y + h + 2
-    else:
-        ty = centre[0]
-        ly = centre[0]
-
-    pyros.gccui.font.set_bold(True)
-    tw = pyros.gccui.font.size(text)[1]
-
-    pygame.draw.line(image, pyros.gccui.WHITE, (lx, ly), (tx, ty))
-    if left:
-        pygame.draw.line(image, pyros.gccui.WHITE, (tx - tw - 5, ty), (tx, ty))
-        image.blit(pyros.gccui.font.render(text, 1, colour), (tx - tw, ty - 25))
-    else:
-        pygame.draw.line(image, pyros.gccui.WHITE, (tx + tw + 5, ty), (tx, ty))
-        image.blit(pyros.gccui.font.render(text, 1, colour), (tx, ty - 25))
-    pyros.gccui.font.set_bold(False)
-
-
-def drawSpot(image, cx, cy, colour, text):
-    if False:
-        for x in range(cx - 30, cx + 30):
-            if x >= 0 and x < 320:
-                if cy > 0:
-                    image.putpixel((x, cy - 1), (255, 255, 255))
-                image.putpixel((x, cy), colour)
-                if cy < 256 - 1:
-                    image.putpixel((x, cy + 1), (255, 255, 255))
-        for y in range(cy - 30, cy + 30):
-            if y >= 0 and y < 256:
-                if cx > 0:
-                    image.putpixel((cx - 1, y), (255, 255, 255))
-                image.putpixel((cx, y), colour)
-                if cx < 320 - 1:
-                    image.putpixel((cx + 1, y), (255, 255, 255))
-
-
-def toggleStart():
-    global imgNo, processedImages, processedBigImages, running
-
-    pass
-
-
-def stop():
-    global running
-    pyros.publish("nebula/command", "stop")
-    running = False
-
-
-def clear():
-    global imgNo, processedImages, processedBigImages
-
-    imgNo = 0
-    del processedImages[:]
-    del processedBigImages[:]
+class NebulaClient:
+    def __init__(self):
+        self.rover = Rover()
+        self.run_log = RunLog(self.rover)
+        self.telemetry = TelemetryUtil()
+
+        self.found = {'45': None, '135': None, '225': None, '315': None}
+
+        self.rawImage = pygame.Surface((80, 64), 24)
+        self.rawImageBig = pygame.Surface((320, 256), 24)
+
+        self.completeRawImage = None
+        self.lastImage = None
+
+        self.processedImages = []
+        self.processedBigImages = []
+        self.imgNo = 0
+        self.ptr = -1
+        self.selected = ""
+
+        self.running = False
+        self.record = False
+        self.found_colours = False
+        self.started_scanning_time = None
+        self.scan_time = "-"
+
+        self.runButtons = None
+        self.radar = None
+        self.heading_component = None
+        self.preview_image = None
+        self.preview_image_small = None
+        self.result_preview = None
+
+    def connected(self):
+        print("Starting agent... ", end="")
+        pyros.agent.init(pyros.client, "nebula-agent.py", optional_files=["../common/rover.py", "../common/challenge_utils.py"])
+        print("Done.")
+
+        pyros.subscribeBinary("nebula/processed", self.handleCameraRaw)
+        pyros.subscribe("nebula/imagedetails", self.handleResults)
+        pyros.subscribe("nebula/feedback/action", self.handleAction)
+        pyros.subscribe("nebula/feedback/running", self.handleRunning)
+
+        pyros.subscribeBinary("camera/raw", self.handleCameraRaw)
+        pyros.subscribeBinary("camera/wheels/raw", self.handleCameraWheelsRaw)
+        pyros.subscribeBinary("camera/camera1/raw", self.handleCamera1Raw)
+        pyros.subscribeBinary("camera/camera2/raw", self.handleCamera2Raw)
+
+        pyros.subscribe("wheel/speed/status", self.rover.handleOdo)
+        pyros.subscribe("wheel/deg/status", self.rover.handleWheelOrientation)
+        pyros.subscribe("sensor/distance", self.rover.handleRadar)
+        pyros.subscribeBinary("sensor/heading/data", self.rover.handleHeading)
+
+        # pyros.subscribe("overtherainbow/distances", handleDistances)
+        # pyros.subscribe("overtherainbow/imagedetails", handleImageDetails)
+        # pyros.subscribeBinary("overtherainbow/processed", handleCameraProcessed)
+
+    @staticmethod
+    def toPILImage(imageBytes):
+        pilImage = Image.frombytes("RGB", size, imageBytes)
+        return pilImage
+
+    @staticmethod
+    def toPyImage(pilImage):
+        pyImage = pygame.image.fromstring(pilImage.tobytes("raw"), size, "RGB")
+        return pyImage
+
+    def handleCameraRaw(self, topic, message, groups):
+        self.handleCameraProcessed(topic, message, groups)
+        self.completeRawImage = self.lastImage
+
+    def handleCameraWheelsRaw(self, topic, message, groups):
+        self.handleCameraProcessed(topic, message, groups)
+        self.completeRawImage = self.lastImage
+
+    def handleCamera1Raw(self, topic, message, groups):
+        self.handleCameraProcessed(topic, message, groups)
+        self.completeRawImage = self.lastImage
+
+    def handleCamera2Raw(self, topic, message, groups):
+        self.handleCameraProcessed(topic, message, groups)
+        self.completeRawImage = self.lastImage
+
+    def handleCameraProcessed(self, topic, message, groups):
+
+        pilImage = self.toPILImage(message)
+
+        image = self.toPyImage(pilImage)
+        self.lastImage = image
+
+        self.rawImage = pygame.transform.scale(self.lastImage, (80, 64))
+        self.rawImageBig = pygame.transform.scale(self.lastImage, (320, 256))
+
+        self.preview_image.setImage(self.rawImageBig)
+        self.preview_image_small.setImage(self.rawImage)
+
+        if self.record:
+            self.processedImages.append(self.rawImage)
+            self.processedBigImages.append(self.rawImageBig)
+            self.updateSelected()
+
+    def handleResults(self, topic, message, groups):
+        # print("Received " + str(message))
+        split = message.split(" ")
+        if split[0] == "found:":
+            self.found_colours = True
+            self.scan_time = "{:7.3f}".format(time.time() - self.started_scanning_time)
+
+        del split[0]
+        for s in split:
+            kv = s.split(":")
+            self.found[kv[0]] = kv[1]
+
+        # print("Found now: " + str(self.found))
+
+    def handleAction(self, topic, message, groups):
+        self.runButtons.label.setText(message)
+
+    def handleRunning(self, topic, message, groups):
+        if message == 'False':
+            self._stop()
+
+    def _stop(self):
+        prev_running = self.running
+        self.running = False
+        self.runButtons.off()
+        self.heading = 0
+        self.start_heading = -1
+        if prev_running:
+            self.telemetry.fetchData("rover-state", self.run_log.addNewRecord)
+
+    def stop(self):
+        pyros.publish("nebula/command", "stop")
+        self.running = False
+
+    def clear(self):
+        self.imgNo = 0
+        del self.processedImages[:]
+        del self.processedBigImages[:]
+        self.updateSelected()
+
+    def scan(self):
+        self.found_colours = False
+        for p in self.found:
+            self.found[p] = None
+        pyros.publish("nebula/command", "start scan")
+        self.started_scanning_time = time.time()
+        self.scan_time = "-"
+
+    def warmup(self):
+        pyros.publish("nebula/command", "start warmup")
+
+    def start(self):
+        pass
+
+    def updateSelected(self):
+        self.selected = str(self.ptr) + " of " + str(len(self.processedImages))
+
+    @staticmethod
+    def swap(array):
+        v = array[0]
+        array[0] = array[1]
+        array[1] = v
+
+    def draw(self, surface):
+        # noinspection PyRedeclaration
+        # hpos = 40
+        # hpos = pyros.gccui.drawKeyValue("Recording", str(self.record), 8, hpos)
+        # hpos = pyros.gccui.drawKeyValue("Selected", str(self.ptr) + " of " + str(len(self.processedImages)), 8, hpos)
+        # hpos = pyros.gccui.drawKeyValue("Running", str(self.running), 8, hpos)
+        # hpos = pyros.gccui.drawKeyValue("Scan time", "{:7.3f}".format(self.scan_time) if self.scan_time is not None else "-", 8, hpos)
+
+        pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-scan, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, d-distances, x- clear, camera: u-up, d-down, /-reset",
+                                  (8, surface.get_height() - pyros.gccui.smallFont.get_height()))
+
+        # pyros.gccui.drawImage(self.rawImage, (500, 50), 10)
+        # pyros.gccui.drawImage(self.rawImageBig, (688, 50), 10)
+
+        if self.ptr >= 0:
+            if self.ptr > len(self.processedImages) - 1:
+                self.ptr = len(self.processedImages) - 1
+            i = self.ptr
+        else:
+            i = len(self.processedImages) - 1
+
+        imgX = 1024 - 320 - 16
+        while i >= 0 and imgX >= 0:
+            pyros.gccui.drawImage(self.processedBigImages[i], (imgX, 420))
+            imgX -= 336
+            i -= 1
+
+    def getHeading(self):
+        if self.rover.heading is not None:
+            return self.rover.getRoverState().heading.heading
+
+        return 0
+
+    def getRadar(self):
+        state = self.rover.getRoverState()
+        if state.radar is not None:
+            radar = state.radar
+            return radar.radar, radar.last_radar, radar.status
+        return None, None, None
+
+    def _getWheelStatus(self, wheel_name):
+        state = self.rover.getRoverState()
+
+        if state.wheel_orientations is not None:
+            ori_status = state.wheel_orientations.status[wheel_name]
+        else:
+            ori_status = 0
+
+        if self.rover.wheel_odos is not None:
+            odo_status = state.wheel_odos.status[wheel_name]
+        else:
+            odo_status = 0
+
+        return odo_status | ori_status
+
+    def getWheelAngleAndStatus(self, wheel_name):
+        state = self.rover.getRoverState()
+        angle = 0
+        status = 0
+        if state.wheel_orientations is not None:
+            status = self._getWheelStatus(wheel_name)
+            angle = state.wheel_orientations.orientations[wheel_name]
+
+        return angle, status
+
+    def getWheelOdoAndStatus(self, wheel_name):
+        state = self.rover.getRoverState()
+        odo = 0
+        status = 0
+        if state.wheel_odos is not None:
+            status = self._getWheelStatus(wheel_name)
+            odo = state.wheel_odos.odos[wheel_name]
+
+        return odo, status
+
+
+class NebulaComponent(gccui.Component):
+    def __init__(self, rect, found):
+        super(NebulaComponent, self).__init__(rect)
+        self.found = found
+        self.border = Border(rect)
+
+    def redefineRect(self, rect):
+        super(NebulaComponent, self).redefineRect(rect)
+        self.border.redefineRect(rect)
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, (0, 0, 0), self.rect)
+
+        self.border.draw(surface)
+
+        pygame.draw.rect(surface, (255, 0, 0), Rect(self.rect.x + int(self.rect.width // 2 - 3), self.rect.top - 6, 6, 6))
+
+        pygame.draw.polygon(surface, self.stringToColour(self.found['45']), ((self.rect.right, self.rect.top), (self.rect.right - 20, self.rect.top), (self.rect.right, self.rect.top + 20)))
+        pygame.draw.polygon(surface, self.stringToColour(self.found['135']), ((self.rect.right, self.rect.bottom), (self.rect.right - 20, self.rect.bottom), (self.rect.right, self.rect.bottom - 20)))
+        pygame.draw.polygon(surface, self.stringToColour(self.found['225']), ((self.rect.left, self.rect.bottom), (self.rect.left + 20, self.rect.bottom), (self.rect.left, self.rect.bottom - 20)))
+        pygame.draw.polygon(surface, self.stringToColour(self.found['315']), ((self.rect.left, self.rect.top), (self.rect.left + 20, self.rect.top), (self.rect.left, self.rect.top + 20)))
+
+    @staticmethod
+    def stringToColour(s):
+        if s is None:
+            return 96, 96, 96
+        elif s == "red":
+            return 255, 0, 0
+        elif s == "yellow":
+            return 255, 255, 0
+        elif s == "green":
+            return 0, 255, 0
+        elif s == "blue":
+            return 0, 0, 255
+        else:
+            return 255, 0, 255
+
+
+nebula = NebulaClient()
 
 
 def onKeyDown(key):
-    global lights, forwardSpeed, running, ptr, imgNo
-    global record
-    global processedImages, processedBigImages
-    global gyroAngle
-
     if pyros.gcc.handleConnectKeyDown(key):
         pass
     elif key == pygame.K_f:
         print("  fetching picture...")
         pyros.publish("camera/raw/fetch", "")
     elif key == pygame.K_s:
-        pyros.publish("nebula/command", "scan")
+        nebula.scan()
+    elif key == pygame.K_w:
+        nebula.warmup()
     elif key == pygame.K_r:
-        record = not record
+        nebula.record = not nebula.record
     elif key == pygame.K_x:
-        clear()
+        nebula.clear()
     elif key == pygame.K_1:
         pyros.publish("camera/wheels/raw/fetch", "")
     elif key == pygame.K_2:
@@ -432,18 +341,20 @@ def onKeyDown(key):
     elif key == pygame.K_4:
         pyros.publish("camera/camera1/raw/fetch", "")
     elif key == pygame.K_RETURN:
-        toggleStart()
+        pyros.publish("nebula/command", "start nebula")
     elif key == pygame.K_SPACE:
-        stop()
+        nebula.stop()
     elif key == pygame.K_LEFT:
-        if ptr == -1:
-            ptr = len(processedImages) - 2
+        if nebula.ptr == -1:
+            nebula.ptr = len(nebula.processedImages) - 2
         else:
-            ptr -= 1
+            nebula.ptr -= 1
+        nebula.updateSelected()
     elif key == pygame.K_RIGHT:
-        ptr += 1
-        if ptr >= len(processedImages) - 1:
-            ptr = -1
+        nebula.ptr += 1
+        if nebula.ptr >= len(nebula.processedImages) - 1:
+            nebula.ptr = -1
+        nebula.updateSelected()
 
 
 def onKeyUp(key):
@@ -451,25 +362,72 @@ def onKeyUp(key):
     return
 
 
-def swap(array):
-    v = array[0]
-    array[0] = array[1]
-    array[1] = v
+def initGraphics(screens, rect):
+    def heading_on():
+        pyros.publish("sensor/distance/resume", "")
+        pyros.publish("position/resume", "")
+        pyros.publish("position/heading/start", '{"frequency":20}')
+
+    def heading_off():
+        pyros.publish("position/heading/stop", "")
+        pyros.publish("position/pause", "")
+        pyros.publish("sensor/distance/pause", "")
+
+    statusComponents = gccui.Collection(screens.rect)
+    screens.addCard("status", statusComponents)
+
+    screens.selectCard("status")
+
+    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, nebula.run_log, nebula.stop, [("Run", nebula.start), ("WarmUp", nebula.warmup), ("Scan", nebula.scan)])
+    statusComponents.addComponent(runButtons)
+    nebula.runButtons = runButtons
+
+    # wheelStatus = WheelsStatus(Rect(rect.x, rect.y, 300, 380), uiFactory, nebula.getWheelOdoAndStatus, nebula.getWheelAngleAndStatus)
+    # statusComponents.addComponent(wheelStatus)
+    #
+    # radar = Radar(Rect(rect.x, wheelStatus.rect.bottom + 10, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
+    radar = Radar(Rect(rect.x, rect.y, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
+    nebula.radar = radar
+    statusComponents.addComponent(nebula.radar)
+
+    preview_image = BorderImage(Rect(runButtons.rect.x - 360, runButtons.rect.y + 50, 320, 256), nebula.rawImageBig)
+    nebula.preview_image = preview_image
+    statusComponents.addComponent(preview_image)
+
+    preview_image_small = BorderImage(Rect(preview_image.rect.x - 110, preview_image.rect.y, 80, 64), nebula.rawImage)
+    nebula.preview_image_small = preview_image_small
+    statusComponents.addComponent(preview_image_small)
+
+    result_preview = NebulaComponent(Rect(preview_image_small.rect.x, preview_image_small.rect.bottom + 20, 80, 80), nebula.found)
+    nebula.result_preview = result_preview
+    statusComponents.addComponent(result_preview)
+
+    nebula.heading_component = HeadingComponent(Rect(radar.rect.x, radar.rect.y, radar.rect.width, radar.rect.height + 30), uiFactory, nebula.getHeading, heading_on, heading_off)
+    statusComponents.addComponent(nebula.heading_component)
+
+    nebula.recording_label = ReflectonValueWithLabel(Rect(preview_image.rect.x, preview_image.rect.bottom + 5, 80, 16), "Recording: ", "{0}", nebula, "running", font=uiFactory.font)
+    nebula.selected_label = ReflectonValueWithLabel(Rect(preview_image.rect.x, preview_image.rect.top - 40, 80, 16), "Selected: ", "{:26s}", nebula, "selected", font=uiFactory.font)
+    nebula.scan_time_label = ReflectonValueWithLabel(Rect(result_preview.rect.x, result_preview.rect.bottom + 5, result_preview.rect.width, 16), "", "{0}", nebula, "scan_time", h_alignment=gccui.ALIGNMENT.CENTER, font=uiFactory.font)
+    # nebula.scan_time_label = ReflectonValueWithLabel(Rect(450, result_preview.rect.bottom + 5, 100, 16), "", "{:26s}", nebula, "scan_time", h_alignment=gccui.ALIGNMENT.CENTER, font=uiFactory.font)
+    statusComponents.addComponent(nebula.recording_label)
+    statusComponents.addComponent(nebula.selected_label)
+    statusComponents.addComponent(nebula.scan_time_label)
+
+    # statusComponents.addComponent(Border(Rect(result_preview.rect.x, result_preview.rect.bottom + 5, result_preview.rect.width, 16)))
 
 
-pyros.subscribeBinary("nebula/processed", handleCameraRaw)
-pyros.subscribeBinary("camera/raw", handleCameraRaw)
-pyros.subscribeBinary("camera/wheels/raw", handleCameraWheelsRaw)
-pyros.subscribeBinary("camera/camera1/raw", handleCamera1Raw)
-pyros.subscribeBinary("camera/camera2/raw", handleCamera2Raw)
+pyros.init("over-the-rainbow-#", unique=True, onConnected=nebula.connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
 
-# pyros.subscribe("overtherainbow/distances", handleDistances)
-# pyros.subscribe("overtherainbow/gyro", handleGyro)
-# pyros.subscribe("overtherainbow/imagedetails", handleImageDetails)
-# pyros.subscribeBinary("overtherainbow/processed", handleCameraProcessed)
+font = pygame.font.Font("../common/garuda.ttf", 18)
+smallFont = pygame.font.Font("../common/garuda.ttf", 12)
 
-pyros.init("over-the-rainbow-#", unique=True, onConnected=connected, host=pyros.gcc.getHost(), port=pyros.gcc.getPort(), waitToConnect=False)
+uiAdapter = gccui.UIAdapter(screen)
+uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter)
+uiFactory.font = font
 
+screensComponent = gccui.CardsCollection(screen.get_rect())
+uiAdapter.setTopComponent(screensComponent)
+initGraphics(screensComponent, screen.get_rect().inflate(-10, -40).move(0, 20))
 
 while True:
     for event in pygame.event.get():
@@ -479,48 +437,21 @@ while True:
         if event.type == pygame.VIDEORESIZE:
             pyros.gccui.screenResized(event.size)
 
+        uiAdapter.processEvent(event)
+
     pyros.pygamehelper.processKeys(onKeyDown, onKeyUp)
 
     pyros.loop(0.03)
     pyros.agent.keepAgents()
     pyros.gccui.background(True)
 
-    avgDistance1String = str(format(avgDistance1, '.2f'))
-    avgDistance2String = str(format(avgDistance2, '.2f'))
+    nebula.draw(screen)
 
-    # noinspection PyRedeclaration
-    hpos = 40
-    hpos = pyros.gccui.drawKeyValue("Local FPS", str(localFPS), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Recording", str(record), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Selected", str(ptr) + " of " + str(len(processedImages)), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Running", str(running), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Turn dist", str(feedback["turnDistance"]), 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg1), str(distance1) + ", avg: " + avgDistance1String, 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Dist @ " + str(distanceDeg2), str(distance2) + ", avg: " + avgDistance2String, 8, hpos)
-    hpos = pyros.gccui.drawKeyValue("Gyro", str(round(gyroAngle, 2)), 8, hpos)
+    if not nebula.runButtons.playback:
+        state = nebula.rover.nextState()
+        state.calculate()
 
-    loc = arrow_image.get_rect().center
-    rot_arrow_image = pygame.transform.rotate(arrow_image, -gyroAngle)
-    rot_arrow_image.get_rect().center = loc
-    screen.blit(rot_arrow_image, (530, 200))
-
-    pyros.gccui.drawSmallText("r-toggle record, f - fetch, s-scan, LEFT/RIGHT-scroll, SPACE-stop, RETURN-start, l-lights, d-distances, x- clear, camera: u-up, d-down, /-reset", (8, screen.get_height() - pyros.gccui.smallFont.get_height()))
-
-    pyros.gccui.drawImage(rawImage, (500, 50), 10)
-    pyros.gccui.drawImage(rawImageBig, (688, 50), 10)
-
-    if ptr >= 0:
-        if ptr > len(processedImages) - 1:
-            ptr = len(processedImages) - 1
-        i = ptr
-    else:
-        i = len(processedImages) - 1
-
-    imgX = 1024 - 320 - 16
-    while i >= 0 and imgX >= 0:
-        pyros.gccui.drawImage(processedBigImages[i], (imgX, 420))
-        imgX -= 336
-        i -= 1
+    uiAdapter.draw(screen)
 
     pyros.gcc.drawConnection()
     pyros.gccui.frameEnd()
