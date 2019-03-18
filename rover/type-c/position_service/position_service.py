@@ -19,6 +19,8 @@ from lsm9ds1_rjg import Driver, SPITransport
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from rover_position_rjg.position.filters.switching_attitude_filter import SwitchingAttitudeFilterConfig
+from rover_position_rjg.position.position.kalman_position_algorithm import KalmanPositionAlgorithmConfig
 from rover_position_rjg.data.data_pump.data_provider import DataProvider
 from rover_position_rjg.data.data_pump.process_data_pump import ProcessDataPump
 from rover_position_rjg.mqtt.mqtt_client import MqttClient
@@ -94,13 +96,38 @@ if __name__ == "__main__":
         imu_calibration_filename = os.path.join(dir_name, 'imu_calibration.json')
         decawave_calibration_filename = os.path.join(dir_name, 'decawave_calibration.json')
 
+        switching_attitude_filter_config = SwitchingAttitudeFilterConfig(
+            acceleration_sensitivity=0.010,
+            cool_down=0.5
+        )
+        kalman_config = KalmanPositionAlgorithmConfig(
+            expected_frequency=imu_data_frequency,
+            mean_position_error=0.15,  # std dev of decawave measurement
+            mean_velocity_error=0.01,  # std dev of odometer
+            mean_acceleration_error=0.01,  # std dev of acceleration measurements
+        )
+
         # g = 9.81265 # Cambridge
+        # position_serivce = PositionService(
+        #     imu_data_frequency,
+        #     local_g,
+        #     0.15,  # std dev of decawave measurement
+        #     0.01,  # std dev of odometer
+        #     0.01,  # std dev of acceleration measurements
+        #     imu_calibration_filename,
+        #     decawave_calibration_filename,
+        #     decawave_range_scaler,
+        #     ambient_temp,
+        #     ProcessDataPump(create_imu_data_provider, 1.5 / imu_data_frequency, 'IMU', samples_to_reject=15),
+        #     # ProcessDataPump(DecawaveDataProvider, 1.5/decawave_data_frequency, 'Decawave'),
+        #     # ProcessDataPump(create_dummy_decawave_provider, 2/decawave_data_frequency, 'Decawave'),
+        #     None,
+        #     MqttClient('position', 'position', 0.01)
+        # )
         position_serivce = PositionService(
-            imu_data_frequency,
             local_g,
-            0.15,  # std dev of decawave measurement
-            0.01,  # std dev of odometer
-            0.01,  # std dev of acceleration measurements
+            switching_attitude_filter_config,
+            kalman_config,
             imu_calibration_filename,
             decawave_calibration_filename,
             decawave_range_scaler,
