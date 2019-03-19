@@ -35,6 +35,11 @@ def normaiseAngle(a):
 
 
 class WheelOdos:
+    WHEEL_DIAMETER = 68  # mm
+    ODO_PER_CIRCLE = 4096  # parts of the circle
+    MM_PER_CIRCLE = 2 * math.pi * WHEEL_DIAMETER
+    MM_PER_ODO = MM_PER_CIRCLE / ODO_PER_CIRCLE
+
     def __init__(self, odos_time, odos, status, old_odos: 'WheelOdos' = None):
         self.time = odos_time
         self.odos = odos
@@ -54,6 +59,18 @@ class WheelOdos:
 
     def deltaTime(self):
         return self.time - self.last_time
+
+    def averageSpeed(self):
+        if self.time == self.last_time:
+            return 0
+
+        total = 0
+        for wheel in self.odos:
+            total += abs(self.normaliseOdo(self.odos[wheel] - self.last_odos[wheel]))
+
+        total = total / 4
+
+        return self.MM_PER_ODO * total / (self.time - self.last_time)
 
     @staticmethod
     def deltaOdo(old, new):
@@ -121,6 +138,38 @@ class Radar:
 
     def deltaTime(self):
         return self.time - self.last_time
+
+    def speedInDirection(self, direction):
+        if self.time == self.last_time:
+            return 0
+
+        res = []
+        opposite_direction = direction + 180
+        if opposite_direction >=360:
+            opposite_direction -= 360
+
+        for a in self.radar:
+            next_a = a + 45
+            if a < direction < next_a:
+                res.append((a, self.last_radar[a] - self.radar[a]))
+                if a == 315:
+                    next_a = 0
+                res.append((next_a, self.last_radar[next_a] - self.radar[next_a]))
+            if a < opposite_direction < next_a:
+                res.append((a, self.radar[a] - self.last_radar[a]))
+                if a == 315:
+                    next_a = 0
+                res.append((next_a, self.radar[next_a] - self.last_radar[next_a]))
+
+        total = 0
+        for p in res:
+            angle = p[0] - direction
+            angle = angle * math.pi / 180
+            delta = math.cos(angle)
+            total += delta
+
+        total = total / len(res)
+        return total / (self.time - self.last_time)
 
 
 class Heading:
