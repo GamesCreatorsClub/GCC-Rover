@@ -79,6 +79,7 @@ if __name__ == "__main__":
         imu_data_frequency = 230.8  # 119 or 238 or 476 are ODR for accelerometer and gyro
         start = time.time()
         local_g = 9.81255  # Wolston
+        # local_g = 9.81265 # Cambridge
         # gc.set_debug(gc.DEBUG_STATS)
 
         # TODO Get these from a config file
@@ -107,23 +108,6 @@ if __name__ == "__main__":
             mean_acceleration_error=0.01,  # std dev of acceleration measurements
         )
 
-        # g = 9.81265 # Cambridge
-        # position_serivce = PositionService(
-        #     imu_data_frequency,
-        #     local_g,
-        #     0.15,  # std dev of decawave measurement
-        #     0.01,  # std dev of odometer
-        #     0.01,  # std dev of acceleration measurements
-        #     imu_calibration_filename,
-        #     decawave_calibration_filename,
-        #     decawave_range_scaler,
-        #     ambient_temp,
-        #     ProcessDataPump(create_imu_data_provider, 1.5 / imu_data_frequency, 'IMU', samples_to_reject=15),
-        #     # ProcessDataPump(DecawaveDataProvider, 1.5/decawave_data_frequency, 'Decawave'),
-        #     # ProcessDataPump(create_dummy_decawave_provider, 2/decawave_data_frequency, 'Decawave'),
-        #     None,
-        #     MqttClient('position', 'position', 0.01)
-        # )
         position_serivce = PositionService(
             local_g,
             switching_attitude_filter_config,
@@ -132,7 +116,7 @@ if __name__ == "__main__":
             decawave_calibration_filename,
             decawave_range_scaler,
             ambient_temp,
-            ProcessDataPump(create_imu_data_provider, 1.5 / imu_data_frequency, 'IMU', samples_to_reject=15),
+            ProcessDataPump(create_imu_data_provider, 1.5/imu_data_frequency, 'IMU', initial_samples_to_reject=int(imu_data_frequency/2), samples_to_reject_on_resume=1),
             # ProcessDataPump(DecawaveDataProvider, 1.5/decawave_data_frequency, 'Decawave'),
             # ProcessDataPump(create_dummy_decawave_provider, 2/decawave_data_frequency, 'Decawave'),
             None,
