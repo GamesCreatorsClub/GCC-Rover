@@ -24,6 +24,8 @@ from pyroslib.logging import log, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_ALW
 from rover import RoverState, normaiseAngle, angleDiference
 from challenge_utils import AgentClass, Action, WaitSensorData, WarmupAction, PID
 
+MINIMUM_SPEED = 60
+MIN_ANGLE = 1
 
 pyroslib.logging.LOG_LEVEL = LOG_LEVEL_INFO
 
@@ -94,15 +96,83 @@ class WaitCameraData(Action):
         return "Scan"
 
 
-class GoToCornerKeepingHeadingAction(Action):
-    def __init__(self, rover, speed, angle, next_action=None):
-        super(GoToCornerKeepingHeadingAction, self).__init__(rover)
+class NebulaAction(Action):
+    def __init__(self, rover, speed, next_action):
+        super(NebulaAction, self).__init__(rover)
         self.speed = speed
-        self.angle = angle
         self.next_action = next_action
 
-        self.side_pid = PID(1, 0.2, 0.01, 1, 0)
-        self.heading_pid = PID(1, 0.2, 0.01, 1, 0, diff_method=angleDiference)
+        self.direction_pid = PID(0.75, 0.2, 0.01, 1, 0)
+        self.heading_pid = PID(1, 0, 0.01, 1, 0, diff_method=angleDiference)
+        self.distance_pid = PID(0.75, 0.2, 0.01, 1, 0)
+
+        self.distance_error = 0
+        self.rover_speed = 0
+
+        self.required_corner_distance = 190
+        self.required_side_distance = 150
+        self.required_keeping_side_distance = 150
+
+    def keepHeading(self):
+        state = self.rover.getRoverState()
+
+        # Keeping heading
+        heading = state.heading.heading
+        heading_output = self.heading_pid.process(0, heading)
+        if -MIN_ANGLE < heading_output < MIN_ANGLE:
+            distance = 100000
+        else:
+            heading_fix_rad = heading_output * math.pi / 180
+            distance = self.rover_speed / heading_output
+            if 0 <= distance < 150:
+                distance = 150
+            elif -150 < distance < 0:
+                distance = -150
+
+        return distance, heading_output
+
+    def keepDirection(self, requested_angle, setpoint_distance, current_distance):
+        state = self.rover.getRoverState()
+
+        # Keeping direction
+        angle_output = self.direction_pid.process(setpoint_distance, current_distance)
+        angle = 0
+        if abs(angle_output) < 10:
+            angle = 0
+        elif angle_output > 0 and angle_output > self.rover_speed:
+            angle = math.pi / 4
+        elif angle_output < 0 and angle_output < -self.rover_speed:
+            angle = -math.pi / 4
+        else:
+            try:
+                angle = math.asin(angle_output / self.rover_speed)
+            except BaseException as ex:
+                log(LOG_LEVEL_ALWAYS, "Domain error")
+        angle = int(requested_angle + angle * 180 / math.pi)
+
+        return angle, angle_output
+
+    def calculateSpeed(self):
+        # Defining forward speed
+        speed = MINIMUM_SPEED + self.distance_error
+        if speed > self.speed:
+            speed = self.speed
+        return speed
+
+    def start(self):
+        super(NebulaAction, self).start()
+        self.distance_pid = PID(0.75, 0.2, 0.01, 1, 0)
+        self.direction_pid = PID(0.75, 0.2, 0.01, 1, 0)
+        self.heading_pid = PID(1, 0.0, 0.01, 1, 0, diff_method=angleDiference)
+
+    def end(self):
+        super(NebulaAction, self).end()
+
+
+class GoToCornerKeepingHeadingAction(NebulaAction):
+    def __init__(self, rover, speed, angle, next_action=None):
+        super(GoToCornerKeepingHeadingAction, self).__init__(rover, speed, next_action)
+        self.angle = angle
 
         self.prev_angle = angle - 90
         self.next_angle = angle + 90
@@ -111,21 +181,13 @@ class GoToCornerKeepingHeadingAction(Action):
         if self.next_angle >= 360:
             self.next_angle -= 360
 
-        self.required_corner_distance = 190
-        self.required_side_distance = 190
-
-    def start(self):
-        super(GoToCornerKeepingHeadingAction, self).start()
-        self.side_pid = PID(1, 0.2, 0.01, 1, 0)
-        self.heading_pid = PID(1, 0.2, 0.01, 1, 0, diff_method=angleDiference)
-
-    def end(self):
-        super(GoToCornerKeepingHeadingAction, self).end()
-
     def next(self):
         state = self.rover.getRoverState()
+        self.rover_speed = self.rover.wheel_odos.averageSpeed()
 
         corner_distance = state.radar.radar[self.angle]
+        self.distance_error = self.distance_pid.process(self.required_corner_distance, corner_distance)
+
         if corner_distance < self.required_corner_distance:
             return self.next_action
 
@@ -139,91 +201,46 @@ class GoToCornerKeepingHeadingAction(Action):
         return self
 
     def execute(self):
-        speed = 50  # mm/second - TODO use odo to update to correct value!
-        speed_steer_fudge_factor = 10  # 5-7
-        speed_distance_fudge_factor = 8   # 4
-        steer_speed = speed * speed_steer_fudge_factor
-        distance_speed = speed * speed_distance_fudge_factor
-
         state = self.rover.getRoverState()
 
-        heading = state.heading.heading
+        distance, heading_output = self.keepHeading()
 
-        corner_distance = state.radar.radar[self.angle]
         left_side = state.radar.radar[self.prev_angle]
         right_side = state.radar.radar[self.next_angle]
+        angle, angle_output = self.keepDirection(self.angle, right_side, left_side)
 
-        angle_fix = self.side_pid.process(right_side, left_side)
+        speed = self.calculateSpeed()
 
-        heading_fix = self.heading_pid.process(0, heading)
+        corner_distance = state.radar.radar[self.angle]
 
-        heading_fix = - heading_fix * math.pi / 180
-
-        min_angle = 1 * math.pi / 180
-
-        if -min_angle < heading_fix < min_angle:
-            distance = 100000
-        else:
-            distance = steer_speed / heading_fix
-            if 0 <= distance < 150:
-                distance = 150
-            elif -150 < distance < 0:
-                distance = -150
-
-        angle = 0
-        if abs(angle_fix) < 10:
-            angle = 0
-        elif angle_fix > 0 and angle_fix > distance_speed:
-            angle = math.pi / 4
-        elif angle_fix < 0 and angle_fix < -distance_speed:
-            angle = -math.pi / 4
-        else:
-            try:
-                angle = math.asin(angle_fix / distance_speed)
-            except BaseException as ex:
-                log(LOG_LEVEL_ALWAYS, "Domain error")
-
-        angle = int(self.angle + angle * 180 / math.pi)
-
-        log(LOG_LEVEL_INFO, "{:16.3f}: corner_dist={: 4d} left_dist={: 4d} right_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
+        log(LOG_LEVEL_INFO, "{:16.3f}: rover_speed={: 4d} corner_dist={: 4d} dist_error={: 7.2f} left_dist={: 4d} right_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             float(time.time()),
-                            int(corner_distance),
-                            int(left_side), int(right_side), angle_fix,
-                            int(state.heading.heading), heading_fix,
-                            int(self.speed), int(angle), int(distance)))
+                            int(self.rover_speed),
+                            int(corner_distance), self.distance_error,
+                            int(left_side), int(right_side), angle_output,
+                            int(state.heading.heading), heading_output,
+                            int(speed), int(angle), int(distance)))
 
-        self.rover.command(pyroslib.publish, self.speed, angle, distance)
+        self.rover.command(pyroslib.publish, speed, angle, distance)
 
     def getActionName(self):
         return "Corner[{:3d}]".format(self.angle)
 
 
-class FollowWallKeepingHeadingAction(Action):
+class FollowWallKeepingHeadingAction(NebulaAction):
     def __init__(self, rover, speed, wall_angle, direction_angle, next_action=None):
-        super(FollowWallKeepingHeadingAction, self).__init__(rover)
-        self.speed = speed
+        super(FollowWallKeepingHeadingAction, self).__init__(rover, speed, next_action)
         self.wall_angle = wall_angle
         self.direction_angle = direction_angle
-        self.next_action = next_action
-
-        self.side_pid = PID(1, 0.2, 0.01, 1, 0)
-        self.heading_pid = PID(1, 0.2, 0.01, 1, 0, diff_method=angleDiference)
-
-        self.required_side_distance = 150
-
-    def start(self):
-        super(FollowWallKeepingHeadingAction, self).start()
-        self.side_pid = PID(1, 0.2, 0.01, 1, 0)
-        self.heading_pid = PID(1, 0.2, 0.01, 1, 0, diff_method=angleDiference)
-
-    def end(self):
-        super(FollowWallKeepingHeadingAction, self).end()
 
     def next(self):
         state = self.rover.getRoverState()
+        self.rover_speed = self.rover.wheel_odos.averageSpeed()
 
         wall_distance = state.radar.radar[self.wall_angle]
         front_distance = state.radar.radar[self.direction_angle]
+
+        self.distance_error = self.distance_pid.process(self.required_side_distance, front_distance)
 
         if front_distance < self.required_side_distance:
             return self.next_action
@@ -231,58 +248,26 @@ class FollowWallKeepingHeadingAction(Action):
         return self
 
     def execute(self):
-        speed = 50  # mm/second - TODO use odo to update to correct value!
-        speed_steer_fudge_factor = 10  # 5-7
-        speed_distance_fudge_factor = 3   # 4
-        steer_speed = speed * speed_steer_fudge_factor
-        distance_speed = speed * speed_distance_fudge_factor
         state = self.rover.getRoverState()
 
-        heading = state.heading.heading
+        distance, heading_output = self.keepHeading()
 
         wall_distance = state.radar.radar[self.wall_angle]
+        angle, angle_output = self.keepDirection(self.direction_angle, self.required_keeping_side_distance, wall_distance)
+
+        speed = self.calculateSpeed()
+
         front_distance = state.radar.radar[self.direction_angle]
 
-        angle_fix = self.side_pid.process(self.required_side_distance, wall_distance)
-
-        heading_fix = self.heading_pid.process(0, heading)
-
-        heading_fix = - heading_fix * math.pi / 180
-
-        min_angle = 1 * math.pi / 180
-
-        if -min_angle < heading_fix < min_angle:
-            distance = 100000
-        else:
-            distance = steer_speed / heading_fix
-            if 0 <= distance < 150:
-                distance = 150
-            elif -150 < distance < 0:
-                distance = -150
-
-        angle = 0
-        if abs(angle_fix) < 10:
-            angle = 0
-        elif angle_fix > 0 and angle_fix > distance_speed:
-            angle = math.pi / 4
-        elif angle_fix < 0 and angle_fix < -distance_speed:
-            angle = -math.pi / 4
-        else:
-            try:
-                angle = math.asin(angle_fix / distance_speed)
-            except BaseException as ex:
-                log(LOG_LEVEL_ALWAYS, "Domain error")
-
-        angle = int(self.direction_angle + angle * 180 / math.pi)
-
-        log(LOG_LEVEL_INFO, "{:16.3f}: front_dist={: 4d} wall_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
+        log(LOG_LEVEL_INFO, "{:16.3f}: rover_speed={: 4d} front_dist={: 4d} dist_error={: 7.2f} wall_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             float(time.time()),
-                            int(front_distance),
-                            int(wall_distance), angle_fix,
-                            int(state.heading.heading), heading_fix,
-                            int(self.speed), int(angle), int(distance)))
+                            int(self.rover_speed),
+                            int(front_distance), self.distance_error,
+                            int(wall_distance), angle_output,
+                            int(state.heading.heading), heading_output,
+                            int(speed), int(angle), int(distance)))
 
-        self.rover.command(pyroslib.publish, self.speed, angle, distance)
+        self.rover.command(pyroslib.publish, speed, angle, distance)
 
     def getActionName(self):
         return "Wall[{0} on {1}]".format(self.direction_angle, self.wall_angle)
