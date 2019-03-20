@@ -5,7 +5,6 @@
 #
 # MIT License
 #
-
 import threading
 import traceback
 import pyroslib
@@ -31,53 +30,39 @@ from rover_position_rjg.sensors.decawave.fixed_position_data_provider import Fix
 from rover_position_rjg.sensors.imu.imu_data_provider import ImuDataProvider
 from rover_position_rjg.services.position.position_service import PositionService, NineDoFData
 
-decawave_data_frequency = 10
-
-
-def create_dummy_decawave_provider():
-    return FixedPositionDataProvider(decawave_data_frequency)
-
 #
-# position service
+# Position Service
 #
-# This service is providing positioning.
+# Provides heading and position data
 #
-
-
-DEBUG = False
 
 
 def stopCallback():
     print("Asked to stop!")
-    position_serivce.quit()
+    position_service.quit()
 
 
 def create_imu_data_provider() -> DataProvider[NineDoFData]:
+    # Blueberry
+    # SPI_BUS_AG = 0
+    # SPI_BUS_MAG = 1
+    # Rover
+    SPI_BUS_AG = 2
+    SPI_BUS_MAG = 0
     driver = Driver(
-        SPITransport(2, False, ImuDataProvider.PIN_INT1_AG),
-        SPITransport(0, True),
+        SPITransport(SPI_BUS_AG, False, ImuDataProvider.PIN_INT1_AG),
+        SPITransport(SPI_BUS_MAG, True),
         high_priority=True)
     return ImuDataProvider(driver)
-
-
-def pauseServiceAgain():
-    time.sleep(5)
-    pyroslib.publish("position/pause", "")
-    print("  Paused service again")
-    time.sleep(2)
-    pyroslib.publish("position/pause", "")
-    print("  Paused service last time")
 
 
 if __name__ == "__main__":
     try:
         print("Starting position service...")
 
-        pyroslib.init("echo-service", onStop=stopCallback)
+        pyroslib.init("position-service", unique=True, onStop=stopCallback)
 
-        print("  Position started. (PID {})".format(os.getpid()))
         imu_data_frequency = 230.8  # 119 or 238 or 476 are ODR for accelerometer and gyro
-        start = time.time()
         local_g = 9.81255  # Wolston
         # local_g = 9.81265 # Cambridge
         # gc.set_debug(gc.DEBUG_STATS)
@@ -108,7 +93,7 @@ if __name__ == "__main__":
             mean_acceleration_error=0.01,  # std dev of acceleration measurements
         )
 
-        position_serivce = PositionService(
+        position_service = PositionService(
             local_g,
             switching_attitude_filter_config,
             kalman_config,
@@ -122,18 +107,16 @@ if __name__ == "__main__":
             None,
             MqttClient('position', 'position', 0.01)
         )
-        threading.Thread(target=position_serivce.run, daemon=True).start()
-        print("  Position finished in {:.1f} seconds".format(time.time() - start))
+        threading.Thread(target=position_service.run, daemon=True).start()
 
-        time.sleep(5)
-
+        time.sleep(2)
         pyroslib.publish("position/pause", "")
-        print("  Paused position service.")
 
-        threading.Thread(target=pauseServiceAgain, daemon=True).start()
-
-        print("Started position service.")
+        print("Started position service. (PID {})".format(os.getpid()))
         pyroslib.forever(0.5, priority=pyroslib.PRIORITY_LOW)
+
+    except (KeyboardInterrupt, SystemExit):
+        print("Stopped by Ctrl-C or system exit")
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
