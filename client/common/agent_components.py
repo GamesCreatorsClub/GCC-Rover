@@ -109,7 +109,7 @@ class RunButtons(gccui.components.CardsCollection):
         self.selectCard("off")
 
     def runners_button_clicked(self, callback, button, pos):
-        self.selectCard('on')
+        # self.selectCard('on')
         callback()
 
     def off_button_clicked(self, button, pos):

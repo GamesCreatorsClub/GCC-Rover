@@ -167,26 +167,27 @@ class CanyonsOfMarsAgent(AgentClass):
 
     def start(self, data):
         if not self.running:
-            pyroslib.publish("canyons/feedback/running", "True")
 
             if data[0] == 'corridor':
-                self.running = True
+                super(CanyonsOfMarsAgent, self).start(data)
+
                 speed = int(data[1])
                 distance = int(data[2])
                 speed = 140
 
                 # drive_forward_action = DriverForwardForTimeActoun(5, speed, self.stop_action)
                 # corner_action = MazeTurnAroundCornerAction(self.odo, self.radar, self.heading, MazeAction.LEFT, distance, speed,next_action=drive_forward_action)
-                corridor_action = MazeCorridorAction(self.rover, MazeAction.RIGHT, distance, speed)
-                wait_for_heading_action = WaitSensorData(self.rover, corridor_action)
+                corridor_action = MazeCorridorAction(self, MazeAction.RIGHT, distance, speed)
+                wait_for_heading_action = WaitSensorData(self, corridor_action)
 
                 self.nextAction(wait_for_heading_action)
             elif data[0] == 'turnCorner':
-                self.running = True
+                super(CanyonsOfMarsAgent, self).start(data)
+
                 speed = int(data[1])
                 distance = int(data[2])
 
-                self.nextAction(WaitSensorData(self.rover, MazeTurnAroundCornerAction(self.rover, MazeAction.LEFT, distance, speed)))
+                self.nextAction(WaitSensorData(self, MazeTurnAroundCornerAction(self, MazeAction.LEFT, distance, speed)))
 
 
 if __name__ == "__main__":

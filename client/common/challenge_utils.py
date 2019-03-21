@@ -10,7 +10,7 @@ import pyroslib.logging
 import telemetry
 import time
 
-from pyroslib.logging import log, LOG_LEVEL_ALWAYS, LOG_LEVEL_INFO
+from pyroslib.logging import log, LOG_LEVEL_ALWAYS, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG
 
 from rover import Rover, RoverState
 
@@ -81,8 +81,9 @@ class PID:
 
 
 class Action:
-    def __init__(self, rover):
-        self.rover = rover
+    def __init__(self, agent):
+        self.agent = agent
+        self.rover = agent.rover
 
     def start(self):
         pass
@@ -101,29 +102,28 @@ class Action:
 
 
 class DoNothing(Action):
-    def __init__(self, rover):
-        super(DoNothing, self).__init__(rover)
+    def __init__(self, agent):
+        super(DoNothing, self).__init__(agent)
 
     def getActionName(self):
         return "Ready"
 
 
 class StopAction(Action):
-    def __init__(self, rover, parent):
-        super(StopAction, self).__init__(rover)
-        self.parent = parent
+    def __init__(self, agent):
+        super(StopAction, self).__init__(agent)
 
     def start(self):
         super(StopAction, self).start()
-        self.parent.stop()
+        self.agent.stop()
 
     def getActionName(self):
         return "Stop"
 
 
 class WaitSensorData(Action):
-    def __init__(self, rover: Rover, next_action):
-        super(WaitSensorData, self).__init__(rover)
+    def __init__(self, agent, next_action):
+        super(WaitSensorData, self).__init__(agent)
         self.next_action = next_action
         self.countdown = 0
         self.initial_countdown = 4
@@ -133,7 +133,7 @@ class WaitSensorData(Action):
         pyroslib.publish("position/resume", "")
         pyroslib.publish("sensor/distance/resume", "")
         pyroslib.publish("position/heading/start", '{"frequency":20}')
-        log(LOG_LEVEL_INFO, "Started a wait for all sensor data to arrive...")
+        self.agent.log_info("Started a wait for all sensor data to arrive...")
 
     def next(self):
         if self.rover.hasHeading():
@@ -141,29 +141,28 @@ class WaitSensorData(Action):
                 pyroslib.publish("position/calibrate", "")
             self.countdown -= 1
             if self.countdown == 1:
-                log(LOG_LEVEL_INFO, "Removing old 'start heading value' " + str(self.rover.start_heading_value))
+                self.agent.log_info("Removing old 'start heading value' " + str(self.rover.start_heading_value))
                 self.rover.start_heading_value = None
 
         # if self.rover.hasCompleteState():
         if self.rover.hasCompleteState() and self.countdown <= 0:
-            log(LOG_LEVEL_INFO, "Using new 'start heading value' " + str(self.rover.start_heading_value))
+            self.agent.log_info("Using new 'start heading value' " + str(self.rover.start_heading_value))
             # self.rover.start_heading_value = self.rover.heading.heading + self.rover.start_heading_value
-            log(LOG_LEVEL_INFO, "Received all sensor data - starting action " + str(self.next_action.getActionName()))
+            self.agent.log_info("Received all sensor data - starting action " + str(self.next_action.getActionName()))
             return self.next_action
 
         return self
 
     def execute(self):
-
-        log(LOG_LEVEL_INFO, "Waiting for sensor data to arrive; has odos " + str(self.rover.hasWheelOdos()) + ", has orientation " + str(self.rover.hasWheelOrientation()) + ", has heading " + str(self.rover.hasHeading()) + " and has radar " + str(self.rover.hasRadar()))
+        self.agent.log_info("Waiting for sensor data to arrive; has odos " + str(self.rover.hasWheelOdos()) + ", has orientation " + str(self.rover.hasWheelOrientation()) + ", has heading " + str(self.rover.hasHeading()) + " and has radar " + str(self.rover.hasRadar()))
 
     def getActionName(self):
         return "Waiting Sensors"
 
 
 class WarmupAction(Action):
-    def __init__(self, rover: Rover):
-        super(WarmupAction, self).__init__(rover)
+    def __init__(self, agent):
+        super(WarmupAction, self).__init__(agent)
 
     def start(self):
         pyroslib.publish("position/resume", "")
@@ -183,9 +182,10 @@ class AgentClass:
         self.rover = Rover()
         self.last_execution_time = 0
 
-        self.do_nothing = DoNothing(self.rover)
-        self.stop_action = StopAction(self.rover, self)
+        self.do_nothing = DoNothing(self)
+        self.stop_action = StopAction(self)
         self.current_action = self.do_nothing
+        self.started_time = 0
 
     def connected(self):
         pyroslib.subscribe(self.prefix + "/command", self.handleAgentCommands)
@@ -220,7 +220,7 @@ class AgentClass:
             self.current_action.end()
             if action is None:
                 action = self.stop_action
-            log(LOG_LEVEL_INFO, "Swapping action " + str(self.current_action.getActionName()) + " to " + str(action.getActionName()))
+            self.log_info("Swapping action " + str(self.current_action.getActionName()) + " to " + str(action.getActionName()))
             self.current_action = action
             action.start()
             pyroslib.publish(self.prefix + "/feedback/action", action.getActionName())
@@ -239,7 +239,6 @@ class AgentClass:
             state.log(self.state_logger, self.current_action.getActionName()[:12])
 
     def stop(self):
-        self.running = False
         self.rover.reset()
         self.nextAction(self.stop_action)
         pyroslib.publish("move/stop", "")
@@ -247,7 +246,26 @@ class AgentClass:
         pyroslib.publish("position/heading/stop", '')
         pyroslib.publish("position/pause", "")
         pyroslib.publish("sensor/distance/pause", "")
-        log(LOG_LEVEL_ALWAYS, "Stopped rover...")
+        self.log_always("Stopped rover...")
+        self.running = False
 
     def start(self, data):
-        pass
+        self.started_time = time.time()
+        self.running = True
+        pyroslib.publish(self.prefix + "/feedback/running", "True")
+        log(LOG_LEVEL_INFO, "Sent Running feedback")
+
+    def log_always(self, line):
+        now = time.time() - self.started_time if self.running else time.time()
+        log_time = time.strftime('%M:%S.', time.localtime(now)) + repr(now).split('.')[1][:3] + ": "
+        log(LOG_LEVEL_ALWAYS, log_time + line)
+
+    def log_info(self, line):
+        now = time.time() - self.started_time if self.running else time.time()
+        log_time = time.strftime('%M:%S.', time.localtime(now)) + repr(now).split('.')[1][:3] + ": "
+        log(LOG_LEVEL_INFO, log_time + line)
+
+    def log_debug(self, line):
+        now = time.time() - self.started_time if self.running else time.time()
+        log_time = time.strftime('%M:%S.', time.localtime(now)) + repr(now).split('.')[1][:3] + ": "
+        log(LOG_LEVEL_DEBUG, log_time + line)

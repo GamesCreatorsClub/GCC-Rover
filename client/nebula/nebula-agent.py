@@ -25,7 +25,7 @@ from rover import RoverState, normaiseAngle, angleDiference
 from challenge_utils import AgentClass, Action, WaitSensorData, WarmupAction, PID
 
 MINIMUM_SPEED = 60
-MIN_ANGLE = 1
+MIN_ANGLE = 0.5
 
 pyroslib.logging.LOG_LEVEL = LOG_LEVEL_INFO
 
@@ -65,10 +65,9 @@ class CameraData:
 
 
 class WaitCameraData(Action):
-    def __init__(self, rover, parent, next_action):
-        super(WaitCameraData, self).__init__(rover)
-        self.parent = parent
-        self.foundColours = parent.foundColours
+    def __init__(self, agent, next_action):
+        super(WaitCameraData, self).__init__(agent)
+        self.foundColours = agent.foundColours
         self.next_action = next_action
         self.started_scanning_time = None
 
@@ -85,25 +84,25 @@ class WaitCameraData(Action):
         pyroslib.publish("camera/wheels/raw/fetch", "")
         pyroslib.publish("camera/camera1/raw/fetch", "")
         pyroslib.publish("camera/camera2/raw/fetch", "")
-        log(LOG_LEVEL_INFO, "Started a wait for all camera data to arrive...")
+        self.agent.log_info("Started a wait for all camera data to arrive...")
 
     def next(self):
         if self.foundColours.hasAll():
-            log(LOG_LEVEL_INFO, "Scanning lasted " + ("{:7.3f}".format(time.time() - self.started_scanning_time)) + "!")
-            log(LOG_LEVEL_INFO, "Received all colours " + ("stopping" if self.next_action is None else "starting action " + str(self.next_action.getActionName())))
+            self.agent.log_info("Scanning lasted " + ("{:7.3f}".format(time.time() - self.started_scanning_time)) + "!")
+            self.agent.log_info("Received all colours " + ("stopping" if self.next_action is None else "starting action " + str(self.next_action.getActionName())))
             return self.next_action
         return self
 
     def execute(self):
-        log(LOG_LEVEL_INFO, "Waiting for sensor data to arrive...")
+        self.agent.log_info("Waiting for sensor data to arrive...")
 
     def getActionName(self):
         return "Scan"
 
 
 class NebulaAction(Action):
-    def __init__(self, rover, speed, next_action):
-        super(NebulaAction, self).__init__(rover)
+    def __init__(self, agent, speed, next_action):
+        super(NebulaAction, self).__init__(agent)
         self.speed = speed
         self.next_action = next_action
 
@@ -156,7 +155,7 @@ class NebulaAction(Action):
             try:
                 angle = math.asin(angle_output / self.rover_speed)
             except BaseException as ex:
-                log(LOG_LEVEL_ALWAYS, "Domain error")
+                self.agent.log_always("Domain error")
         angle = int(requested_angle + angle * 180 / math.pi)
 
         return angle, angle_output
@@ -180,11 +179,8 @@ class NebulaAction(Action):
 
     def start(self):
         super(NebulaAction, self).start()
-        # self.distance_pid = PID(0.75, 0.0, 0.1, 1, 0)
-        # self.direction_pid = PID(0.20, 0.02, 0.005, 1, 0)
-        # self.heading_pid = PID(0.25, 0.0, 0.01, 1, 0, diff_method=angleDiference)
-        self.distance_pid = PID(0.75, 0.1, 0.1, 1, 0)
-        self.direction_pid = PID(0.20, 0.02, 0.005, 1, 0)
+        self.distance_pid = PID(0.75, 0.15, 0.1, 1, 0)
+        self.direction_pid = PID(0.20, 0.02, 0.005, 0.8, 0)
         self.heading_pid = PID(0.25, 0.0, 0.01, 1, 0, diff_method=angleDiference)
 
     def end(self):
@@ -192,8 +188,8 @@ class NebulaAction(Action):
 
 
 class GoToCornerKeepingHeadingAction(NebulaAction):
-    def __init__(self, rover, speed, angle, next_action=None):
-        super(GoToCornerKeepingHeadingAction, self).__init__(rover, speed, next_action)
+    def __init__(self, agent, speed, angle, next_action=None):
+        super(GoToCornerKeepingHeadingAction, self).__init__(agent, speed, next_action)
         self.angle = angle
 
         self.prev_angle = angle - 45
@@ -205,7 +201,7 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
     def start(self):
         super(GoToCornerKeepingHeadingAction, self).start()
-        log(LOG_LEVEL_INFO, "Starting Corner with prev_angle={: 3d} angle={: 3d} next_angle={: 3d}".format(self.prev_angle, self.angle, self.next_angle))
+        self.agent.log_info("Starting Corner with prev_angle={: 3d} angle={: 3d} next_angle={: 3d}".format(self.prev_angle, self.angle, self.next_angle))
 
     def next(self):
         state = self.rover.getRoverState()
@@ -228,6 +224,7 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
     def execute(self):
         state = self.rover.getRoverState()
+        corner_distance = state.radar.radar[self.angle]
 
         distance, heading_output = self.keepHeading()
 
@@ -235,15 +232,15 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
         right_side = state.radar.radar[self.next_angle]
         angle, angle_output = self.keepDirection(self.angle, right_side, left_side)
 
-        if self.distance_error > 400:
-            angle = self.angle
-
         speed = self.calculateSpeed()
+
+        if corner_distance > 400:
+            angle = self.angle
+            speed = self.speed
 
         corner_distance = state.radar.radar[self.angle]
 
-        log(LOG_LEVEL_INFO, "{:16.3f}: rover_speed={: 4d} corner_dist={: 4d} dist_error={: 7.2f} left_dist={: 4d} right_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
-                            float(time.time()),
+        self.agent.log_info("rover_speed={: 4d} corner_dist={: 4d} dist_error={: 7.2f} left_dist={: 4d} right_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             int(self.rover_speed),
                             int(corner_distance), self.distance_error,
                             int(left_side), int(right_side), angle_output,
@@ -259,8 +256,8 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
 
 class FollowWallKeepingHeadingAction(NebulaAction):
-    def __init__(self, rover, speed, wall_angle, direction_angle, next_action=None):
-        super(FollowWallKeepingHeadingAction, self).__init__(rover, speed, next_action)
+    def __init__(self, agent, speed, wall_angle, direction_angle, next_action=None):
+        super(FollowWallKeepingHeadingAction, self).__init__(agent, speed, next_action)
         self.wall_angle = wall_angle
         self.direction_angle = direction_angle
 
@@ -288,14 +285,12 @@ class FollowWallKeepingHeadingAction(NebulaAction):
             angle, angle_output = self.keepDirection(self.direction_angle, wall_distance, self.required_keeping_side_distance)
         else:
             angle, angle_output = self.keepDirection(self.direction_angle, self.required_keeping_side_distance, wall_distance)
-            # angle, angle_output = self.keepDirection(self.direction_angle, wall_distance, self.required_keeping_side_distance)
 
         speed = self.calculateSpeed()
 
         front_distance = state.radar.radar[self.direction_angle]
 
-        log(LOG_LEVEL_INFO, "{:16.3f}: rover_speed={: 4d} front_dist={: 4d} dist_error={: 7.2f} wall_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
-                            float(time.time()),
+        self.agent.log_info("rover_speed={: 4d} front_dist={: 4d} dist_error={: 7.2f} wall_dist={: 4d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             int(self.rover_speed),
                             int(front_distance), self.distance_error,
                             int(wall_distance), angle_output,
@@ -309,8 +304,8 @@ class FollowWallKeepingHeadingAction(NebulaAction):
 
 
 class CalculateRouteAction(Action):
-    def __init__(self, rover, speed, foundColours, next_action):
-        super(CalculateRouteAction, self).__init__(rover)
+    def __init__(self, agent, speed, foundColours, next_action):
+        super(CalculateRouteAction, self).__init__(agent)
         self.speed = speed
         self.foundColours = foundColours
         self.next_action = next_action
@@ -328,23 +323,28 @@ class CalculateRouteAction(Action):
         else:
             following_action = self.next_action
 
+        # follow_wall_speed = self.speed
+        # go_to_corner_speed = self.speed
+        follow_wall_speed = 200
+        go_to_corner_speed = 240
+
         if normaiseAngle(from_angle + 90) == to_angle:
             wall_angle = normaiseAngle(from_angle + 45)
             direction_angle = normaiseAngle(wall_angle + 90)
-            # return FollowWallKeepingHeadingAction(self.rover, self.speed, wall_angle, direction_angle, following_action)
-            return FollowWallKeepingHeadingAction(self.rover, 160, wall_angle, direction_angle, following_action)
+            # return FollowWallKeepingHeadingAction(self.agent, self.speed, wall_angle, direction_angle, following_action)
+            return FollowWallKeepingHeadingAction(self.agent, follow_wall_speed, wall_angle, direction_angle, following_action)
         elif normaiseAngle(from_angle - 90) == to_angle:
             wall_angle = normaiseAngle(from_angle - 45)
             direction_angle = normaiseAngle(wall_angle - 90)
-            # return FollowWallKeepingHeadingAction(self.rover, self.speed, wall_angle, direction_angle, following_action)
-            return FollowWallKeepingHeadingAction(self.rover, 160, wall_angle, direction_angle, following_action)
+            # return FollowWallKeepingHeadingAction(self.agent, self.speed, wall_angle, direction_angle, following_action)
+            return FollowWallKeepingHeadingAction(self.agent, follow_wall_speed, wall_angle, direction_angle, following_action)
         else:
-            # return GoToCornerKeepingHeadingAction(self.rover, self.speed, to_angle, following_action)
-            return GoToCornerKeepingHeadingAction(self.rover, 220, to_angle, following_action)
+            # return GoToCornerKeepingHeadingAction(self, self.speed, to_angle, following_action)
+            return GoToCornerKeepingHeadingAction(self.agent, go_to_corner_speed, to_angle, following_action)
 
     def next(self):
         if self.wait == 0:
-            log(LOG_LEVEL_INFO, "Calculating route (1) -> Corner " + str(self.foundColours.found['red']))
+            self.agent.log_info("Calculating route (1) -> Corner " + str(self.foundColours.found['red']))
 
             initial_angle = self.foundColours.found['red']
             following_action = self.calcualteAction(initial_angle, 'blue')
@@ -354,18 +354,19 @@ class CalculateRouteAction(Action):
             while a != self.next_action:
                 i += 1
                 if isinstance(a, GoToCornerKeepingHeadingAction):
-                    log(LOG_LEVEL_INFO, "Calculating route (" + str(i) + ") -> Corner " + str(a.angle))
+                    self.agent.log_info("Calculating route (" + str(i) + ") -> Corner " + str(a.angle))
                     a = a.next_action
                 else:
-                    log(LOG_LEVEL_INFO, "Calculating route (" + str(i) + ") -> Follow wall " + str(a.wall_angle) + " to  " + str(a.direction_angle))
+                    self.agent.log_info("Calculating route (" + str(i) + ") -> Follow wall " + str(a.wall_angle) + " to  " + str(a.direction_angle))
                     a = a.next_action
 
-            self.prepared_action = GoToCornerKeepingHeadingAction(self.rover, self.speed, initial_angle, following_action)
-            self.wait = 5
+            self.prepared_action = GoToCornerKeepingHeadingAction(self.agent, self.speed, initial_angle, following_action)
+
+            self.wait = 2
             self.rover.command(pyroslib.publish, 0, initial_angle, 32000)
-            log(LOG_LEVEL_INFO, "Wheels orientation {0} wait:{1:2d}".format(str(self.rover.current_state.wheel_orientations.orientations), self.wait))
+            self.agent.log_info("Wheels orientation {0} wait:{1:2d}".format(str(self.rover.current_state.wheel_orientations.orientations), self.wait))
         else:
-            log(LOG_LEVEL_INFO, "Wheels orientation {0} wait:{1:2d}".format(str(self.rover.current_state.wheel_orientations.orientations), self.wait))
+            self.agent.log_info("Wheels orientation {0} wait:{1:2d}".format(str(self.rover.current_state.wheel_orientations.orientations), self.wait))
             self.wait -= 1
             if self.wait == 0:
                 return self.prepared_action
@@ -396,35 +397,34 @@ class NebulaAgent(AgentClass):
 
     def start(self, data):
         if not self.running:
-            pyroslib.publish("canyons/feedback/running", "True")
-
             if data[0] == 'nebula':
-                self.running = True
+                super(NebulaAgent, self).start(data)
                 # speed = int(data[1])
 
                 speed = 160
                 speed = 200
 
-                calculate_route_action = CalculateRouteAction(self.rover, speed, self.foundColours, self.stop_action)
-                wait_camera_data_action = WaitCameraData(self.rover, self, calculate_route_action)
-                wait_sensor_data_action = WaitSensorData(self.rover, wait_camera_data_action)
-                self.nextAction(wait_sensor_data_action)
+                calculate_route_action = CalculateRouteAction(self, speed, self.foundColours, self.stop_action)
+                wait_camera_data_action = WaitCameraData(self, calculate_route_action)
+                wait_sensor_data_action = WaitSensorData(self, wait_camera_data_action)
+                # self.nextAction(wait_sensor_data_action)
+                self.nextAction(wait_camera_data_action)
 
             elif data[0] == 'warmup':
-                self.running = True
-                self.nextAction(WaitSensorData(self.rover, WarmupAction(self.rover)))
+                # super(NebulaAgent, self).start(data)
+                self.nextAction(WaitSensorData(self, WarmupAction(self)))
 
             elif data[0] == 'scan':
-                self.running = True
-                self.nextAction(WaitCameraData(self.rover, self, self.stop_action))
+                super(NebulaAgent, self).start(data)
+                self.nextAction(WaitCameraData(self, self.stop_action))
 
             elif data[0] == 'corner':
-                self.running = True
+                super(NebulaAgent, self).start(data)
 
-                follow_wall_action = FollowWallKeepingHeadingAction(self.rover, 80, 270, 0, self.stop_action)
-                go_to_corner_action = GoToCornerKeepingHeadingAction(self.rover, 80, 225, follow_wall_action)
-                # wait_camera_data_action = WaitCameraData(self.rover, self, go_to_corner_action)
-                wait_sensor_data_action = WaitSensorData(self.rover, go_to_corner_action)
+                follow_wall_action = FollowWallKeepingHeadingAction(self, 80, 270, 0, self.stop_action)
+                go_to_corner_action = GoToCornerKeepingHeadingAction(self, 80, 225, ollow_wall_action)
+                # wait_camera_data_action = WaitCameraData(self, self, go_to_corner_action)
+                wait_sensor_data_action = WaitSensorData(self, go_to_corner_action)
                 self.nextAction(wait_sensor_data_action)
 
     def handleCameraData(self, topic, message, source):
@@ -437,18 +437,18 @@ class NebulaAgent(AgentClass):
 
         result, value = self.processImageCV(openCVImage)
 
-        log(LOG_LEVEL_INFO, "For " + str(source) + " got " + ("None" if result is None else str(result)) + " for value " + str(value))
+        self.log_info("For " + str(source) + " got " + ("None" if result is None else str(result)) + " for value " + str(value))
 
         if result is not None:
             self.foundColours.setData(result, source)
 
         if not self.foundColours.hasAll():
-            log(LOG_LEVEL_INFO, "Found " + self.foundColours.foundAsString() + " but not finished yet as " + self.foundColours.missingColours() + " " + ("are" if len(self.foundColours.missingColours()) > 1 else "is") + " still missing.")
+            self.log_info("Found " + self.foundColours.foundAsString() + " but not finished yet as " + self.foundColours.missingColours() + " " + ("are" if len(self.foundColours.missingColours()) > 1 else "is") + " still missing.")
             if self.running:
                 pyroslib.publish(topic + "/fetch", "")
             pyroslib.publish("nebula/imagedetails", "working: " + self.foundColours.foundAsString())
         else:
-            log(LOG_LEVEL_INFO, "So far " + self.foundColours.foundAsString() + " and finishing...")
+            self.log_info("So far " + self.foundColours.foundAsString() + " and finishing...")
             stopped = True
             pyroslib.publish("nebula/imagedetails", "found: " + self.foundColours.foundAsString())
 
@@ -469,8 +469,7 @@ class NebulaAgent(AgentClass):
         pilImage = PIL.Image.frombytes("RGB", size, imageBytes)
         return pilImage
 
-    @staticmethod
-    def processImageCV(image):
+    def processImageCV(self, image):
         def findColourNameHSV(hChannel, contour):
 
             mask = numpy.zeros(hChannel.shape[:2], dtype="uint8")
@@ -481,7 +480,7 @@ class NebulaAgent(AgentClass):
             cv2.bitwise_and(hChannel, mask, maskAnd)
 
             pyroslib.publish("nebula/processed", PIL.Image.fromarray(cv2.cvtColor(maskAnd, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-            log(LOG_LEVEL_DEBUG, "Published mask ")
+            self.log_debug("Published mask ")
 
             hist = cv2.calcHist([hChannel], [0], mask, [255], [0, 255], False)
 
@@ -519,21 +518,21 @@ class NebulaAgent(AgentClass):
 
             if result == "red":
                 sendResult("#f00")
-                log(LOG_LEVEL_DEBUG, "Published hue red image")
+                self.log_debug("Published hue red image")
             elif result == "yellow":
                 sendResult("#ff0")
-                log(LOG_LEVEL_DEBUG, "Published hue yellow image")
+                self.log_debug("Published hue yellow image")
             elif result == "green":
                 sendResult("#0f0")
-                log(LOG_LEVEL_DEBUG, "Published hue green image")
+                self.log_debug("Published hue green image")
             elif result == "blue":
                 sendResult("#00f")
-                log(LOG_LEVEL_DEBUG, "Published hue blue image")
+                self.log_debug("Published hue blue image")
         else:
             cv2.drawContours(hueChannel, countours, -1, (255, 255, 255), 2)
 
             pyroslib.publish("nebula/processed", PIL.Image.fromarray(cv2.cvtColor(hueChannel, cv2.COLOR_GRAY2RGB)).tobytes("raw"))
-            log(LOG_LEVEL_DEBUG, "Published unrecognised hue image")
+            self.log_debug("Published unrecognised hue image")
 
         return result, value
 

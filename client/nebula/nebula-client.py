@@ -158,6 +158,9 @@ class NebulaClient:
     def handleRunning(self, topic, message, groups):
         if message == 'False':
             self._stop()
+            self.runButtons.off()
+        elif message == 'True':
+            self.runButtons.on()
 
     def _stop(self):
         prev_running = self.running

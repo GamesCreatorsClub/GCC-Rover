@@ -229,8 +229,8 @@ class MazeAttitude:
 
 
 class MoveForwardOnOdo(Action):
-    def __init__(self, rover, stop_action=None):
-        super(MoveForwardOnOdo, self).__init__(rover)
+    def __init__(self, agent, stop_action=None):
+        super(MoveForwardOnOdo, self).__init__(agent)
         self.stop_action = stop_action
         self.required_odo = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0}
 
@@ -279,16 +279,16 @@ class MazeAction(Action):
     LEFT = -1
     RIGHT = 1
 
-    def __init__(self, rover):
-        super(MazeAction, self).__init__(rover)
+    def __init__(self, agent):
+        super(MazeAction, self).__init__(agent)
 
     def check_next_action_conditions(self):
         return self
 
 
 class ChicaneAction(MazeAction):
-    def __init__(self, rover, left_or_right, distance, speed, next_action=None):
-        super(ChicaneAction, self).__init__(rover)
+    def __init__(self, agent, left_or_right, distance, speed, next_action=None):
+        super(ChicaneAction, self).__init__(agent)
         self.left_or_right = left_or_right
         self.distance = distance
         self.speed = speed
@@ -302,8 +302,8 @@ class ChicaneAction(MazeAction):
             self.a2 = 270
             self.a3 = 225
 
-        self.left_corner_action = MazeTurnAroundCornerAction(self.rover, self.LEFT, self.distance, self.speed, self)
-        self.right_corner_action = MazeTurnAroundCornerAction(self.rover, self.RIGHT, self.distance, self.speed, DriverForwardForTimeAction(self.rover, 10, self.speed, None))
+        self.left_corner_action = MazeTurnAroundCornerAction(self, self.LEFT, self.distance, self.speed, self)
+        self.right_corner_action = MazeTurnAroundCornerAction(self, self.RIGHT, self.distance, self.speed, DriverForwardForTimeAction(self, 10, self.speed, None))
 
     def start(self):
         super(ChicaneAction, self).start()
@@ -415,8 +415,8 @@ class ChicaneAction(MazeAction):
 
 
 class MazeCorridorAction(MazeAction):
-    def __init__(self, rover, left_or_right, distance, speed, next_action=None):
-        super(MazeCorridorAction, self).__init__(rover)
+    def __init__(self, agent, left_or_right, distance, speed, next_action=None):
+        super(MazeCorridorAction, self).__init__(agent)
         self.left_or_right = left_or_right
         self.distance = distance
         self.speed = speed
@@ -430,8 +430,8 @@ class MazeCorridorAction(MazeAction):
             self.a2 = 270
             self.a3 = 225
 
-        self.left_corner_action = MazeTurnAroundCornerAction(self.rover, self.LEFT, int(self.distance * 1), self.speed, self)
-        self.right_corner_action = MazeTurnAroundCornerAction(self.rover, self.RIGHT, int(self.distance * 1), self.speed, self)
+        self.left_corner_action = MazeTurnAroundCornerAction(self, self.LEFT, int(self.distance * 1), self.speed, self)
+        self.right_corner_action = MazeTurnAroundCornerAction(self, self.RIGHT, int(self.distance * 1), self.speed, self)
         # self.right_corner_action = MazeTurnAroundCornerAction(self.odo, self.radar, self.heading, self.RIGHT, self.distance, self.speed, DriverForwardForTimeActoun(10, self.speed, None))
 
         self.been_in_chicane = False
@@ -460,7 +460,7 @@ class MazeCorridorAction(MazeAction):
                 if False and not self.been_in_chicane and front_distance > 300 and left_diagonal_distance > expected_diagonal_distance * 1.2:
                     log(LOG_LEVEL_INFO, "Found chicane... lfd={: 4d} fd={: 4d} dd={: 4d} ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
                     self.been_in_chicane = True
-                    return ChicaneAction(self.rover, self.LEFT, self.distance, self.speed, next_action=self)
+                    return ChicaneAction(self, self.LEFT, self.distance, self.speed, next_action=self)
                 else:
                     log(LOG_LEVEL_INFO, "Found corner - turning, lfd={: 4d} fd={: 4d} dd={: 4d}  ed={: 4d}".format(int(state.left_front_distance_of_wall), int(front_distance), int(left_diagonal_distance), int(expected_diagonal_distance)))
                     return self.left_corner_action
@@ -582,8 +582,8 @@ class MazeCorridorAction(MazeAction):
 
 
 class MazeTurnAroundCornerAction(MazeAction):
-    def __init__(self, rover, left_or_right, distance, speed, next_action=None):
-        super(MazeTurnAroundCornerAction, self).__init__(rover)
+    def __init__(self, agent, left_or_right, distance, speed, next_action=None):
+        super(MazeTurnAroundCornerAction, self).__init__(agent)
         self.left_or_right = left_or_right
         self.distance = distance * (1 if left_or_right == self.RIGHT else -1)
         self.speed = speed
@@ -640,8 +640,8 @@ class MazeTurnAroundCornerAction(MazeAction):
 
 
 class DriverForwardForTimeAction(Action):
-    def __init__(self, rover, time, speed, next_action):
-        super(DriverForwardForTimeAction, self).__init__(rover)
+    def __init__(self, agent, time, speed, next_action):
+        super(DriverForwardForTimeAction, self).__init__(agent)
         self.time = time
         self.speed = speed
         self.next_action = next_action
