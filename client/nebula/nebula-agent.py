@@ -114,9 +114,9 @@ class NebulaAction(Action):
         self.distance_error = 0
         self.rover_speed = 0
 
-        self.required_corner_distance = 190
+        self.required_corner_distance = 210
         self.required_side_distance = 150
-        self.required_keeping_side_distance = 150
+        self.required_keeping_side_distance = 180
         self.last_speed = 0
         self.last_speed_time = 0
 
@@ -218,6 +218,7 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
     def start(self):
         super(GoToCornerKeepingHeadingAction, self).start()
+        # pyroslib.publish("sensor/distance/focus", str(self.prev_angle) + " " + str(self.next_angle) + " " + str(self.angle))
         self.distance_pid = PID(0.75, 0.15, 0.1, 1, 0)
         self.direction_pid = PID(0.30, 0, 0.005, 1, 0)
         self.heading_pid = PID(0.25, 0.0, 0.01, 0.5, 0, diff_method=angleDiference)
@@ -311,6 +312,7 @@ class FollowWallKeepingHeadingAction(NebulaAction):
 
     def start(self):
         super(FollowWallKeepingHeadingAction, self).start()
+        # pyroslib.publish("sensor/distance/focus", str(self.wall_angle) + " " + str(self.direction_angle))
         self.distance_pid = PID(0.85, 0.1, 0.2, 0.8, 0)
         self.direction_pid = PID(0.20, 0, 0.01, 0.7, 0)
         self.heading_pid = PID(0.25, 0.0, 0.01, 1.2, 0, diff_method=angleDiference)
