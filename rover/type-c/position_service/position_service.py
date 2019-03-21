@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
         switching_attitude_filter_config = SwitchingAttitudeFilterConfig(
             acceleration_sensitivity=0.010,
-            cool_down=0.5
+            cool_down=20
         )
         kalman_config = KalmanPositionAlgorithmConfig(
             expected_frequency=imu_data_frequency,
