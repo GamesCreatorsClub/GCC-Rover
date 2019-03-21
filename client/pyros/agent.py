@@ -9,7 +9,7 @@ import os
 import time
 import pyros
 
-AGENT_PING_TIMEOUT = 1
+AGENT_PING_TIMEOUT = 10
 
 _returncodes = {}
 

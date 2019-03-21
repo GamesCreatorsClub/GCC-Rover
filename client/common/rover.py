@@ -606,6 +606,7 @@ class Rover:
 
     def hasCompleteState(self):
         return self.hasWheelOdos() and self.hasWheelOrientation() and self.hasHeading() and self.hasRadar()
+        # return self.hasWheelOdos() and self.hasWheelOrientation() and self.hasRadar()
 
     def nextState(self):
         self.current_state = RoverState(self, self.wheel_odos, self.wheel_orientations, self.radar, self.heading, self.last_command)

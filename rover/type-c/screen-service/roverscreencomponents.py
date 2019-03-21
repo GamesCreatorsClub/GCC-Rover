@@ -11,6 +11,8 @@ import time
 from pygame import Rect
 
 
+print("gccui=" + str(gccui) + " file " + str(gccui.__file__))
+
 # OFF = 10
 # XOFF = 0
 # YOFF = 15
@@ -76,7 +78,7 @@ class WheelStatus:
         self._update(("2W", WheelStatus.ERR) if _status & STATUS_ERROR_I2C_WRITE else (("2R", WheelStatus.ERR) if _status & STATUS_ERROR_I2C_READ else ("", WheelStatus.NORM)))
 
     def updateRadioStatus(self, _status):
-        self._update(("RX", WheelStatus.WARN) if _status & STATUS_ERROR_RX_FAILED else (("TX", WheelStatus.ERR) if _status & STATUS_ERROR_TX_FAILED else ("", WheelStatus.NORM)))
+        self._update(("TR", WheelStatus.WARN) if _status & STATUS_ERROR_RX_FAILED and _status & STATUS_ERROR_TX_FAILED else (("RX", WheelStatus.WARN) if _status & STATUS_ERROR_RX_FAILED else (("TX", WheelStatus.ERR) if _status & STATUS_ERROR_TX_FAILED else ("", WheelStatus.NORM))))
 
     def updateMagnetStatus(self, _status):
         self._update(("MH", WheelStatus.WARN) if _status & STATUS_ERROR_MAGNET_HIGH else (("ML", WheelStatus.WARN) if _status & STATUS_ERROR_MAGNET_LOW else (("ND", WheelStatus.ERR) if _status & STATUS_ERROR_MAGNET_NOT_DETECTED == 0 else ("", WheelStatus.NORM))))
@@ -161,10 +163,10 @@ class WheelComponent(gccui.Collection):
         self.image = uiFactory.image(rect, None, h_alignment=gccui.ALIGNMENT.CENTER, v_alignment=gccui.ALIGNMENT.MIDDLE)
         self.addComponent(self.image)
         self.angle_text = uiFactory.label(self.rect,
-                                           "",
-                                           h_alignment=gccui.ALIGNMENT.CENTER,
-                                           v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                           colour=pygame.color.THECOLORS['black'])
+                                          "",
+                                          h_alignment=gccui.ALIGNMENT.CENTER,
+                                          v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                          colour=pygame.color.THECOLORS['black'])
 
         self.addComponent(self.angle_text)
 
@@ -234,39 +236,39 @@ class WheelStatusComponent(gccui.Collection):
         self.margin = (rect.width - wheelOdoImage.get_rect().width) // 2
 
         self.odo_text = uiFactory.label(self.rect,
-                                         "",
-                                         font=_smallFont,
-                                         h_alignment=gccui.ALIGNMENT.RIGHT,
-                                         v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                         colour=pygame.color.THECOLORS['white'])
+                                        "",
+                                        font=_smallFont,
+                                        h_alignment=gccui.ALIGNMENT.RIGHT,
+                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                        colour=pygame.color.THECOLORS['white'])
 
         self.i2c_text = uiFactory.label(self.rect,
-                                         "",
-                                         font=_smallFont,
-                                         h_alignment=gccui.ALIGNMENT.LEFT,
-                                         v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                         colour=pygame.color.THECOLORS['orange'])
+                                        "",
+                                        font=_smallFont,
+                                        h_alignment=gccui.ALIGNMENT.LEFT,
+                                        v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                        colour=pygame.color.THECOLORS['orange'])
 
         self.radio_text = uiFactory.label(self.rect,
+                                          "",
+                                          font=_smallFont,
+                                          h_alignment=gccui.ALIGNMENT.RIGHT,
+                                          v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                          colour=pygame.color.THECOLORS['orange'])
+
+        self.control_text = uiFactory.label(self.rect,
+                                            "",
+                                            font=_smallFont,
+                                            h_alignment=gccui.ALIGNMENT.LEFT,
+                                            v_alignment=gccui.ALIGNMENT.MIDDLE,
+                                            colour=pygame.color.THECOLORS['orange'])
+
+        self.magnet_text = uiFactory.label(self.rect,
                                            "",
                                            font=_smallFont,
                                            h_alignment=gccui.ALIGNMENT.RIGHT,
                                            v_alignment=gccui.ALIGNMENT.MIDDLE,
                                            colour=pygame.color.THECOLORS['orange'])
-
-        self.control_text = uiFactory.label(self.rect,
-                                             "",
-                                             font=_smallFont,
-                                             h_alignment=gccui.ALIGNMENT.LEFT,
-                                             v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                             colour=pygame.color.THECOLORS['orange'])
-
-        self.magnet_text = uiFactory.label(self.rect,
-                                            "",
-                                            font=_smallFont,
-                                            h_alignment=gccui.ALIGNMENT.RIGHT,
-                                            v_alignment=gccui.ALIGNMENT.MIDDLE,
-                                            colour=pygame.color.THECOLORS['orange'])
 
         self.i2c_status = WheelStatus(self.i2c_text)
         self.radio_status = WheelStatus(self.radio_text)

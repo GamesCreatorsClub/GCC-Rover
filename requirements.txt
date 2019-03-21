@@ -2,3 +2,5 @@ netifaces
 pygame
 approxeng.input
 psutil
+nose2
+unittest

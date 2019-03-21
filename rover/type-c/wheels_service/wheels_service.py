@@ -646,38 +646,51 @@ def prepareAndDriveWheel(wheelName):
 
         data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
 
+        status = 0
+
         nRF2401.swithToTX()
         done = nRF2401.sendDataAndSwitchRx(data, 0.015)
         if done:
-            # nRF2401.swithToRX()
-            # nRF2401.startListening()
-            if nRF2401.poolData(0.0025):  # 1 sec / 50 times a second / 4 wheels / 2 max half of time needed for wheel
-                p = nRF2401.receiveData(NRF_PACKET_SIZE)
-                nRF2401.stopListening()
-
-                drive_mode = p[0]
-                drive_speed = p[1]
-                wheel_speed = p[2]
-                wheel_pos = p[3] + 256 * p[4]
-                wheel_pos_deg = int(wheel_pos * 360 / 4096)
-                wheel_r_pos = p[5] + 256 * p[6]
-                pid_p = p[7]
-                pid_i = p[8]
-                pid_d = p[9]
-                i2c_status = p[10]
-                pwm_reg = p[11]
-
-                now = time.time()
-                drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
-                return wheel_pos, 0
-            else:
-                now = time.time()
-                drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_RX_FAILED, (now - started_time), speed)
-                return 0, STATUS_ERROR_RX_FAILED
+            pass
         else:
-            now = time.time()
-            drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_TX_FAILED, (now - started_time), speed)
-            return 0, STATUS_ERROR_TX_FAILED
+            # now = time.time()
+            # drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_TX_FAILED, (now - started_time), speed)
+            # return 0, STATUS_ERROR_TX_FAILED
+            status = status + STATUS_ERROR_TX_FAILED
+
+        wheel_pos = 0
+
+        # nRF2401.swithToRX()
+        # nRF2401.startListening()
+        if nRF2401.poolData(0.0025):  # 1 sec / 50 times a second / 4 wheels / 2 max half of time needed for wheel
+            p = nRF2401.receiveData(NRF_PACKET_SIZE)
+            nRF2401.stopListening()
+
+            drive_mode = p[0]
+            drive_speed = p[1]
+            wheel_speed = p[2]
+            wheel_pos = p[3] + 256 * p[4]
+            wheel_pos_deg = int(wheel_pos * 360 / 4096)
+            wheel_r_pos = p[5] + 256 * p[6]
+            pid_p = p[7]
+            pid_i = p[8]
+            pid_d = p[9]
+            i2c_status = p[10]
+            pwm_reg = p[11]
+
+            # now = time.time()
+            # drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
+            # return wheel_pos, status
+        else:
+            # now = time.time()
+            # drive_logger.log(now, bytes(wheelName, 'ASCII'), 0, STATUS_ERROR_RX_FAILED, (now - started_time), speed)
+            # return 0, STATUS_ERROR_RX_FAILED
+            status = status + STATUS_ERROR_RX_FAILED
+
+        now = time.time()
+        drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
+        return wheel_pos, status
+
 
 
 def driveAllWheels():

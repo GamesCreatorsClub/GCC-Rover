@@ -6,12 +6,12 @@
 #
 
 import gccui
-import pygame
 import pyros
 import pyros.gcc
 import pyros.gccui
 import pyros.agent
 import pyros.pygamehelper
+import pygame
 import sys
 import time
 
@@ -21,7 +21,6 @@ from rover import Rover
 from client_utils import TelemetryUtil, RunLog
 from agent_components import RunButtons, HeadingComponent, Border, BorderImage, ReflectonValueWithLabel, ReflectonAngleWithLabel, ReflectonLookupWithLabel, WheelsStatus
 from roverscreencomponents import Radar
-
 
 screen_size = (1024, 800)
 
@@ -171,7 +170,6 @@ class NebulaClient:
 
     def stop(self):
         pyros.publish("nebula/command", "stop")
-        self.running = False
 
     def clear(self):
         self.imgNo = 0
@@ -198,6 +196,7 @@ class NebulaClient:
         pyros.publish("nebula/command", "start warmup")
 
     def start(self):
+        self.running = True
         self.clear()
         pyros.publish("nebula/command", "start nebula " + str(self.speed))
         self.started_scanning_time = time.time()

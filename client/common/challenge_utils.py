@@ -144,6 +144,7 @@ class WaitSensorData(Action):
                 log(LOG_LEVEL_INFO, "Removing old 'start heading value' " + str(self.rover.start_heading_value))
                 self.rover.start_heading_value = None
 
+        # if self.rover.hasCompleteState():
         if self.rover.hasCompleteState() and self.countdown <= 0:
             log(LOG_LEVEL_INFO, "Using new 'start heading value' " + str(self.rover.start_heading_value))
             # self.rover.start_heading_value = self.rover.heading.heading + self.rover.start_heading_value
@@ -242,7 +243,7 @@ class AgentClass:
         self.rover.reset()
         self.nextAction(self.stop_action)
         pyroslib.publish("move/stop", "")
-        pyroslib.publish("canyons/feedback/running", "False")
+        pyroslib.publish(self.prefix + "/feedback/running", "False")
         pyroslib.publish("position/heading/stop", '')
         pyroslib.publish("position/pause", "")
         pyroslib.publish("sensor/distance/pause", "")
