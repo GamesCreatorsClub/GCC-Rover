@@ -190,16 +190,23 @@ class NebulaClient:
         self.scan_time = "-"
 
     def corner(self):
+        self.running = True
+        self.run_log.reset()
         self.clear()
         pyros.publish("nebula/command", "start corner")
-        self.started_scanning_time = time.time()
-        self.scan_time = "-"
+
+    def walls(self):
+        self.running = True
+        self.run_log.reset()
+        self.clear()
+        pyros.publish("nebula/command", "start walls")
 
     def warmup(self):
         pyros.publish("nebula/command", "start warmup")
 
     def start(self):
         self.running = True
+        self.run_log.reset()
         self.clear()
         pyros.publish("nebula/command", "start nebula " + str(self.speed))
         self.started_scanning_time = time.time()
@@ -343,6 +350,8 @@ def onKeyDown(key):
         nebula.warmup()
     elif key == pygame.K_c:
         nebula.corner()
+    elif key == pygame.K_q:
+        nebula.walls()
     elif key == pygame.K_r:
         nebula.record = not nebula.record
     elif key == pygame.K_x:
@@ -393,15 +402,15 @@ def initGraphics(screens, rect):
 
     screens.selectCard("status")
 
-    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, nebula.run_log, nebula.stop, [("Run", nebula.start), ("WarmUp", nebula.warmup), ("Scan", nebula.scan), ("Corner", nebula.corner)])
+    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 320), uiFactory, nebula.run_log, nebula.stop, [("Run", nebula.start), ("WarmUp", nebula.warmup), ("Scan", nebula.scan), ("Corner", nebula.corner), ("Walls", nebula.walls)])
     statusComponents.addComponent(runButtons)
     nebula.runButtons = runButtons
 
-    # wheelStatus = WheelsStatus(Rect(rect.x, rect.y, 300, 380), uiFactory, nebula.getWheelOdoAndStatus, nebula.getWheelAngleAndStatus)
-    # statusComponents.addComponent(wheelStatus)
-    #
-    # radar = Radar(Rect(rect.x, wheelStatus.rect.bottom + 10, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
-    radar = Radar(Rect(rect.x, rect.y, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
+    wheelStatus = WheelsStatus(Rect(rect.x, rect.y, 300, 380), uiFactory, nebula.getWheelOdoAndStatus, nebula.getWheelAngleAndStatus)
+    statusComponents.addComponent(wheelStatus)
+
+    radar = Radar(Rect(rect.x, wheelStatus.rect.bottom + 10, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
+    # radar = Radar(Rect(rect.x, rect.y, 300, 300), uiFactory, nebula.getRadar, 1500, display_delta=True)
     nebula.radar = radar
     statusComponents.addComponent(nebula.radar)
 
