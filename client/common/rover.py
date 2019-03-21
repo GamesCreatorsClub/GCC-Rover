@@ -145,7 +145,7 @@ class Radar:
 
         res = []
         opposite_direction = direction + 180
-        if opposite_direction >=360:
+        if opposite_direction >= 360:
             opposite_direction -= 360
 
         for a in self.radar:
