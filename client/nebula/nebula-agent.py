@@ -27,6 +27,13 @@ from challenge_utils import AgentClass, Action, WaitSensorData, WarmupAction, PI
 MINIMUM_SPEED = 60
 MIN_ANGLE = 0.5
 MAX_ANGLE = 45
+HEADING_MIN_DISTANCE = 150
+
+WALL_SPEED = 240
+CORNER_SPEED = 200
+
+CORNER_CROSS_SPEED = 240
+MAX_CORNER_DISTANCE = 700
 
 pyroslib.logging.LOG_LEVEL = LOG_LEVEL_INFO
 
@@ -135,10 +142,10 @@ class NebulaAction(Action):
         else:
             heading_fix_rad = heading_output * math.pi / 180
             distance = self.rover_speed / heading_fix_rad
-            if 0 <= distance < 150:
-                distance = 150
-            elif -150 < distance < 0:
-                distance = -150
+            if 0 <= distance < HEADING_MIN_DISTANCE:
+                distance = HEADING_MIN_DISTANCE
+            elif -HEADING_MIN_DISTANCE < distance < 0:
+                distance = -HEADING_MIN_DISTANCE
 
         return distance, heading_output
 
@@ -148,7 +155,7 @@ class NebulaAction(Action):
         # Keeping direction
         angle_output = self.direction_pid.process(setpoint_distance, current_distance)
         angle = 0
-        if abs(angle_output) < 10:
+        if abs(angle_output) < 1:
             angle = 0
         elif angle_output > 0 and angle_output > self.rover_speed:
             angle = math.pi / 4
@@ -218,9 +225,9 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
     def start(self):
         super(GoToCornerKeepingHeadingAction, self).start()
-        # pyroslib.publish("sensor/distance/focus", str(self.prev_angle) + " " + str(self.next_angle) + " " + str(self.angle))
+        pyroslib.publish("sensor/distance/focus", str(self.prev_angle) + " " + str(self.next_angle) + " " + str(self.angle))
         self.distance_pid = PID(0.75, 0.15, 0.1, 1, 0)
-        self.direction_pid = PID(0.30, 0, 0.005, 1, 0)
+        self.direction_pid = PID(0.20, 0, 0.02, 0.4, 0)
         self.heading_pid = PID(0.25, 0.0, 0.01, 0.5, 0, diff_method=angleDiference)
         self.agent.log_info("Starting Corner with prev_angle={: 3d} angle={: 3d} next_angle={: 3d}".format(self.prev_angle, self.angle, self.next_angle))
 
@@ -280,9 +287,9 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
             speed = self.calculateSpeed(state.radar.time)
 
-            if corner_distance > 700:
+            if corner_distance > MAX_CORNER_DISTANCE:
                 angle = self.angle
-                speed = 220
+                speed = CORNER_CROSS_SPEED
 
             corner_distance = state.radar.radar[self.angle]
 
@@ -307,15 +314,27 @@ class FollowWallKeepingHeadingAction(NebulaAction):
         self.wall_angle = wall_angle
         self.direction_angle = direction_angle
 
+    @staticmethod
+    def calculateRealDistance(side_distance, side_angle):
+        if side_distance < 1:
+            return 0
+
+        if side_angle > 180:
+            side_angle = 360 - side_angle
+
+        side_angle = side_angle * math.pi / 180
+
+        return math.sin(math.pi / 2 - side_angle) * side_distance
+
     def hasRadar(self, state):
         return state.radar.radar[self.wall_angle] > 1 and state.radar.radar[self.direction_angle] > 1
 
     def start(self):
         super(FollowWallKeepingHeadingAction, self).start()
-        # pyroslib.publish("sensor/distance/focus", str(self.wall_angle) + " " + str(self.direction_angle))
+        pyroslib.publish("sensor/distance/focus", str(self.wall_angle) + " " + str(self.direction_angle))
         self.distance_pid = PID(0.85, 0.1, 0.2, 0.8, 0)
-        self.direction_pid = PID(0.20, 0, 0.01, 0.7, 0)
-        self.heading_pid = PID(0.25, 0.0, 0.01, 1.2, 0, diff_method=angleDiference)
+        self.direction_pid = PID(0.20, 0, 0.01, 0.6, 0)
+        self.heading_pid = PID(0.25, 0.02, 0.0, 1, 0, diff_method=angleDiference)
 
     def next(self):
         state = self.rover.getRoverState()
@@ -349,7 +368,8 @@ class FollowWallKeepingHeadingAction(NebulaAction):
 
             distance, heading_output = self.keepHeading()
 
-            wall_distance = state.radar.radar[self.wall_angle]
+            wall_distance = self.calculateRealDistance(state.radar.radar[self.wall_angle], state.heading.heading)
+
             if angleDiference(self.wall_angle, self.direction_angle) > 0:
                 angle, angle_output = self.keepDirection(self.direction_angle, wall_distance, self.required_keeping_side_distance)
             else:
@@ -394,8 +414,8 @@ class CalculateRouteAction(Action):
 
         # follow_wall_speed = self.speed
         # go_to_corner_speed = self.speed
-        follow_wall_speed = 180
-        go_to_corner_speed = 120
+        follow_wall_speed = WALL_SPEED
+        go_to_corner_speed = CORNER_SPEED
 
         if normaiseAngle(from_angle + 90) == to_angle:
             wall_angle = normaiseAngle(from_angle + 45)
@@ -487,28 +507,52 @@ class NebulaAgent(AgentClass):
                 super(NebulaAgent, self).start(data)
                 self.nextAction(WaitCameraData(self, self.stop_action))
 
-            elif data[0] == 'corner':
+            elif data[0] == 'combo':
                 super(NebulaAgent, self).start(data)
 
-                corner_speed = 240
-                wall_speed = 200
+                combo = data[1]
 
-                go_to_corner2_action = GoToCornerKeepingHeadingAction(self, corner_speed, 225, self.stop_action)
-                follow_right_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 90, 0, go_to_corner2_action)
-                go_to_corner1_action = GoToCornerKeepingHeadingAction(self, corner_speed, 135, follow_right_wall_action)
-                follow_left_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 270, 0, go_to_corner1_action)
-                wait_sensor_data_action = WaitSensorData(self, follow_left_wall_action)
+                # go_to_corner2_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 225, self.stop_action)
+                # follow_right_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 90, 0, go_to_corner2_action)
+                # go_to_corner1_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 135, follow_right_wall_action)
+                # follow_left_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 270, 0, go_to_corner1_action)
+                # wait_sensor_data_action = WaitSensorData(self, follow_left_wall_action)
+
+                if combo == '1':
+                    # Comb 1
+                    go_to_corner3_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 315, self.stop_action)
+                    follow_right_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 90, 180, go_to_corner3_action)
+                    go_to_corner2_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 45, follow_right_wall_action)
+                    go_to_corner1_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 225, go_to_corner2_action)
+                    wait_sensor_data_action = WaitSensorData(self, go_to_corner1_action)
+
+                elif combo == '2':
+                    # Comb 2
+                    follow_right_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 90, 0, self.stop_action)
+                    go_to_corner2_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 135, follow_right_wall_action)
+                    follow_left_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 270, 0, go_to_corner2_action)
+                    go_to_corner1_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 225, follow_left_wall_action)
+                    wait_sensor_data_action = WaitSensorData(self, go_to_corner1_action)
+
+                elif combo == '3':
+                    # Comb 3
+                    follow_right_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 90, 180, self.stop_action)
+                    follow_top_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 0, 90, follow_right_wall_action)
+                    follow_left_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 270, 0, follow_top_wall_action)
+                    go_to_corner1_action = GoToCornerKeepingHeadingAction(self, CORNER_SPEED, 225, follow_left_wall_action)
+                    wait_sensor_data_action = WaitSensorData(self, go_to_corner1_action)
+                else:
+                    wait_sensor_data_action = WaitSensorData(self, self.stop_action)
+
                 self.nextAction(wait_sensor_data_action)
 
             elif data[0] == 'walls':
                 super(NebulaAgent, self).start(data)
 
-                wall_speed = 200
-
-                follow_bottom_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 180, 270, self.stop_action)
-                follow_right_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 90, 180, follow_bottom_wall_action)
-                follow_top_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 0, 90, follow_right_wall_action)
-                follow_left_wall_action = FollowWallKeepingHeadingAction(self, wall_speed, 270, 0, follow_top_wall_action)
+                follow_bottom_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 180, 270, self.stop_action)
+                follow_right_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 90, 180, follow_bottom_wall_action)
+                follow_top_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 0, 90, follow_right_wall_action)
+                follow_left_wall_action = FollowWallKeepingHeadingAction(self, WALL_SPEED, 270, 0, follow_top_wall_action)
                 wait_sensor_data_action = WaitSensorData(self, follow_left_wall_action)
                 self.nextAction(wait_sensor_data_action)
 

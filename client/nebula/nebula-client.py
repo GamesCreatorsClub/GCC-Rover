@@ -189,11 +189,11 @@ class NebulaClient:
         self.started_scanning_time = time.time()
         self.scan_time = "-"
 
-    def corner(self):
+    def corner(self, combo=3):
         self.running = True
         self.run_log.reset()
         self.clear()
-        pyros.publish("nebula/command", "start corner")
+        pyros.publish("nebula/command", "start combo " + str(combo))
 
     def walls(self):
         self.running = True
@@ -357,11 +357,11 @@ def onKeyDown(key):
     elif key == pygame.K_x:
         nebula.clear()
     elif key == pygame.K_1:
-        pyros.publish("camera/wheels/raw/fetch", "")
+        nebula.corner(1)
     elif key == pygame.K_2:
-        pyros.publish("camera/camera2/raw/fetch", "")
+        nebula.corner(2)
     elif key == pygame.K_3:
-        pyros.publish("camera/raw/fetch", "")
+        nebula.corner(3)
     elif key == pygame.K_4:
         pyros.publish("camera/camera1/raw/fetch", "")
     elif key == pygame.K_RETURN:
