@@ -62,25 +62,6 @@ class MazeMothAction(Action):
         front_distance = state.radar.radar[0]
         front_right_distance = state.radar.radar[45]
 
-        if front_left_distance > front_right_distance and front_left_distance > front_distance:
-            target_heading = -45
-        elif front_right_distance > front_left_distance and front_right_distance > front_distance:
-            target_heading = 45
-        else:
-            target_heading = 0
-
-        # Keeping heading
-        heading_pid_output = -self.heading_pid.process(-target_heading, 0)
-        if -MIN_ANGLE < heading_pid_output < MIN_ANGLE:
-            distance = 32000
-        else:
-            heading_fix_rad = heading_pid_output * math.pi / 180
-            distance = self.rover_speed / heading_fix_rad
-            if 0 <= distance < HEADING_MIN_RADIUS:
-                distance = HEADING_MIN_RADIUS
-            elif -HEADING_MIN_RADIUS < distance < 0:
-                distance = -HEADING_MIN_RADIUS
-
         left_distance = state.radar.radar[270]
         right_distance = state.radar.radar[90]
 
@@ -122,6 +103,25 @@ class MazeMothAction(Action):
                 angle = -MAX_WHEEL_ANGLE
 
             angle = sign * int(angle * 180 / math.pi)
+
+        if front_left_distance > front_right_distance and front_left_distance > front_distance:
+            target_heading = -45
+        elif front_right_distance > front_left_distance and front_right_distance > front_distance:
+            target_heading = 45
+        else:
+            target_heading = 0
+
+        # Keeping heading
+        heading_pid_output = -self.heading_pid.process(-target_heading, 0)
+        if -MIN_ANGLE < heading_pid_output < MIN_ANGLE:
+            distance = 32000
+        else:
+            heading_fix_rad = heading_pid_output * math.pi / 180
+            distance = self.rover_speed / heading_fix_rad
+            if 0 <= distance < HEADING_MIN_RADIUS:
+                distance = HEADING_MIN_RADIUS
+            elif -HEADING_MIN_RADIUS < distance < 0:
+                distance = -HEADING_MIN_RADIUS
 
         speed = self.speed
 
