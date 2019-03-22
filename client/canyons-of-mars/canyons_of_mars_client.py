@@ -31,7 +31,7 @@ screen = pyros.gccui.initAll(screen_size, True)
 
 def connected():
     print("Starting agent... ", end="")
-    pyros.agent.init(pyros.client, "canyons_of_mars_agent.py", optional_files=["../common/rover.py", "maze.py"])
+    pyros.agent.init(pyros.client, "canyons_of_mars_agent.py", optional_files=["../common/rover.py", "../common/challenge_utils.py"])
     print("Done.")
 
 
@@ -242,7 +242,9 @@ uiFactory.font = font
 
 screensComponent = gccui.CardsCollection(screen.get_rect())
 uiAdapter.setTopComponent(screensComponent)
-initGraphics(screensComponent, screen.get_rect().inflate(-10, -40).move(0, 20))
+screen_rect = screen.get_rect().inflate(-10, -40).move(0, 20)
+print("Screen rect: " + str(screen_rect))
+initGraphics(screensComponent, screen_rect)
 
 while True:
     for event in pygame.event.get():
@@ -251,7 +253,7 @@ while True:
             sys.exit()
         if event.type == pygame.VIDEORESIZE:
             pyros.gccui.screenResized(event.size)
-            screensComponent.redefineRect(Rect(0, 0, event.size[0], event.size[1]))
+            # screensComponent.redefineRect(Rect(0, 0, event.size[0], event.size[1]))
 
         uiAdapter.processEvent(event)
 

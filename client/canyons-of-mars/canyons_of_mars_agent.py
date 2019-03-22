@@ -12,9 +12,8 @@ import pyroslib
 import pyroslib.logging
 
 from pyroslib.logging import LOG_LEVEL_INFO
-from rover import Rover
-from maze import MazeAction, MazeCorridorAction, MazeTurnAroundCornerAction
-from challenge_utils import AgentClass, WaitSensorData
+from rover import Rover, normaiseAngle, angleDiference
+from challenge_utils import AgentClass, Action, WaitSensorData, WarmupAction, PID
 
 
 SQRT2 = math.sqrt(2)
@@ -24,130 +23,115 @@ WHEEL_NAMES = ['fl', 'fr', 'bl', 'br']
 
 pyroslib.logging.LOG_LEVEL = LOG_LEVEL_INFO
 
+MIN_ANGLE = 0.5
+MAX_WHEEL_ANGLE = 45
+
+HEADING_MIN_RADIUS = 150
+
+SPEED = 120
+REQUIRED_WALL_DISTANCE = 250
+
 corridor_logger = None
 
 
-def angleDiference(a1, a2):
-    diff = a1 - a2
-    if diff >= 180:
-        return diff - 360
-    elif diff <= -180:
-        return diff + 360
-    return diff
+class MazeMothAction(Action):
+    heading_pid = ...  # type: PID
+    side_distance_pid = ...  # type: PID
 
+    def __init__(self, agent, speed, distance):
+        super(MazeMothAction, self).__init__(agent)
+        self.speed = speed
+        self.wall_distance = distance
+        self.heading_pid = None
+        self.side_distance_pid = None
+        self.rover_speed = 25
 
-def normaiseAngle(a):
-    a = a % 360
-    if a < 0:
-        a += 360
-    return a
+    def start(self):
+        super(MazeMothAction, self).start()
+        self.heading_pid = PID(0.75, 0.25, 0, .3, 0, diff_method=angleDiference)
+        self.side_distance_pid = PID(0.75, 0.25, 0, .4, 0)
 
+    def next(self):
+        return self
 
-class Odo:
-    def __init__(self):
-        self.odo = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0}
-        self.last_odo = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0}
-        self.wheel_speeds = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0}
-        self.last_odo_data = 0
-        self.odo_delta_time = 0
+    def execute(self):
+        state = self.rover.getRoverState()
 
-        self.wheel_orientation = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0, 'timestamp': 0.0}
-        self.last_wheel_orientation = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0, 'timestamp': 0.0}
-        self.wheel_rot_speeds = {'fl': 0, 'fr': 0, 'bl': 0, 'br': 0}
-        self.last_speed_data = 0
-        self.speed_delta_time = 0
+        front_left_distance = state.radar.radar[315]
+        front_distance = state.radar.radar[0]
+        front_right_distance = state.radar.radar[45]
 
-    @staticmethod
-    def deltaOdo(old, new):
-        d = new - old
-        if d > 32768:
-            d -= 32768
-        elif d < -32768:
-            d += 32768
-
-        return d
-
-    @staticmethod
-    def deltaOdoInmm(old, new):
-        d = new - old
-        if d > 32768:
-            d -= 32768
-        elif d < -32768:
-            d += 32768
-
-        return d * WHEEL_CIRCUMFERENCE / 4096
-
-    def wheelOdos(self):
-        return self.odo
-
-    def wheelOdoInmm(self, wheel_name):
-        return self.odo[wheel_name] * WHEEL_CIRCUMFERENCE / 4096
-
-    def wheelSpeedInmmPs(self, wheel_name):
-        return self.wheel_speeds[wheel_name] * WHEEL_CIRCUMFERENCE / 4096
-
-    def wheelSpeeds(self):
-        return self.wheel_speeds
-
-    def wheelSpeedAndDirection(self):
-        def addAngles(v1, v2):
-            t = (v1[1] + 180 - v2[1]) * math.pi / 180
-            m = math.sqrt(v1[0] * v1[0] + v2[0] * v2[0] - 2 * v1[0] * v1[0] * math.cos(t))
-            if m < 0.00001:
-                return 0, 0
-
-            a = math.asin(v2[0] * math.sin(t) / m)
-            return m, a * 180 / math.pi
-
-        if self.odo_delta_time == 0:
-            return 0
-        total = (0, 0)
-        for wheel in WHEEL_NAMES:
-            distance = self.odo[wheel] - self.last_odo[wheel]
-            total = addAngles(total, (distance, self.wheel_orientation[wheel]))
-
-        return total[0] / (4 * self.odo_delta_time), total[1]
-
-    def wheelOrietations(self):
-        return self.wheel_orientation
-
-    def wheelOrientationalSpeed(self):
-        return self.wheel_rot_speeds
-
-    def processSpeed(self, data):
-        t = float(data[0])
-
-        if t - self.last_odo_data < 1:
-            self.odo_delta_time = t - self.last_odo_data
+        if front_left_distance > front_right_distance and front_left_distance > front_distance:
+            target_heading = -45
+        elif front_right_distance > front_left_distance and front_right_distance > front_distance:
+            target_heading = 45
         else:
-            self.odo_delta_time = 100000000
+            target_heading = 0
 
-        self.last_odo_data = t
+        # Keeping heading
+        heading_pid_output = -self.heading_pid.process(-target_heading, 0)
+        if -MIN_ANGLE < heading_pid_output < MIN_ANGLE:
+            distance = 32000
+        else:
+            heading_fix_rad = heading_pid_output * math.pi / 180
+            distance = self.rover_speed / heading_fix_rad
+            if 0 <= distance < HEADING_MIN_RADIUS:
+                distance = HEADING_MIN_RADIUS
+            elif -HEADING_MIN_RADIUS < distance < 0:
+                distance = -HEADING_MIN_RADIUS
 
-        for i in range(4):
-            data_index = i * 2
-            if data[data_index + 2] == "0":
-                new_odo = int(data[data_index + 1])
-                delta_odo = self.deltaOdo(self.last_odo[WHEEL_NAMES[i]], new_odo)
-                self.last_odo[WHEEL_NAMES[i]] = self.odo[WHEEL_NAMES[i]]
-                self.odo[WHEEL_NAMES[i]] = new_odo
-                self.wheel_speeds[WHEEL_NAMES[i]] = delta_odo
+        left_distance = state.radar.radar[270]
+        right_distance = state.radar.radar[90]
 
-    def processOrientation(self, data):
-        # def deltaDeg(old, new):
-        #     d = (int(new) - int(old)) % 360
-        #     if d < 0:
-        #         d += 360
-        #     return d
+        if left_distance > front_left_distance:  # / SQRT2:
+            left_distance = front_left_distance
 
-        self.wheel_orientation['timestamp'] = float(data[0])
+        if right_distance > front_right_distance:  # / SQRT2:
+            right_distance = front_right_distance
 
-        for i in range(4):
-            data_index = i * 2
-            if data[data_index + 2] == "32":
-                new_deg = int(data[data_index + 1])
-                self.last_wheel_orientation[WHEEL_NAMES[i]] = self.wheel_orientation[WHEEL_NAMES[i]]
-                self.wheel_orientation[WHEEL_NAMES[i]] = new_deg
+        if left_distance < right_distance:
+            current_wall_distance = left_distance
+            sign = 1
+        else:
+            current_wall_distance = right_distance
+            sign = -1
+
+        if current_wall_distance > self.wall_distance:
+            angle = 0
+            angle_pid_output = 0
+        else:
+            # Keeping distance
+            angle_pid_output = self.side_distance_pid.process(self.wall_distance, current_wall_distance)
+            angle = 0
+            if abs(angle_pid_output) < 1:
+                angle = 0
+            elif angle_pid_output > 0 and angle_pid_output > self.rover_speed:
+                angle = math.pi / 4
+            elif angle_pid_output < 0 and angle_pid_output < -self.rover_speed:
+                angle = -math.pi / 4
+            else:
+                try:
+                    angle = math.asin(angle_pid_output / self.rover_speed)
+                except BaseException as ex:
+                    self.agent.log_always("Domain error")
+
+            if angle > MAX_WHEEL_ANGLE:
+                angle = MAX_WHEEL_ANGLE
+            elif angle < -MAX_WHEEL_ANGLE:
+                angle = -MAX_WHEEL_ANGLE
+
+            angle = sign * int(angle * 180 / math.pi)
+
+        speed = self.speed
+
+        self.agent.log_info(
+            "rover_speed={: 4d} front_dist={: 4d} front_left_dist={: 4d} front_right_dist={: 4d} heading_pid_out={: 7.2f} left_dist={: 4d} right_dist={: 4d} angle_pid_out={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
+                int(self.rover_speed),
+                int(front_distance), int(front_left_distance), int(front_right_distance), heading_pid_output,
+                int(left_distance), int(right_distance), angle_pid_output,
+                int(speed), int(angle), int(distance)))
+
+        self.rover.command(pyroslib.publish, speed, angle, distance)
 
 
 class CanyonsOfMarsAgent(AgentClass):
@@ -157,13 +141,13 @@ class CanyonsOfMarsAgent(AgentClass):
         self.rover = Rover()
         self.last_execution_time = 0
 
-    def stop(self):
-        self.running = False
-        self.rover.reset()
-        self.nextAction(self.stop_action)
-        pyroslib.publish("position/heading/stop", '')
-        pyroslib.publish("position/pause", "")
-        pyroslib.publish("sensor/distance/pause", "")
+    # def stop(self):
+    #     self.running = False
+    #     self.rover.reset()
+    #     self.nextAction(self.stop_action)
+    #     pyroslib.publish("position/heading/stop", '')
+    #     pyroslib.publish("position/pause", "")
+    #     pyroslib.publish("sensor/distance/pause", "")
 
     def start(self, data):
         if not self.running:
@@ -171,23 +155,20 @@ class CanyonsOfMarsAgent(AgentClass):
             if data[0] == 'corridor':
                 super(CanyonsOfMarsAgent, self).start(data)
 
-                speed = int(data[1])
-                distance = int(data[2])
-                speed = 140
+                distance = REQUIRED_WALL_DISTANCE
+                speed = SPEED
 
-                # drive_forward_action = DriverForwardForTimeActoun(5, speed, self.stop_action)
-                # corner_action = MazeTurnAroundCornerAction(self.odo, self.radar, self.heading, MazeAction.LEFT, distance, speed,next_action=drive_forward_action)
-                corridor_action = MazeCorridorAction(self, MazeAction.RIGHT, distance, speed)
+                corridor_action = MazeMothAction(self, speed, distance)
                 wait_for_heading_action = WaitSensorData(self, corridor_action)
 
                 self.nextAction(wait_for_heading_action)
             elif data[0] == 'turnCorner':
                 super(CanyonsOfMarsAgent, self).start(data)
 
-                speed = int(data[1])
-                distance = int(data[2])
-
-                self.nextAction(WaitSensorData(self, MazeTurnAroundCornerAction(self, MazeAction.LEFT, distance, speed)))
+                # speed = int(data[1])
+                # distance = int(data[2])
+                #
+                # self.nextAction(WaitSensorData(self, MazeTurnAroundCornerAction(self, MazeAction.LEFT, distance, speed)))
 
 
 if __name__ == "__main__":
