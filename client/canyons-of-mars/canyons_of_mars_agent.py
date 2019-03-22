@@ -80,6 +80,7 @@ class MazeMothAction(Action):
 
         if current_wall_distance > self.wall_distance:
             angle = 0
+            angle_rad = 0
             angle_pid_output = 0
         else:
             # Keeping distance
@@ -102,6 +103,7 @@ class MazeMothAction(Action):
             elif angle < -MAX_WHEEL_ANGLE:
                 angle = -MAX_WHEEL_ANGLE
 
+            angle_rad = sign * angle
             angle = sign * int(angle * 180 / math.pi)
 
         if front_left_distance > front_right_distance and front_left_distance > front_distance:
@@ -117,7 +119,7 @@ class MazeMothAction(Action):
             distance = 32000
         else:
             heading_fix_rad = heading_pid_output * math.pi / 180
-            distance = self.rover_speed / heading_fix_rad
+            distance = self.rover_speed / (heading_fix_rad * math.cos(angle_rad))
             if 0 <= distance < HEADING_MIN_RADIUS:
                 distance = HEADING_MIN_RADIUS
             elif -HEADING_MIN_RADIUS < distance < 0:
