@@ -28,7 +28,7 @@ MAX_WHEEL_ANGLE = 45
 
 HEADING_MIN_RADIUS = 150
 
-SPEED = 120
+SPEED = 130
 REQUIRED_WALL_DISTANCE = 250
 
 corridor_logger = None
@@ -50,7 +50,7 @@ class MazeMothAction(Action):
         super(MazeMothAction, self).start()
         pyroslib.publish("sensor/distance/focus", "270 315 0 45 90")
         self.heading_pid = PID(0.6, 0.3, 0, 0.2, 0, diff_method=angleDiference)
-        self.side_distance_pid = PID(0.75, 0.1, 0.05, 0.3, 0)
+        self.side_distance_pid = PID(0.75, 0.0, 0.05, 0.25, 0)
 
     def next(self):
         return self
