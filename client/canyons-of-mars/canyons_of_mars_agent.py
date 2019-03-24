@@ -31,7 +31,7 @@ EXIT_HEADING_CONE = 15
 
 HEADING_MIN_RADIUS = 150
 
-SPEED = 125
+SPEED = 120
 FOLLOW_WALL_SPEED = 150
 
 REQUIRED_WALL_DISTANCE = 250
@@ -262,6 +262,9 @@ class FollowWallKeepingHeadingAction(Action):
         speed = self.speed
 
         front_distance = state.radar.radar[0]
+
+        if front_distance < 400:
+            angle = angle + 35
 
         self.agent.log_info("rover_speed={: 4d} front_dist={: 5d} dist_error={: 9.2f} wall_dist={: 5d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             int(self.rover_speed),
