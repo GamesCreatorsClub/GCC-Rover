@@ -131,7 +131,7 @@ class MazeMothAction(Action):
             angle_rad = sign * angle
             angle = sign * int(angle * 180 / math.pi)
 
-        if front_distance > 500:
+        if front_distance > 600:
             turning_requirement = 30
         else:
             turning_requirement = 45
