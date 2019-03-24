@@ -60,7 +60,7 @@ class MazeMothAction(Action):
         super(MazeMothAction, self).start()
         pyroslib.publish("sensor/distance/focus", "270 315 0 45 90")
         # self.heading_pid = PID(0.6, 0.3, 0, 0.2, 0, diff_method=angleDiference)
-        self.heading_pid = PID(0.5, 00, 0, 0.2, 0, diff_method=angleDiference)
+        self.heading_pid = PID(0.6, 00, 0, 0.2, 0, diff_method=angleDiference)
         self.side_distance_pid = PID(0.75, 0.0, 0.05, 0.25, 0)
 
     @staticmethod
