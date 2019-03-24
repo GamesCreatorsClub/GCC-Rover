@@ -31,10 +31,12 @@ EXIT_HEADING_CONE = 15
 
 HEADING_MIN_RADIUS = 200
 
-SPEED = 120
+SPEED = 130
 FOLLOW_WALL_SPEED = 150
 
 REQUIRED_WALL_DISTANCE = 250
+
+STEERING_FRONT_WALL_DISTANCE = 800
 
 MAX_ANGLE = 45
 
@@ -57,7 +59,8 @@ class MazeMothAction(Action):
     def start(self):
         super(MazeMothAction, self).start()
         pyroslib.publish("sensor/distance/focus", "270 315 0 45 90")
-        self.heading_pid = PID(0.6, 0.3, 0, 0.2, 0, diff_method=angleDiference)
+        # self.heading_pid = PID(0.6, 0.3, 0, 0.2, 0, diff_method=angleDiference)
+        self.heading_pid = PID(0.5, 00, 0, 0.2, 0, diff_method=angleDiference)
         self.side_distance_pid = PID(0.75, 0.0, 0.05, 0.25, 0)
 
     @staticmethod
@@ -131,17 +134,46 @@ class MazeMothAction(Action):
             angle_rad = sign * angle
             angle = sign * int(angle * 180 / math.pi)
 
-        if front_distance > 600:
-            turning_requirement = 30
-        else:
-            turning_requirement = 45
+        turning_requirement = 25
+        if front_distance < STEERING_FRONT_WALL_DISTANCE:
+            propotion = 1 - front_distance / STEERING_FRONT_WALL_DISTANCE
+            turning_requirement = 25 + propotion * 45
+            if turning_requirement > 90:
+                turning_requirement = 90
 
         if front_left_distance > front_right_distance and front_left_distance > front_distance:
-            target_heading = -turning_requirement
+            ratio = front_left_distance / front_distance
+            if ratio > 2:
+                ratio = 2
+            ratio -= 1
+
+            target_heading = -turning_requirement - 20 * ratio
         elif front_right_distance > front_left_distance and front_right_distance > front_distance:
-            target_heading = turning_requirement
+            ratio = front_right_distance / front_distance
+            if ratio > 2:
+                ratio = 2
+            ratio -= 1
+
+            target_heading = turning_requirement + 20 * ratio
+        elif front_left_distance > front_right_distance:
+            ratio = front_distance / front_left_distance
+            if ratio > 2:
+                ratio = 2
+            ratio -= 1
+
+            ratio = 1 - ratio
+
+            target_heading = -20 * ratio
         else:
-            target_heading = 0
+            ratio = front_distance / front_right_distance
+            if ratio > 2:
+                ratio = 2
+            ratio -= 1
+
+            ratio = 1 - ratio
+
+            target_heading = 20 * ratio
+
 
         # Keeping heading
         heading_pid_output = -self.heading_pid.process(-target_heading, 0)
@@ -283,6 +315,16 @@ class FollowWallKeepingHeadingAction(Action):
         return "Wall[{0} on {1}]".format(self.direction_angle, self.wall_angle)
 
 
+class StraightWheelsAction(Action):
+    def __init__(self, agent, next_action):
+        super(StraightWheelsAction, self).__init__(agent)
+        self.next_action = next_action
+
+    def next(self):
+        self.rover.command(pyroslib.publish, 0, 0, 3200)
+        return self.next_action
+
+
 class CanyonsOfMarsAgent(AgentClass):
     def __init__(self):
         super(CanyonsOfMarsAgent, self).__init__("canyons")
@@ -314,7 +356,7 @@ class CanyonsOfMarsAgent(AgentClass):
                 self.nextAction(wait_for_heading_action)
 
             elif data[0] == 'warmup':
-                self.nextAction(WaitSensorData(self, WarmupAction(self)))
+                self.nextAction(StraightWheelsAction(self, WaitSensorData(self, WarmupAction(self))))
 
 
 if __name__ == "__main__":
