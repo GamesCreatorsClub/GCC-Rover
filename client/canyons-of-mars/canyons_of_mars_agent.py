@@ -29,7 +29,7 @@ MAX_WHEEL_ANGLE = 45
 EXIT_HEADING = 270
 EXIT_HEADING_CONE = 15
 
-HEADING_MIN_RADIUS = 150
+HEADING_MIN_RADIUS = 200
 
 SPEED = 120
 FOLLOW_WALL_SPEED = 150
@@ -37,7 +37,6 @@ FOLLOW_WALL_SPEED = 150
 REQUIRED_WALL_DISTANCE = 250
 
 MAX_ANGLE = 45
-HEADING_MIN_DISTANCE = 150
 
 corridor_logger = None
 
@@ -132,10 +131,15 @@ class MazeMothAction(Action):
             angle_rad = sign * angle
             angle = sign * int(angle * 180 / math.pi)
 
+        if front_distance > 500:
+            turning_requirement = 30
+        else:
+            turning_requirement = 45
+
         if front_left_distance > front_right_distance and front_left_distance > front_distance:
-            target_heading = -45
+            target_heading = -turning_requirement
         elif front_right_distance > front_left_distance and front_right_distance > front_distance:
-            target_heading = 45
+            target_heading = turning_requirement
         else:
             target_heading = 0
 
@@ -210,10 +214,10 @@ class FollowWallKeepingHeadingAction(Action):
         else:
             heading_fix_rad = heading_output * math.pi / 180
             distance = self.rover_speed / heading_fix_rad
-            if 0 <= distance < HEADING_MIN_DISTANCE:
-                distance = HEADING_MIN_DISTANCE
-            elif -HEADING_MIN_DISTANCE < distance < 0:
-                distance = -HEADING_MIN_DISTANCE
+            if 0 <= distance < HEADING_MIN_RADIUS:
+                distance = HEADING_MIN_RADIUS
+            elif -HEADING_MIN_RADIUS < distance < 0:
+                distance = -HEADING_MIN_RADIUS
 
         return distance, heading_output
 
@@ -308,13 +312,9 @@ class CanyonsOfMarsAgent(AgentClass):
                 wait_for_heading_action = WaitSensorData(self, corridor_action)
 
                 self.nextAction(wait_for_heading_action)
-            elif data[0] == 'turnCorner':
-                super(CanyonsOfMarsAgent, self).start(data)
 
-                # speed = int(data[1])
-                # distance = int(data[2])
-                #
-                # self.nextAction(WaitSensorData(self, MazeTurnAroundCornerAction(self, MazeAction.LEFT, distance, speed)))
+            elif data[0] == 'warmup':
+                self.nextAction(WaitSensorData(self, WarmupAction(self)))
 
 
 if __name__ == "__main__":

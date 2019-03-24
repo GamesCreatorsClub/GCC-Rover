@@ -63,17 +63,8 @@ class CanyonsOfMars:
         pyros.publish("canyons/command", "start corridor " + str(100) + " " + str(220))  # Speed/Distance
         self.runButtons.on()
 
-    def turnCorner(self):
-        self.running = True
-        self.run_log.reset()
-        pyros.publish("canyons/command", "start turnCorner " + str(100) + " " + str(300))  # Speed/Distance
-        self.runButtons.on()
-
-    def turn180(self):
-        self.running = True
-        self.run_log.reset()
-        pyros.publish("canyons/command", "start turn180 " + str(100) + " " + str(166))  # Speed/Distance
-        self.runButtons.on()
+    def warmup(self):
+        pyros.publish("canyons/command", "start warmup")
 
     def _stop(self):
         prev_running = self.running
@@ -161,7 +152,7 @@ def initGraphics(screens, rect):
     statusComponents = gccui.Collection(screens.rect)
     screens.addCard("status", statusComponents)
 
-    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, canyonsOfMars.run_log, canyonsOfMars.stop, [("Run", canyonsOfMars.start), ("Turn Corner", canyonsOfMars.turnCorner), ("Turn 180", canyonsOfMars.turn180)])
+    runButtons = RunButtons(Rect(rect.right - 160, rect.y, 160, 280), uiFactory, canyonsOfMars.run_log, canyonsOfMars.stop, [("Run", canyonsOfMars.start), ("Warm Up", canyonsOfMars.warmup)])
     statusComponents.addComponent(runButtons)
     canyonsOfMars.runButtons = runButtons
 
@@ -216,6 +207,8 @@ def onKeyDown(key):
         canyonsOfMars.stop()
     elif key == pygame.K_RETURN:
         canyonsOfMars.start()
+    elif key == pygame.K_w:
+        canyonsOfMars.warmup()
 
 
 def onKeyUp(key):
