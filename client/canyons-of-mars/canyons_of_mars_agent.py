@@ -55,9 +55,22 @@ class MazeMothAction(Action):
     def next(self):
         return self
 
+    @staticmethod
+    def calculateRealDistance(side_distance, side_angle):
+        if side_distance < 1:
+            return 0
+
+        if side_angle > 180:
+            side_angle = 360 - side_angle
+
+        side_angle = side_angle * math.pi / 180
+
+        return math.sin(math.pi / 2 - side_angle) * side_distance
+
     def execute(self):
         state = self.rover.getRoverState()
 
+        heading = state.heading.heading
         front_left_distance = state.radar.radar[315]
         front_distance = state.radar.radar[0]
         front_right_distance = state.radar.radar[45]
