@@ -23,8 +23,32 @@ trying_frequency = 50  # 5 seconds
 last_status_broadcast = 0
 status_broadcast_time = 5  # every 5 seconds
 
+TRIGGER_LOW = 110
+TRIGGER_HIGH = 170
+TRIGGER_SERVO = 1
+
+ELEVATOR_LOW = 85
+ELEVATOR_HIGH = 210
+ELEVATOR_SERVO = 2
+
+BARRLES_LOW = 90
+BARRLES_HIGH = 130
+BARRLES_SERVO = 0
+
 max_speed = 100
 max_rot_speed = 100
+
+motor_speed = 0.5
+motor_current_speed = -1
+motor_change_speed = 0.01
+
+
+def moveServo(servoid, position):
+    try:
+        with open("/dev/servoblaster", 'w') as f:
+            f.write(str(servoid) + "=" + str(position) + "\n")
+    except Exception as ex:
+        print("Sending servo exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
 
 def increase(value):
@@ -53,9 +77,28 @@ def decrease(value):
     return value
 
 
+def send_motor_servo(servo_position):
+    print("  Setting motor servo to " + str(servo_position) + "; motor_speed=" + str(motor_speed))
+    moveServo(BARRLES_SERVO, servo_position)
+
+
 def loop():
     global joystick, last_presses, trying_counter, last_status_broadcast
-    global max_speed, max_rot_speed
+    global max_speed, max_rot_speed, motor_speed, motor_current_speed
+
+    if motor_current_speed >= 0:
+        print("Testing motor speed motor_current_speed=" + str(motor_current_speed) + " <--> " + str(motor_speed))
+        motor_changed = False
+        if motor_current_speed > motor_speed:
+            motor_current_speed -= motor_change_speed
+            motor_changed = True
+        elif motor_current_speed < motor_speed:
+            motor_current_speed += motor_change_speed
+            motor_changed = True
+
+        if motor_changed:
+            print("Changed motor current speed to " + str(motor_current_speed))
+            send_motor_servo(int(((BARRLES_HIGH - BARRLES_LOW) * motor_current_speed + BARRLES_LOW)))
 
     try:
         if joystick is None:
@@ -149,6 +192,36 @@ def loop():
                             speed = -speed
 
                         pyros.publish("move/steer", str(int(distance)) + " " + str(int(speed)) + " " + str(int(ra)))
+
+                    if joystick['r1'] is not None:
+                        motor_changed = False
+                        if presses['l2']:
+                            motor_speed -= 0.1
+                            if motor_speed < 0:
+                                motor_speed = 0
+
+                        elif presses['r2']:
+                            motor_speed += 0.1
+                            if motor_speed > 1:
+                                motor_speed = 1
+
+                    else:
+                        rt = joystick['rt']
+                        servo_position = int((TRIGGER_HIGH - TRIGGER_LOW) * (1 - rt) + TRIGGER_LOW)
+                        # print("  Setting trigger servo to " + str(servo_position) + "; rt=" + str(rt))
+                        moveServo(TRIGGER_SERVO, servo_position)
+
+                    if joystick['l1'] is not None:
+                        servo_position = int((ELEVATOR_HIGH - ELEVATOR_LOW) * (1 - ly) / 2 + TRIGGER_LOW)
+                        # print("  Setting elevator servo to " + str(servo_position) + "; ly=" + str(ly))
+                        moveServo(ELEVATOR_SERVO, servo_position)
+
+                    if presses['square']:
+                        if motor_current_speed > 0:
+                            motor_current_speed = -1
+                            send_motor_servo(BARRLES_LOW)
+                        else:
+                            motor_current_speed = 0
 
                     for axis_name in joystick.axes.names:
                         last_axes[axis_name] = joystick[axis_name]
