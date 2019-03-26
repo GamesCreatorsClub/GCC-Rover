@@ -25,7 +25,7 @@ MAX_ANGLE = 45
 
 HEADING_MIN_DISTANCE = 150
 
-SPEED = 150
+SPEED = 200
 REQUIRED_WALL_DISTANCE = 250
 
 STEERING_FRONT_WALL_DISTANCE = 800
@@ -410,7 +410,7 @@ class HeadingAntenae(BlastoffAction):
         super(HeadingAntenae, self).start()
         pyroslib.publish("sensor/distance/focus", "315, 45")
         self.heading_pid = PID(0.75, 0.2, 0.0, 1.2, 0, diff_method=angleDiference)
-        self.direction_pid = PID(0.75, 0, 0.02, 0.4, 0)
+        self.direction_pid = PID(0.75, 0, 0.04, 0.3, 0)
 
     def next(self):
         self.obtainRoverSpeed()
@@ -430,9 +430,9 @@ class HeadingAntenae(BlastoffAction):
         if abs(angle_output) < 1:
             angle = 0
         elif angle_output > 0 and angle_output > self.rover_speed:
-            angle = math.pi / 4
+            angle = math.pi / 4 * 1.1
         elif angle_output < 0 and angle_output < -self.rover_speed:
-            angle = -math.pi / 4
+            angle = -math.pi / 4 * 1.1
         else:
             try:
                 angle = math.asin(angle_output / self.rover_speed)
