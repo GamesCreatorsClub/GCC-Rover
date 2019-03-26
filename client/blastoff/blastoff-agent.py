@@ -9,13 +9,8 @@ import math
 import time
 import telemetry
 import traceback
+import sys
 
-import numpy
-
-import cv2
-import PIL
-import PIL.Image
-from PIL import ImageDraw
 
 import pyroslib
 import pyroslib.logging
@@ -30,7 +25,7 @@ MAX_ANGLE = 45
 
 HEADING_MIN_DISTANCE = 150
 
-SPEED = 180
+SPEED = 150
 REQUIRED_WALL_DISTANCE = 250
 
 STEERING_FRONT_WALL_DISTANCE = 800
@@ -213,7 +208,7 @@ class BlastoffAction(Action):
 
     def obtainRoverSpeed(self):
         self.rover_speed = self.rover.wheel_odos.averageSpeed() / 10
-        self.rover_speed = 25
+        self.rover_speed = self.speed
 
     def keepHeading(self, heading):
         state = self.rover.getRoverState()
@@ -330,8 +325,8 @@ class FollowWallAction(BlastoffAction):
     def start(self):
         super(FollowWallAction, self).start()
         pyroslib.publish("sensor/distance/focus", "0, 45, 90, 135")
-        self.direction_pid = PID(0.20, 0, 0.01, 0.6, 0)
-        self.heading_pid = PID(0.25, 0.02, 0.0, 0.8, 0, diff_method=angleDiference)
+        self.heading_pid = PID(0.75, 0.2, 0.0, 1.0, 0, diff_method=angleDiference)
+        self.direction_pid = PID(0.75, 0, 0.01, 0.7, 0)
 
     def next(self):
         self.obtainRoverSpeed()
@@ -344,32 +339,40 @@ class FollowWallAction(BlastoffAction):
         front_distance = state.radar.radar[0]
         front_right_distance = state.radar.radar[45]
         right_distance = state.radar.radar[90]
-        back_right_distance = state.radar.radar[45]
+        back_right_distance = state.radar.radar[135]
 
         wall_angle, wall_distance, calc_type = self.calculateAngleAndFrontDistance(front_right_distance, right_distance, back_right_distance)
 
-        distance, heading_output = self.keepHeading(wall_angle)
+        orig_wall_angle = wall_angle
+        if wall_angle >= -10 and front_distance < 650 and state.radar.radar_deltas[0] < 0:
+            pass
+            wall_angle += 30
+
+        distance, heading_output = self.keepHeading(-wall_angle)
 
         angle, angle_output = self.keepDirection(0, wall_distance, self.required_keeping_side_distance)
 
         speed = self.speed
 
-        self.agent.log_info("rspd={: 4d} f={: 5d} fs={: 5d} s={: 5d} bs={: 5d} wall={: 5d} calc=a{:1d} angle_f={: 7.2f} wall_a={: 3d} head_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
+        self.agent.log_info("rspd={: 4d} f={: 5d} fs={: 5d} s={: 5d} bs={: 5d} wall={: 5d} calc=a{:1d} angle_f={: 7.2f} owall_a={: 3d} wall_a={: 3d} head_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             int(self.rover_speed),
                             int(front_distance), int(front_right_distance), int(right_distance), int(back_right_distance),
                             int(wall_distance), calc_type,  angle_output,
-                            int(wall_angle), heading_output,
+                            int(orig_wall_angle), int(wall_angle), heading_output,
                             int(speed), int(angle), int(distance)))
 
         self.rover.command(pyroslib.publish, speed, angle, distance)
 
     def getActionName(self):
-        return "WallWithHeading"
+        return "Wall"
 
 
-class FollowWallKeepingHeadingAction(BlastoffAction):
+class HeadingAntenae(BlastoffAction):
+    FRONT = 1
+    BACK = 2
+
     def __init__(self, agent, speed, next_action=None):
-        super(FollowWallKeepingHeadingAction, self).__init__(agent, speed, next_action)
+        super(HeadingAntenae, self).__init__(agent, speed, next_action)
 
     @staticmethod
     def calculateRealDistance(side_distance, side_angle):
@@ -383,11 +386,31 @@ class FollowWallKeepingHeadingAction(BlastoffAction):
 
         return math.sin(math.pi / 2 - side_angle) * side_distance
 
+    def calculateAngleAndFrontDistance(self, df, dm, db):
+        dfsqrt2 = df / SQRT2
+        dbsqrt2 = db / SQRT2
+
+        if df < db:
+            # angle = math.atan2(dfsqrt2, dfsqrt2 - dm) * 180 / math.pi - 90
+            angle = math.atan2(dfsqrt2, dfsqrt2 - dm) - math.pi / 2
+            calc_type = self.FRONT
+
+        else:
+            # angle = 90 - math.atan2(dbsqrt2, dbsqrt2 - dm) * 180 / math.pi
+            angle = math.pi / 2 - math.atan2(dbsqrt2, dbsqrt2 - dm)
+            calc_type = self.BACK
+
+        angle = angle * 180 / math.pi
+
+        d = self.calculateRealDistance(dm, angle)
+
+        return angle, int(d), calc_type
+
     def start(self):
-        super(FollowWallKeepingHeadingAction, self).start()
-        pyroslib.publish("sensor/distance/focus", "0, 45, 90, 135")
-        self.direction_pid = PID(0.20, 0, 0.01, 0.2, 0)
-        self.heading_pid = PID(0.25, 0.02, 0.0, 1, 0, diff_method=angleDiference)
+        super(HeadingAntenae, self).start()
+        pyroslib.publish("sensor/distance/focus", "315, 45")
+        self.heading_pid = PID(0.75, 0.2, 0.0, 1.2, 0, diff_method=angleDiference)
+        self.direction_pid = PID(0.75, 0, 0.02, 0.4, 0)
 
     def next(self):
         self.obtainRoverSpeed()
@@ -397,30 +420,58 @@ class FollowWallKeepingHeadingAction(BlastoffAction):
     def execute(self):
         state = self.rover.getRoverState()
 
-        distance, heading_output = self.keepHeading(state.heading.heading)
+        heading = state.heading.heading
 
-        wall_side_distance = self.calculateRealDistance(state.radar.radar[90], state.heading.heading)
-        wall_front_distance = state.radar.radar[0]
-        if wall_front_distance // 3 < wall_side_distance:
-            wall_side_distance = -wall_front_distance // 3
+        front_left = state.radar.radar[315]
+        front_right = state.radar.radar[45]
 
-        angle, angle_output = self.keepDirection(0, wall_side_distance, self.required_keeping_side_distance)
+        angle_output = self.direction_pid.process(front_right, front_left)
+        angle = 0
+        if abs(angle_output) < 1:
+            angle = 0
+        elif angle_output > 0 and angle_output > self.rover_speed:
+            angle = math.pi / 4
+        elif angle_output < 0 and angle_output < -self.rover_speed:
+            angle = -math.pi / 4
+        else:
+            try:
+                angle = math.asin(angle_output / self.rover_speed)
+            except BaseException as ex:
+                self.agent.log_always("Domain error")
+
+        if angle > MAX_ANGLE:
+            angle = MAX_ANGLE
+        elif angle < -MAX_ANGLE:
+            angle = -MAX_ANGLE
+
+        angle_rad = angle
+        angle = int(angle * 180 / math.pi)
+
+        heading_pid_output = -self.heading_pid.process(0, heading)
+        if -MIN_ANGLE < heading_pid_output < MIN_ANGLE:
+            distance = 32000
+        else:
+            heading_fix_rad = heading_pid_output * math.pi / 180
+            angle_factor = math.cos(angle_rad) * math.cos(angle_rad) * math.cos(angle_rad)
+            distance = self.rover_speed / (heading_fix_rad * angle_factor)
+            if 0 <= distance < HEADING_MIN_RADIUS:
+                distance = HEADING_MIN_RADIUS
+            elif -HEADING_MIN_RADIUS < distance < 0:
+                distance = -HEADING_MIN_RADIUS
 
         speed = self.speed
 
-        front_distance = state.radar.radar[0]
-
-        self.agent.log_info("rover_speed={: 4d} front_dist={: 5d} dist_error={: 9.2f} wall_dist={: 5d} angle_fix={: 7.2f} heading={: 3d} heading_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
+        self.agent.log_info("rspd={: 4d} fl={: 5d} fr={: 5d} heading={: 3d} heading_pid={: 7.2f}, angle_fix={: 7.2f} speed={: 3d} angle={: 3d} distance={: 3d}".format(
                             int(self.rover_speed),
-                            int(front_distance), self.distance_error,
-                            int(wall_side_distance), angle_output,
-                            int(state.heading.heading), heading_output,
+                            int(front_left), int(front_right),
+                            int(heading), heading_pid_output,
+                            angle_output,
                             int(speed), int(angle), int(distance)))
 
         self.rover.command(pyroslib.publish, speed, angle, distance)
 
     def getActionName(self):
-        return "WallWithHeading"
+        return "HeadingAntenae"
 
 
 class StraightWheelsAction(Action):
@@ -445,14 +496,20 @@ class BlastoffAgent(AgentClass):
             if data[0] == 'blastoff':
                 super(BlastoffAgent, self).start(data)
 
-                follow_wall = FollowWallKeepingHeadingAction(self, SPEED)
+                # follow_wall = FollowWallKeepingHeadingAction(self, SPEED)
                 # follow_wall = FollowWallAction(self, SPEED)
                 # follow_wall = MazeMothAction(self, SPEED, REQUIRED_WALL_DISTANCE)
+                follow_wall = HeadingAntenae(self, SPEED)
                 wait_sensor_data_action = StraightWheelsAction(self, WaitSensorData(self, follow_wall))
                 self.nextAction(wait_sensor_data_action)
 
             elif data[0] == 'warmup':
                 self.nextAction(StraightWheelsAction(self, WaitSensorData(self, WarmupAction(self))))
+
+
+def stopCallback():
+    print("Asked to stop!")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -464,7 +521,7 @@ if __name__ == "__main__":
 
         blastoff = BlastoffAgent()
 
-        pyroslib.init("blastoff-agent", unique=True, onConnected=blastoff.connected)
+        pyroslib.init("blastoff-agent", unique=True, onConnected=blastoff.connected, onStop=stopCallback)
 
         print("  initialising logger...")
         state_logger.init()
