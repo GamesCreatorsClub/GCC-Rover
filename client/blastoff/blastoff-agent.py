@@ -25,7 +25,7 @@ MAX_ANGLE = 45
 
 HEADING_MIN_DISTANCE = 150
 
-SPEED = 200
+SPEED = 180
 REQUIRED_WALL_DISTANCE = 250
 
 STEERING_FRONT_WALL_DISTANCE = 800
@@ -410,7 +410,7 @@ class HeadingAntenae(BlastoffAction):
         super(HeadingAntenae, self).start()
         pyroslib.publish("sensor/distance/focus", "315, 45")
         self.heading_pid = PID(0.75, 0.2, 0.0, 1.2, 0, diff_method=angleDiference)
-        self.direction_pid = PID(0.75, 0, 0.04, 0.3, 0)
+        self.direction_pid = PID(0.75, 0, 0.03, 0.3, 0)
 
     def next(self):
         self.obtainRoverSpeed()
@@ -430,29 +430,29 @@ class HeadingAntenae(BlastoffAction):
         if abs(angle_output) < 1:
             angle = 0
         elif angle_output > 0 and angle_output > self.rover_speed:
-            angle = math.pi / 4 * 1.1
+            angle = math.pi / 4
         elif angle_output < 0 and angle_output < -self.rover_speed:
-            angle = -math.pi / 4 * 1.1
+            angle = -math.pi / 4
         else:
             try:
                 angle = math.asin(angle_output / self.rover_speed)
             except BaseException as ex:
                 self.agent.log_always("Domain error")
 
-        if angle > MAX_ANGLE:
-            angle = MAX_ANGLE
-        elif angle < -MAX_ANGLE:
-            angle = -MAX_ANGLE
-
         angle_rad = angle
         angle = int(angle * 180 / math.pi)
+
+        # if angle > MAX_ANGLE:
+        #     angle = MAX_ANGLE
+        # elif angle < -MAX_ANGLE:
+        #     angle = -MAX_ANGLE
 
         heading_pid_output = -self.heading_pid.process(0, heading)
         if -MIN_ANGLE < heading_pid_output < MIN_ANGLE:
             distance = 32000
         else:
             heading_fix_rad = heading_pid_output * math.pi / 180
-            angle_factor = math.cos(angle_rad) * math.cos(angle_rad) * math.cos(angle_rad)
+            angle_factor = math.cos(angle_rad) * math.cos(angle_rad)
             distance = self.rover_speed / (heading_fix_rad * angle_factor)
             if 0 <= distance < HEADING_MIN_RADIUS:
                 distance = HEADING_MIN_RADIUS
