@@ -29,8 +29,8 @@ MIN_ANGLE = 0.5
 MAX_ANGLE = 45
 HEADING_MIN_DISTANCE = 150
 
-WALL_SPEED = 240
-CORNER_SPEED = 200
+WALL_SPEED = 210
+CORNER_SPEED = 170
 
 CORNER_CROSS_SPEED = 240
 MAX_CORNER_DISTANCE = 700
@@ -249,6 +249,12 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
         self.distance_error = self.distance_pid.process(self.required_corner_distance, corner_distance)
 
+        average_side = int((left_side + right_side) / 2)
+        if left_side > right_side:
+            ratio = left_side / right_side
+        else:
+            ratio = right_side / left_side
+
         if corner_distance < self.required_corner_distance:
             self.agent.log_info(
                 "reached corner distance rover_speed={: 4d} corner_dist={: 4d} dist_error={: 7.2f} left_dist={: 4d} right_dist={: 4d} heading={: 3d}".format(
@@ -261,7 +267,6 @@ class GoToCornerKeepingHeadingAction(NebulaAction):
 
         left_side = state.radar.radar[self.prev_angle]
         right_side = state.radar.radar[self.next_angle]
-        average_side = int((left_side + right_side) / 2)
 
         if average_side < self.required_side_distance:
             self.agent.log_info(
@@ -466,6 +471,16 @@ class CalculateRouteAction(Action):
         return "Calculate"
 
 
+class StraightWheelsAction(Action):
+    def __init__(self, agent, next_action):
+        super(StraightWheelsAction, self).__init__(agent)
+        self.next_action = next_action
+
+    def next(self):
+        self.rover.command(pyroslib.publish, 0, 0, 3200)
+        return self.next_action
+
+
 class NebulaAgent(AgentClass):
     def __init__(self):
         super(NebulaAgent, self).__init__("nebula")
@@ -501,7 +516,7 @@ class NebulaAgent(AgentClass):
 
             elif data[0] == 'warmup':
                 # super(NebulaAgent, self).start(data)
-                self.nextAction(WaitSensorData(self, WarmupAction(self)))
+                self.nextAction(StraightWheelsAction(self, WaitSensorData(self, WarmupAction(self))))
 
             elif data[0] == 'scan':
                 super(NebulaAgent, self).start(data)

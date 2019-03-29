@@ -4,3 +4,4 @@ approxeng.input
 psutil
 nose2
 unittest
+Pillow-PIL
