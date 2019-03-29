@@ -976,7 +976,7 @@ class RadarScreen(ScreenComponent):
         self.uiFactory = uiFactory
         self.addComponent(_uiFactory.text_button(Rect(10, 430, 90, 40), "STOP", stopAllButtonClick))
         self.addComponent(_uiFactory.text_button(Rect(220, 430, 90, 40), "BACK", self.selectScreenCallback('main_menu')))
-        self.addComponent(Radar(Rect(50, 50, 220, 220), self.uiFactory, getRadar, 1300))
+        self.addComponent(Radar(Rect(0, 50, 300, 300), self.uiFactory, getRadar, 1300))
 
     def redefineRect(self, rect):
         super(RadarScreen, self).redefineRect(rect)

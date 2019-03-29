@@ -85,7 +85,8 @@ class BoxBlueSFThemeFactory(BaseUIFactory):
         self.background_colour = background_colour
         self.mouse_over_colour = mouse_over_colour
         self.mouse_over_background_colour = mouse_over_background_colour
-        self.font = font if font is not None else pygame.font.SysFont('Arial', 30)
+        # self.font = font if font is not None else pygame.font.SysFont('Arial', 30)
+        self.font = font
 
     def setMouseOverColour(self, mouse_over_colour):
         self.mouse_over_colour = mouse_over_colour

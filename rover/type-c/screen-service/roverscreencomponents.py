@@ -336,11 +336,11 @@ class Radar(gccui.Collection):
 
     def redefineRect(self, rect):
         self.rect = rect
-        self.components[0].redefineRect(Rect(rect.x + 150, rect.centery - 120, 0, 20))
-        self.components[1].redefineRect(Rect(rect.x + 250, rect.centery - 90, 0, 20))
-        self.components[2].redefineRect(Rect(rect.x + 280, rect.centery - 10, 0, 20))
-        self.components[3].redefineRect(Rect(rect.x + 250, rect.centery + 70, 0, 20))
-        self.components[4].redefineRect(Rect(rect.x + 150, rect.centery + 100, 0, 20))
+        self.components[0].redefineRect(Rect(rect.x + rect.width // 2, rect.centery - 120, 0, 20))
+        self.components[1].redefineRect(Rect(rect.right - 60, rect.centery - 90, 0, 20))
+        self.components[2].redefineRect(Rect(rect.right - 30, rect.centery - 10, 0, 20))
+        self.components[3].redefineRect(Rect(rect.right - 60, rect.centery + 70, 0, 20))
+        self.components[4].redefineRect(Rect(rect.x + rect.width // 2, rect.centery + 100, 0, 20))
         self.components[5].redefineRect(Rect(rect.x + 60, rect.centery + 70, 0, 20))
         self.components[6].redefineRect(Rect(rect.x + 30, rect.centery - 10, 0, 20))
         self.components[7].redefineRect(Rect(rect.x + 60, rect.centery - 90, 0, 20))
