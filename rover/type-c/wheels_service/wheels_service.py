@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Copyright 2016-2017 Games Creators Club
+# Copyright 2016-2019 Games Creators Club
 #
 # MIT License
 #
@@ -127,58 +127,6 @@ FORWARD = bytes('FO', 'ASCII')
 BACK = bytes('BA', 'ASCII')
 
 
-def normaiseAngle(a):
-    a = a % 360
-    if a < 0:
-        a += 360
-    return a
-
-
-def angleDiference(a1, a2):
-    diff = a1 - a2
-    if diff >= 180:
-        return diff - 360
-    elif diff <= -180:
-        return diff + 360
-    return diff
-
-
-def addAngles(a1, a2):
-    return normaiseAngle(a1 + a2)
-
-
-def subAngles(a1, a2):
-    return normaiseAngle(a1 - a2)
-
-
-def oppositeAngle(a, mod):
-    if mod >= 0:
-        return a
-    return normaiseAngle(a + 180)
-
-
-def smallestAngleChange(old_angle, mod, new_angle):
-    real_old_angle = oppositeAngle(old_angle, mod)
-    angle_diff = angleDiference(new_angle, real_old_angle)
-    if angle_diff > 90:
-        new_diff = angle_diff - 180
-        return normaiseAngle(old_angle + new_diff), -mod
-    elif angle_diff < -90:
-        new_diff = 180 + angle_diff
-        return normaiseAngle(old_angle + new_diff), -mod
-    else:
-        return normaiseAngle(old_angle + angle_diff), mod
-
-
-def _updaate_service_started_time():
-    global service_started_time
-    with open("/proc/uptime", 'r') as fh:
-        uptime = float(float(fh.read().split(" ")[0]))
-
-        service_started_time = time.time() - uptime
-        print("  set started time " + str(uptime) + " seconds ago.")
-
-
 class PID:
     def __init__(self, _kp, _ki, _kd, gain, dead_band):
         self.set_point = 0.0
@@ -199,7 +147,7 @@ class PID:
     def process(self, set_point, current):
         now = time.time()
 
-        error = angleDiference(set_point, current)
+        error = angle_difference(set_point, current)
         if abs(error) <= self.dead_band:
             error = 0.0
 
@@ -239,14 +187,58 @@ class PID:
         return "p=" + str(self.p * self.kp) + ", i=" + str(self.i * self.ki) + ", d=" + str(self.d * self.kd) + ", last_delta=" + str(self.last_delta)
 
 
-def initWheel(wheelName):
-    wheelMap[wheelName] = {
+def normalise_angle(a):
+    a = a % 360
+    if a < 0:
+        a += 360
+    return a
+
+
+def angle_difference(a1, a2):
+    diff = a1 - a2
+    if diff >= 180:
+        return diff - 360
+    elif diff <= -180:
+        return diff + 360
+    return diff
+
+
+def opposite_angle(a, mod):
+    if mod >= 0:
+        return a
+    return normalise_angle(a + 180)
+
+
+def smallest_angle_change(old_angle, mod, new_angle):
+    real_old_angle = opposite_angle(old_angle, mod)
+    angle_diff = angle_difference(new_angle, real_old_angle)
+    if angle_diff > 90:
+        new_diff = angle_diff - 180
+        return normalise_angle(old_angle + new_diff), -mod
+    elif angle_diff < -90:
+        new_diff = 180 + angle_diff
+        return normalise_angle(old_angle + new_diff), -mod
+    else:
+        return normalise_angle(old_angle + angle_diff), mod
+
+
+def _update_service_started_time():
+    global service_started_time
+    with open("/proc/uptime", 'r') as fh:
+        uptime = float(float(fh.read().split(" ")[0]))
+
+        service_started_time = time.time() - uptime
+        print("  set started time " + str(uptime) + " seconds ago.")
+
+
+def init_wheel(wheel_name: str):
+    wheelMap[wheel_name] = {
         'deg': 0,
         'deg_stop': False,
         'speed': 0,
         's_mod': 1,
         'gen': None,
-        'name': wheelName,
+        'name': wheel_name,
         'pid': PID(0.7, 0.29, 0.01, 1.0, 1),
         'deg_lt': 0,  # deg last time
         'speed_lt': 0,  # speed last time
@@ -257,23 +249,7 @@ def initWheel(wheelName):
     }
 
 
-def initWheelPid(wheelName):
-    global kp, ki, kd, kg, deadband
-    kp = float(wheelCalibrationMap['pid']['p'])
-    ki = float(wheelCalibrationMap['pid']['i'])
-    kd = float(wheelCalibrationMap['pid']['d'])
-    kg = float(wheelCalibrationMap['pid']['g'])
-    deadband = int(float(wheelCalibrationMap['pid']['deadband']))
-
-    pid = wheelMap[wheelName]['pid']
-    pid.kp = kp
-    pid.ki = ki
-    pid.kd = kd
-    pid.kg = kg
-    pid.dead_band = deadband
-
-
-def initWheels():
+def init_wheels():
     global wheelCalibrationMap
 
     if "wheels" not in storagelib.storageMap:
@@ -284,65 +260,60 @@ def initWheels():
 
     wheelCalibrationMap = storagelib.storageMap["wheels"]["cal"]
 
-    initWheel("fr")
-    initWheel("fl")
-    initWheel("br")
-    initWheel("bl")
+    for wheel in WHEEL_NAMES:
+        init_wheel(wheel)
 
 
-def updateWheelsPid():
-    initWheelPid('fr')
-    initWheelPid('fl')
-    initWheelPid('br')
-    initWheelPid('bl')
+def init_all_wheels_pid():
+    global kp, ki, kd, kg, deadband
+    kp = float(wheelCalibrationMap['pid']['p'])
+    ki = float(wheelCalibrationMap['pid']['i'])
+    kd = float(wheelCalibrationMap['pid']['d'])
+    kg = float(wheelCalibrationMap['pid']['g'])
+    deadband = int(float(wheelCalibrationMap['pid']['deadband']))
+
+    for wheel_name in WHEEL_NAMES:
+        pid = wheelMap[wheel_name]['pid']
+        pid.kp = kp
+        pid.ki = ki
+        pid.kd = kd
+        pid.kg = kg
+        pid.dead_band = deadband
 
 
-def checkPidsChanged():
+def check_pids_changed():
     if kp != float(wheelCalibrationMap['pid']['p']) or \
             ki != float(wheelCalibrationMap['pid']['i']) or \
             kd != float(wheelCalibrationMap['pid']['d']) or \
             kg != float(wheelCalibrationMap['pid']['g']) or \
             deadband != float(wheelCalibrationMap['pid']['deadband']):
-        updateWheelsPid()
+        init_all_wheels_pid()
 
 
-def subscribeWheels():
-    storagelib.subscribeWithPrototype("wheels/cal/fl", PROTOTYPE_WHEEL_CALIBRATION)
-    storagelib.subscribeWithPrototype("wheels/cal/fr", PROTOTYPE_WHEEL_CALIBRATION)
-    storagelib.subscribeWithPrototype("wheels/cal/bl", PROTOTYPE_WHEEL_CALIBRATION)
-    storagelib.subscribeWithPrototype("wheels/cal/br", PROTOTYPE_WHEEL_CALIBRATION)
+def subscribe_wheels():
+    for wheel_name in WHEEL_NAMES:
+        storagelib.subscribeWithPrototype("wheels/cal/" + wheel_name, PROTOTYPE_WHEEL_CALIBRATION)
     storagelib.subscribeWithPrototype("wheels/cal/pid", PROTOTYPE_PID_CALIBRATION)
 
 
-def ensureWheelData(name, motorEnablePin, motorPWMPin, i2cAddress, nrfAddress):
-    calMap = copy.deepcopy(PROTOTYPE_WHEEL_CALIBRATION)
-    calMap['steer']['en_pin'] = str(motorEnablePin)
-    calMap['steer']['pwm_pin'] = str(motorPWMPin)
-    calMap['speed']['addr'] = str(nrfAddress)
-    calMap['deg']['i2c'] = str(i2cAddress)
-    storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calMap)
+def ensure_wheel_data(name: str, motor_enable_pin: int, motor_pwm_pin: int, i2c_address: int, nrf_address: str):
+    calibration_map = copy.deepcopy(PROTOTYPE_WHEEL_CALIBRATION)
+    calibration_map['steer']['en_pin'] = str(motor_enable_pin)
+    calibration_map['steer']['pwm_pin'] = str(motor_pwm_pin)
+    calibration_map['speed']['addr'] = str(nrf_address)
+    calibration_map['deg']['i2c'] = str(i2c_address)
+    storagelib.bulkPopulateIfEmpty("wheels/cal/" + name, calibration_map)
 
 
-# noinspection PyTypeChecker
-def ensurePIDData():
-    calMap = copy.deepcopy(PROTOTYPE_PID_CALIBRATION)
-    calMap['p'] = str(PROTOTYPE_PID_CALIBRATION['p'])
-    calMap['i'] = str(PROTOTYPE_PID_CALIBRATION['i'])
-    calMap['d'] = str(PROTOTYPE_PID_CALIBRATION['d'])
-    calMap['g'] = str(PROTOTYPE_PID_CALIBRATION['g'])
-    calMap['deadband'] = str(PROTOTYPE_PID_CALIBRATION['deadband'])
-    storagelib.bulkPopulateIfEmpty("wheels/cal/pid", calMap)
+def print_wheel_calibration(wheel_name):
+    print("    " + wheel_name + ".deg.i2c: " + str(wheelCalibrationMap[wheel_name]['deg']['i2c']))
+    print("    " + wheel_name + ".deg.0: " + str(wheelCalibrationMap[wheel_name]['deg']['0']))
+    print("    " + wheel_name + ".speed.addr: " + str(wheelCalibrationMap[wheel_name]['speed']['addr']))
+    print("    " + wheel_name + ".steer.en_pin: " + str(wheelCalibrationMap[wheel_name]['steer']['en_pin']))
+    print("    " + wheel_name + ".steer.pwm_pin: " + str(wheelCalibrationMap[wheel_name]['steer']['pwm_pin']))
 
 
-def printWheelCal(wheelName):
-    print("    " + wheelName + ".deg.i2c: " + str(wheelCalibrationMap[wheelName]['deg']['i2c']))
-    print("    " + wheelName + ".deg.0: " + str(wheelCalibrationMap[wheelName]['deg']['0']))
-    print("    " + wheelName + ".speed.addr: " + str(wheelCalibrationMap[wheelName]['speed']['addr']))
-    print("    " + wheelName + ".steer.en_pin: " + str(wheelCalibrationMap[wheelName]['steer']['en_pin']))
-    print("    " + wheelName + ".steer.pwm_pin: " + str(wheelCalibrationMap[wheelName]['steer']['pwm_pin']))
-
-
-def printPidCal():
+def print_pid_cal():
     print("    pid.p: " + str(wheelCalibrationMap['pid']['p']))
     print("    pid.i: " + str(wheelCalibrationMap['pid']['i']))
     print("    pid.d: " + str(wheelCalibrationMap['pid']['d']))
@@ -350,140 +321,106 @@ def printPidCal():
     print("    pid.deadband: " + str(wheelCalibrationMap['pid']['deadband']))
 
 
-def setupWheelWithCal(wheelName):
-    wheel = wheelMap[wheelName]
-    wheelCalMap = wheelCalibrationMap[wheelName]
+def setup_wheel_with_calibration(wheel_name):
+    calibration_map = wheelCalibrationMap[wheel_name]
 
-    enPin = int(wheelCalMap['steer']['en_pin'])
-    GPIO.setup(enPin, GPIO.OUT)
+    en_pin = int(calibration_map['steer']['en_pin'])
+    GPIO.setup(en_pin, GPIO.OUT)
 
-    pwm_pin = int(wheelCalMap['steer']['pwm_pin'])
+    pwm_pin = int(calibration_map['steer']['pwm_pin'])
     GPIO.setup(pwm_pin, GPIO.OUT)
     motor_pwm = GPIO.PWM(pwm_pin, 1000)
     motor_pwm.start(0)
-    wheelCalMap['steer']['pwm'] = motor_pwm
+    calibration_map['steer']['pwm'] = motor_pwm
 
-    address = wheelCalMap['speed']['addr']
-    wheelCalMap['speed']['nrf'] = [ord(address[0]), ord(address[1]), ord(address[2]), ord(address[3]), ord(address[4])]
+    address = calibration_map['speed']['addr']
+    calibration_map['speed']['nrf'] = [ord(address[0]), ord(address[1]), ord(address[2]), ord(address[3]), ord(address[4])]
 
 
-def loadStorage():
-    ensureWheelData("fr", 12, 16, 1, 'WHL01')
-    ensureWheelData("fl", 20, 21, 2, 'WHL02')
-    ensureWheelData("br", 6, 13, 4, 'WHL03')
-    ensureWheelData("bl", 19, 26, 8, 'WHL04')
-    subscribeWheels()
+def load_storage():
+    ensure_wheel_data("fr", 12, 16, 1, 'WHL01')
+    ensure_wheel_data("fl", 20, 21, 2, 'WHL02')
+    ensure_wheel_data("br", 6, 13, 4, 'WHL03')
+    ensure_wheel_data("bl", 19, 26, 8, 'WHL04')
+    subscribe_wheels()
     storagelib.waitForData()
-    printWheelCal("fl")
-    printWheelCal("fr")
-    printWheelCal("bl")
-    printWheelCal("br")
-    printPidCal()
 
-    setupWheelWithCal("fl")
-    setupWheelWithCal("fr")
-    setupWheelWithCal("bl")
-    setupWheelWithCal("br")
+    for wheel_name in WHEEL_NAMES:
+        print_wheel_calibration(wheel_name)
+    print_pid_cal()
+
+    for wheel_name in WHEEL_NAMES:
+        setup_wheel_with_calibration(wheel_name)
     print("  Storage details loaded.")
 
 
-def stopWheel(wheelName):
-    wheel = wheelMap[wheelName]
-    enPin = int(wheelCalibrationMap[wheelName]['steer']['en_pin'])
-    steerDir = int(wheelCalibrationMap[wheelName]['steer']['dir'])
+def stop_all_wheels():
+    stop_wheel('fr')
+    stop_wheel('fl')
+    stop_wheel('br')
+    stop_wheel('bl')
 
-    if "pwm" in wheelCalibrationMap[wheelName]["steer"]:
-        motor_pwm = wheelCalibrationMap[wheelName]['steer']['pwm']
 
-        GPIO.output(enPin, GPIO.LOW)
+def stop_wheel(wheel_name):
+    calibration = wheelCalibrationMap[wheel_name]['steer']
+    if "pwm" in calibration:
+        en_pin = int(calibration['en_pin'])
+        GPIO.output(en_pin, GPIO.LOW)
+        motor_pwm = calibration['pwm']
         motor_pwm.ChangeDutyCycle(0)
-        print("*** Stopped wheel " + str(wheelName))
+        print("*** Stopped wheel " + str(wheel_name))
 
 
-def stopAllWheels():
-    stopWheel('fr')
-    stopWheel('fl')
-    stopWheel('br')
-    stopWheel('bl')
-
-
-def handleDeg(wheel, wheelCal, new_angle):
+def handle_degrees(wheel, new_angle: float):
     try:
-        new_angle = float(new_angle)
-
         old_angle = wheel['deg']
         old_mod = wheel['s_mod']
 
-        new_angle, mod = smallestAngleChange(old_angle, wheel['s_mod'], new_angle)
+        new_angle, mod = smallest_angle_change(old_angle, old_mod, new_angle)
 
         wheel['old'] = old_angle
         wheel['deg'] = new_angle
         wheel['s_mod'] = mod
 
         wheel['deg_stop'] = False
-    except:
+    except Exception:
         wheel['deg_stop'] = True
 
 
-def handleSpeed(wheel, wheelCal, speedStr):
-    wheelNumber = wheel['name']
+def handle_speed(wheel, speed_string: str):
+    if DEBUG_SPEED_VERBOSE:
+        wheel_name = wheel['name']
+        print("    got speed " + speed_string + " @ for " + str(wheel_name))
 
-    if speedStr == "0":
-        if DEBUG_SPEED_VERBOSE:
-            print("    got speed 0 @ for " + str(wheelNumber))
-        speed = 0
-    else:
-        if speedStr == "-0" or speedStr == "+0":
-            if DEBUG_SPEED_VERBOSE:
-                print("    got speed +0 @ for " + str(wheelNumber))
-            speed = 0
-        else:
-            speed = float(speedStr)
-
-        if DEBUG_SPEED_VERBOSE:
-            print("    got speed " + speedStr + " @ for " + str(wheelNumber))
-
-    wheel['speed'] = speedStr
+    wheel['speed'] = speed_string
 
 
-def interpolate(value, zerostr, maxstr):
-    zero = float(zerostr)
-    maxValue = float(maxstr)
-    return (maxValue - zero) * value + zero
-
-
-def steerWheel(wheelName, curDeg, status):
-    def updateCurrent(duty_cycle):
+def steer_wheel(wheel_name: str, current_degrees, status):
+    def update_current(duty_cycle):
         last_time = wheel['deg_lt']
         t = time.time()
         if t - last_time < 1:
             last_pwm = wheel['deg_pwm']
-            mAh = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_STEER_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
-            old_mAh = wheel['dmAh']
-            wheel['dmAh'] = old_mAh + mAh
+            milli_amp_hours = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_STEER_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
+            wheel['dmAh'] = wheel['dmAh'] + milli_amp_hours
         wheel['deg_lt'] = t
         wheel['deg_pwm'] = duty_cycle
 
-    def stopAll():
-        GPIO.output(enPin, GPIO.LOW)
+    def stop():
+        GPIO.output(en_pin, GPIO.LOW)
         motor_pwm.ChangeDutyCycle(0)
-        updateCurrent(0)
+        update_current(0)
 
-    wheel = wheelMap[wheelName]
-    enPin = int(wheelCalibrationMap[wheelName]['steer']['en_pin'])
-    steerDir = int(wheelCalibrationMap[wheelName]['steer']['dir'])
-    if "pwm" not in wheelCalibrationMap[wheelName]['steer']:
-        pwm_pin = int(wheelCalibrationMap[wheelName]['steer']['pwm_pin'])
-        GPIO.setup(pwm_pin, GPIO.OUT)
-        motor_pwm = GPIO.PWM(pwm_pin, 1000)
-        motor_pwm.start(0)
-    else:
-        motor_pwm = wheelCalibrationMap[wheelName]['steer']['pwm']
+    wheel = wheelMap[wheel_name]
+    calibration_steer = wheelCalibrationMap[wheel_name]['steer']
+    en_pin = int(calibration_steer['en_pin'])
+    steer_direction = int(calibration_steer['dir'])
+    motor_pwm = calibration_steer['pwm']
 
     deg = int(wheel['deg'])
 
     if all_stop:
-        stopAll()
+        stop()
         return
 
     if 'overheat' in wheel:
@@ -492,23 +429,22 @@ def steerWheel(wheelName, curDeg, status):
         if now - overheat > OVERHEAT_COOLDOWN:
             del wheel['overheat']
         else:
-            stopAll()
-            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
+            stop()
+            steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), STOP_OVERHEAT, current_degrees, status | STATUS_ERROR_MOTOR_OVERHEAT, 0, 0, 0, 0, 0, 0, 0)
             return
 
     deg_stop = wheel['deg_stop']
 
-    if deg_stop or curDeg is None or deg is None:
-        stopAll()
-        steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_NO_DATA, curDeg, status, 0, 0, 0, 0, 0, 0, 0)
+    if deg_stop or current_degrees is None or deg is None:
+        stop()
+        steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), STOP_NO_DATA, current_degrees, status, 0, 0, 0, 0, 0, 0, 0)
     else:
-
         pid = wheel['pid']
-        speed = pid.process(deg, curDeg)
+        speed = pid.process(deg, current_degrees)
 
         forward = True
-        speed = speed * steerDir
-        origSpeed = speed
+        speed = speed * steer_direction
+        original_speed = speed
         if speed < 0:
             forward = False
             speed = -speed
@@ -517,131 +453,128 @@ def steerWheel(wheelName, curDeg, status):
             speed = 100.0
         elif speed < 1:
             speed = 0.0
-            stopAll()
-            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_REACHED_POSITION, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            stop()
+            steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), STOP_REACHED_POSITION, current_degrees, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
             return
 
         if speed > 50:
             now = time.time()
-            if 'termal' in wheel:
-                termal = wheel['termal']
-                if now - termal > OVERHEAT_PROTECTION:
-                    del wheel['termal']
+            if 'thermal' in wheel:
+                thermal = wheel['thermal']
+                if now - thermal > OVERHEAT_PROTECTION:
+                    del wheel['thermal']
                     wheel['overheat'] = now
-                    stopAll()
-                    steer_logger.log(time.time(), bytes(wheelName, 'ascii'), STOP_OVERHEAT, curDeg, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point,
-                                     pid.i, pid.d, pid.last_error)
+                    stop()
+                    steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), STOP_OVERHEAT, current_degrees, status | STATUS_ERROR_MOTOR_OVERHEAT, speed, pid.last_output, pid.last_delta, pid.set_point,pid.i, pid.d, pid.last_error)
                     return
             else:
-                wheel['termal'] = now
-        elif 'termal' in wheel:
-            del wheel['termal']
+                wheel['thermal'] = now
+        elif 'thermal' in wheel:
+            del wheel['thermal']
 
         if forward:
-            GPIO.output(enPin, GPIO.LOW)
+            GPIO.output(en_pin, GPIO.LOW)
             motor_pwm.ChangeDutyCycle(speed)
-            updateCurrent(speed)
-            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), BACK, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            update_current(speed)
+            steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), BACK, current_degrees, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
             if DEBUG_TURN:
-                print(wheelName.upper() + ": going back; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
+                print(wheel_name.upper() + ": going back; " + str(deg) + "<-->" + str(current_degrees) + ", s=" + str(speed) + " os=" + str(original_speed) + ", " + pid.to_string())
         else:
-            GPIO.output(enPin, GPIO.HIGH)
+            GPIO.output(en_pin, GPIO.HIGH)
             motor_pwm.ChangeDutyCycle(100.0 - speed)
-            updateCurrent(100.0 - speed)
-            steer_logger.log(time.time(), bytes(wheelName, 'ascii'), FORWARD, curDeg, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
+            update_current(100.0 - speed)
+            steer_logger.log(time.time(), bytes(wheel_name, 'ascii'), FORWARD, current_degrees, status, speed, pid.last_output, pid.last_delta, pid.set_point, pid.i, pid.d, pid.last_error)
             if DEBUG_TURN:
-                print(wheelName.upper() + ": going forward; " + str(deg) + "<-->" + str(curDeg) + ", s=" + str(speed) + " os=" + str(origSpeed) + ", " + pid.to_string())
+                print(wheel_name.upper() + ": going forward; " + str(deg) + "<-->" + str(current_degrees) + ", s=" + str(speed) + " os=" + str(original_speed) + ", " + pid.to_string())
 
 
-def readPosition(wheelName):
-    wheel = wheelMap[wheelName]
-    i2cAddress = int(wheelCalibrationMap[wheelName]['deg']["i2c"])
+def read_position(wheel_name: str):
+    i2c_address = int(wheelCalibrationMap[wheel_name]['deg']["i2c"])
     try:
-        i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2cAddress)
+        i2cBus.write_byte(I2C_MULTIPLEXER_ADDRESS, i2c_address)
         try:
             pos = i2cBus.read_i2c_block_data(I2C_AS5600_ADDRESS, 0x0B, 5)
             angle = (pos[3] * 256 + pos[4]) * 360 // 4096
             status = pos[0] & 0b00111000 | STATUS_ERROR_MAGNET_NOT_DETECTED
 
             if DEBUG_READ:
-                print("Read wheel " + wheelName + " @ address " + str(i2cAddress) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + (
+                print("Read wheel " + wheel_name + " @ address " + str(i2c_address) + " pos " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + (
                     "MD" if status & 32 else "  "))
 
             return angle, status
-        except:
+        except Exception:
             if DEBUG_READ:
-                print("Failed to read " + wheelName + " @ address " + str(i2cAddress))
+                print("Failed to read " + wheel_name + " @ address " + str(i2c_address))
 
         return 0, STATUS_ERROR_I2C_READ
 
-    except:
+    except Exception:
         if DEBUG_READ:
-            print("Failed to select " + wheelName + " @ address " + str(i2cAddress))
+            print("Failed to select " + wheel_name + " @ address " + str(i2c_address))
 
         return 0, STATUS_ERROR_I2C_WRITE
 
 
-def prepareAndSteerWheel(wheelName):
-    angle, status = readPosition(wheelName)
+def prepare_and_steer_wheel(wheel_name: str):
+    angle, status = read_position(wheel_name)
     if DBEUG_ERRORS and status & 24 != 0:
-        print(wheelName + ": position (raw) " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
+        print(wheel_name + ": position (raw) " + str(angle) + " " + ("MH" if status & 8 else "  ") + " " + ("ML" if status & 16 else "  ") + " " + ("MD" if status & 32 else "  "))
 
-    wheel = wheelMap[wheelName]
-    posDir = int(wheelCalibrationMap[wheelName]['deg']['dir'])
-    if posDir < 0:
+    degree_calibration = wheelCalibrationMap[wheel_name]['deg']
+    pos_dir = int(degree_calibration['dir'])
+    if pos_dir < 0:
         angle = 360 - angle
 
     if status == 1:
         return 0, status
 
-    caloffset = int(wheelCalibrationMap[wheelName]['deg']['0'])
-    angle -= caloffset
+    calibration_offset = int(degree_calibration['0'])
+    angle -= calibration_offset
     if angle < 0:
         angle += 360
 
-    steerWheel(wheelName, angle, status)
+    steer_wheel(wheel_name, angle, status)
 
-    if 'overheat' in wheel:
+    if 'overheat' in wheelMap[wheel_name]:
         status |= STATUS_ERROR_MOTOR_OVERHEAT
 
     return angle, status
 
 
-def prepareAndDriveWheel(wheelName):
-    def updateCurrent(duty_cycle):
+def prepare_and_drive_wheel(wheel_name: str):
+    def update_current(duty_cycle: int):
         last_time = wheel['speed_lt']
         t = time.time()
         if t - last_time < 1:
             last_pwm = wheel['speed_pwm']
-            mAh = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_DRIVE_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
-            old_mAh = wheel['smAh']
-            wheel['smAh'] = old_mAh + mAh
+            milli_amp_hours = (abs(duty_cycle + last_pwm) / 200) * (t - last_time) * WHEEL_DRIVE_CURRENT / 3600  # 1000 mAh = 1 aH - 1 s = 1/3600h
+            wheel['smAh'] = wheel['smAh'] + milli_amp_hours
         wheel['speed_lt'] = t
         wheel['speed_pwm'] = duty_cycle
 
-    wheel = wheelMap[wheelName]
-    wheelSpeedCalMap = wheelCalibrationMap[wheelName]['speed']
+    wheel = wheelMap[wheel_name]
+    wheel_speed_cal_map = wheelCalibrationMap[wheel_name]['speed']
 
-    address = wheelSpeedCalMap['nrf']
-    speedDirStr = wheelSpeedCalMap['dir']
+    address = wheel_speed_cal_map['nrf']
+    speed_dir_str = wheel_speed_cal_map['dir']
 
     started_time = time.time()
     nRF2401.setReadPipeAddress(0, address)
     nRF2401.setWritePipeAddress(address)
 
     if all_stop:
-        speedStr = 0
+        speed_str = 0
     else:
-        speedStr = wheel['speed']
-    speedModStr = wheel['s_mod']
+        speed_str = wheel['speed']
+    speed_mod_str = wheel['s_mod']
 
     try:
-        speed = int(float(speedStr)) * int(speedModStr) * int(speedDirStr)
+        speed = int(float(speed_str)) * int(speed_mod_str) * int(speed_dir_str)
     except:
         speed = None
 
     if speed is not None:
-        updateCurrent(abs(speed))
+        update_current(abs(speed))
         send_speed = int(127 - (speed * 127 / 300))
 
         data = nRF2401.padToSize([MSG_TYPE_SET_RAW_BR, send_speed, send_speed], NRF_PACKET_SIZE)
@@ -660,23 +593,21 @@ def prepareAndDriveWheel(wheelName):
 
         wheel_pos = 0
 
-        # nRF2401.swithToRX()
-        # nRF2401.startListening()
         if nRF2401.poolData(0.0025):  # 1 sec / 50 times a second / 4 wheels / 2 max half of time needed for wheel
             p = nRF2401.receiveData(NRF_PACKET_SIZE)
             nRF2401.stopListening()
 
-            drive_mode = p[0]
-            drive_speed = p[1]
-            wheel_speed = p[2]
+            # drive_mode = p[0]
+            # drive_speed = p[1]
+            # wheel_speed = p[2]
             wheel_pos = p[3] + 256 * p[4]
-            wheel_pos_deg = int(wheel_pos * 360 / 4096)
-            wheel_r_pos = p[5] + 256 * p[6]
-            pid_p = p[7]
-            pid_i = p[8]
-            pid_d = p[9]
-            i2c_status = p[10]
-            pwm_reg = p[11]
+            # wheel_pos_deg = int(wheel_pos * 360 / 4096)
+            # wheel_r_pos = p[5] + 256 * p[6]
+            # pid_p = p[7]
+            # pid_i = p[8]
+            # pid_d = p[9]
+            # i2c_status = p[10]
+            # pwm_reg = p[11]
 
             # now = time.time()
             # drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
@@ -688,112 +619,83 @@ def prepareAndDriveWheel(wheelName):
             status = status + STATUS_ERROR_RX_FAILED
 
         now = time.time()
-        drive_logger.log(now, bytes(wheelName, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
+        drive_logger.log(now, bytes(wheel_name, 'ASCII'), wheel_pos, 0, (now - started_time), speed)
         return wheel_pos, status
 
 
-
-def driveAllWheels():
+def drive_wheels():
     if not shutdown:
-        checkPidsChanged()
+        odo_fl, status_speed_fl = prepare_and_drive_wheel("fl")
+        odo_fr, status_speed_fr = prepare_and_drive_wheel("fr")
+        odo_bl, status_speed_bl = prepare_and_drive_wheel("bl")
+        odo_br, status_speed_br = prepare_and_drive_wheel("br")
 
-        angleFl, statusSteerFl = prepareAndSteerWheel("fl")
-        angleFr, statusSteerFr = prepareAndSteerWheel("fr")
-        angleBl, statusSteerBl = prepareAndSteerWheel("bl")
-        angleBr, statusSteerBr = prepareAndSteerWheel("br")
-
-        odoFl, statusSpeedFl = prepareAndDriveWheel("fl")
-        odoFr, statusSpeedFr = prepareAndDriveWheel("fr")
-        odoBl, statusSpeedBl = prepareAndDriveWheel("bl")
-        odoBr, statusSpeedBr = prepareAndDriveWheel("br")
-
-        statusFl = statusSteerFl | statusSpeedFl
-        statusFr = statusSteerFr | statusSpeedFr
-        statusBl = statusSteerBl | statusSpeedBl
-        statusBr = statusSteerBr | statusSpeedBr
-
-        message = ",".join([str(f) for f in [angleFl, odoFl, statusFl, angleFr, odoFr, statusFr, angleBl, odoBl, statusBl, angleBr, odoBr, statusBr]])
-        pyroslib.publish("wheel/status", message)
-
-
-def driveWheels():
-    if not shutdown:
-        odoFl, statusSpeedFl = prepareAndDriveWheel("fl")
-        odoFr, statusSpeedFr = prepareAndDriveWheel("fr")
-        odoBl, statusSpeedBl = prepareAndDriveWheel("bl")
-        odoBr, statusSpeedBr = prepareAndDriveWheel("br")
-
-        message = ",".join([str(f) for f in [time.time(), odoFl, statusSpeedFl, odoFr, statusSpeedFr, odoBl, statusSpeedBl, odoBr, statusSpeedBr]])
+        message = ",".join([str(f) for f in [time.time(), odo_fl, status_speed_fl, odo_fr, status_speed_fr, odo_bl, status_speed_bl, odo_br, status_speed_br]])
         pyroslib.publish("wheel/speed/status", message)
 
 
-def steerWheels():
+def steer_wheels():
     global last_status_broadcast
 
     if not shutdown:
-        checkPidsChanged()
+        check_pids_changed()
 
-        angleFl, statusSteerFl = prepareAndSteerWheel("fl")
-        angleFr, statusSteerFr = prepareAndSteerWheel("fr")
-        angleBl, statusSteerBl = prepareAndSteerWheel("bl")
-        angleBr, statusSteerBr = prepareAndSteerWheel("br")
+        angle_fl, status_steer_fl = prepare_and_steer_wheel("fl")
+        angle_fr, status_steer_fr = prepare_and_steer_wheel("fr")
+        angle_bl, status_steer_bl = prepare_and_steer_wheel("bl")
+        angle_br, status_steer_br = prepare_and_steer_wheel("br")
 
-        message = ",".join([str(f) for f in [time.time(), angleFl, statusSteerFl, angleFr, statusSteerFr, angleBl, statusSteerBl, angleBr, statusSteerBr]])
+        message = ",".join([str(f) for f in [time.time(), angle_fl, status_steer_fl, angle_fr, status_steer_fr, angle_bl, status_steer_bl, angle_br, status_steer_br]])
         pyroslib.publish("wheel/deg/status", message)
 
         now = time.time()
         if last_status_broadcast + status_broadcast_time < now:
-            broadcastWheelsStatus()
+            broadcast_wheels_status()
             last_status_broadcast = now
 
 
-def driveThreadMain():
+def drive_thread_main():
     while not shutdown:
         try:
             starting = time.time()
-            driveWheels()
+            drive_wheels()
             now = time.time()
             if now - starting < 0.02:
                 time.sleep(now - starting)
             else:
                 time.sleep(0.01)
-        except BaseException as e:
-            print("ERROR: drive.thread: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+        except BaseException as exc:
+            print("ERROR: drive.thread: " + str(exc) + "\n" + ''.join(traceback.format_tb(exc.__traceback__)))
 
     print("drive.thread: Shutdown detected.")
 
 
-def wheelDegTopic(topic, payload, groups):
-    wheelName = groups[0]
-
-    if wheelName in wheelMap:
-        wheel = wheelMap[wheelName]
-        wheelCal = wheelCalibrationMap[wheelName]
-
+# noinspection PyUnusedLocal
+def wheel_deg_topic(topic, payload, groups):
+    wheel_name = groups[0]
+    if wheel_name in wheelMap:
+        wheel = wheelMap[wheel_name]
         if DEBUG_TURN:
-            print("  Turning wheel: " + wheelName + " to " + str(payload) + " degs")
-
-        handleDeg(wheel, wheelCal['deg'], payload)
-
+            print("  Turning wheel: " + wheel_name + " to " + str(payload) + " degrees")
+        handle_degrees(wheel, float(payload))
     else:
-        print("ERROR: no wheel with name " + wheelName + " fonund.")
+        print("ERROR: no wheel with name " + wheel_name + " found.")
 
 
-def wheelSpeedTopic(topic, payload, groups):
-    wheelName = groups[0]
-
-    if wheelName in wheelMap:
-        wheel = wheelMap[wheelName]
-        wheelCal = wheelCalibrationMap[wheelName]
-
+# noinspection PyUnusedLocal
+def wheel_speed_topic(topic, payload, groups):
+    wheel_name = groups[0]
+    if wheel_name in wheelMap:
+        wheel = wheelMap[wheel_name]
         if DEBUG_SPEED:
-            print("  Setting wheel: " + wheelName + " speed to " + str(payload))
-        handleSpeed(wheel, wheelCal['speed'], payload)
+            print("  Setting wheel: " + wheel_name + " speed to " + str(payload))
+        handle_speed(wheel, payload)
     else:
-        print("ERROR: no wheel with name " + wheelName + " fonund.")
+        print("ERROR: no wheel with name " + wheel_name + " fonund.")
 
 
-def wheelsAllStop(topic, payload, groups):
+# noinspection PyUnusedLocal
+def wheels_all_stop(topic, payload, groups):
     global all_stop
     if payload == 'stop':
         all_stop = True
@@ -804,95 +706,95 @@ def wheelsAllStop(topic, payload, groups):
     elif payload == 'status':
         pass
 
-    broadcastWheelsStatus()
+    broadcast_wheels_status()
 
 
-def broadcastWheelsStatus():
-    smAh = 0
-    dmAh = 0
+def broadcast_wheels_status():
+    steer_milli_ah = 0
+    drive_milli_ah = 0
     for wheel_name in WHEEL_NAMES:
         wheel = wheelMap[wheel_name]
-        # print("Wheel: " + str(wheelMap))
-        smAh += wheel['smAh']
-        dmAh += wheel['dmAh']
+        steer_milli_ah += wheel['smAh']
+        drive_milli_ah += wheel['dmAh']
 
     total_idle = (time.time() - service_started_time) * WHEEL_IDLE_CURRENT / 3600
 
     status = ("s:stopped" if all_stop else "s:running")
-    status += " dmAh:" + str(int(dmAh)) + " smAh:" + str(int(smAh)) + " wtmAh:" + str(int(dmAh + smAh + total_idle))
+    status += " dmAh:" + str(int(drive_milli_ah)) + " smAh:" + str(int(steer_milli_ah)) + " wtmAh:" + str(int(drive_milli_ah + steer_milli_ah + total_idle))
     pyroslib.publish('wheel/feedback/status', status)
 
 
-def wheelsCombined(topic, payload, groups):
+# noinspection PyUnusedLocal
+def wheels_combined(topic, payload, groups):
     if DEBUG_SPEED:
         print(str(int(time.time() * 1000) % 10000000) + ": wheels " + payload)
 
-    wheelCmds = payload.split(" ")
-    for wheelCmd in wheelCmds:
-        kv = wheelCmd.split(":")
+    wheel_commands = payload.split(" ")
+    for wheel_command in wheel_commands:
+        kv = wheel_command.split(":")
         if len(kv) > 1:
-            wheelName = kv[0][:2]
+            wheel_name = kv[0][:2]
             command = kv[0][2]
             value = kv[1]
 
-            if wheelName in wheelMap:
-                wheel = wheelMap[wheelName]
-                wheelCal = wheelCalibrationMap[wheelName]
+            if wheel_name in wheelMap:
+                wheel = wheelMap[wheel_name]
                 if command == "s":
-                    handleSpeed(wheel, wheelCal['speed'], value)
+                    handle_speed(wheel, value)
                 elif command == "d":
-                    handleDeg(wheel, wheelCal['deg'], float(value))
+                    handle_degrees(wheel, float(value))
 
 
-def handleShutdownAnnounced(topic, payload, groups):
+# noinspection PyUnusedLocal
+def handle_shutdown_announced(topic, payload, groups):
     global shutdown
     shutdown = True
-    stopAllWheels()
+    stop_all_wheels()
 
 
-def stopCallback():
+def stop_callback():
     print("Asked to stop!")
-    stopAllWheels()
+    stop_all_wheels()
 
 
-def timeDriftThreadMethod():
+def uptime_thread_method():
     last_time = time.time()
     while True:
         try:
             now = time.time()
             if now - last_time > 2:
-                _updaate_service_started_time()
+                _update_service_started_time()
                 last_time = time.time()
             else:
                 last_time = now
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             time.sleep(1)
 
 
 if __name__ == "__main__":
     try:
-        print("Starting wheels service...")
-        _updaate_service_started_time()
+        print("#4# Starting wheels service...")
+        _update_service_started_time()
 
         print("    initialising wheels...")
-        initWheels()
+        init_wheels()
 
         print("    setting GPIOs...")
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
 
-        print("    sbscribing to topics...")
-        pyroslib.subscribe("wheel/stop", wheelsAllStop)
-        pyroslib.subscribe("wheel/all", wheelsCombined)
-        pyroslib.subscribe("wheel/+/deg", wheelDegTopic)
-        pyroslib.subscribe("wheel/+/speed", wheelSpeedTopic)
-        pyroslib.subscribe("shutdown/announce", handleShutdownAnnounced)
-        pyroslib.init("wheels-service", onStop=stopCallback)
+        print("    subscribing to topics...")
+        pyroslib.subscribe("wheel/stop", wheels_all_stop)
+        pyroslib.subscribe("wheel/all", wheels_combined)
+        pyroslib.subscribe("wheel/+/deg", wheel_deg_topic)
+        pyroslib.subscribe("wheel/+/speed", wheel_speed_topic)
+        pyroslib.subscribe("shutdown/announce", handle_shutdown_announced)
+        pyroslib.init("wheels-service", onStop=stop_callback)
 
         print("  Loading storage details...")
-        loadStorage()
-        updateWheelsPid()
+        load_storage()
+        init_all_wheels_pid()
 
         print("  Initialising radio...")
         nRF2401.initNRF(0, 0, NRF_PACKET_SIZE, NRF_DEFAULT_ADDRESS, NRF_CHANNEL)
@@ -931,13 +833,13 @@ if __name__ == "__main__":
 
         print("Started wheels service.")
 
-        driveThread = threading.Thread(target=driveThreadMain, daemon=True)
+        driveThread = threading.Thread(target=drive_thread_main, daemon=True)
         driveThread.start()
 
-        timeDriftThread = threading.Thread(target=timeDriftThreadMethod, daemon=True)
-        timeDriftThread.start()
+        uptime_thread = threading.Thread(target=uptime_thread_method, daemon=True)
+        uptime_thread.start()
 
-        pyroslib.forever(0.02, steerWheels)
+        pyroslib.forever(0.02, steer_wheels)
 
     except Exception as ex:
         print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
