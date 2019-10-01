@@ -103,7 +103,7 @@ class TouchHandler:
             t = self.FADEOUT - (now - tr[0])
             size = int(t * 5)
             colour = int(255.0 / self.FADEOUT * t)
-            pygame.draw.circle(screen, (colour, colour, colour / 2, self.FADEOUT * t), tr[1], size, 0)
+            pygame.draw.circle(surface, (colour, colour, colour / 2, self.FADEOUT * t), tr[1], size, 0)
 
     def readReg(self, reg, minv, maxv, dest_max):
         self.spi.open(0, 1)
@@ -201,7 +201,7 @@ def startPyGame():
 
     font = pygame.font.Font("garuda.ttf", 20)
     smallFont = pygame.font.Font("garuda.ttf", 16)
-
+    print("startPyGame: font=" + str(font) + ", smallfont=" + str(smallFont))
     working = True
 
 
@@ -315,6 +315,7 @@ if __name__ == "__main__":
 
         startPyGame()
 
+        print("Font " + str(font) + ", small font " + str(smallFont))
         uiAdapter = gccui.UIAdapter(screen)
         uiFactory = gccui.BoxBlueSFTheme.BoxBlueSFThemeFactory(uiAdapter, font=font)
 

@@ -44,12 +44,12 @@ motor_change_speed = 0.01
 
 
 def moveServo(servoid, position):
-    try:
-        with open("/dev/servoblaster", 'w') as f:
-            f.write(str(servoid) + "=" + str(position) + "\n")
-    except Exception as ex:
-        print("Sending servo exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
-
+    # try:
+    #     with open("/dev/servoblaster", 'w') as f:
+    #         f.write(str(servoid) + "=" + str(position) + "\n")
+    # except Exception as ex:
+    #     print("Sending servo exception: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+    pass
 
 def increase(value):
     if value < 300:

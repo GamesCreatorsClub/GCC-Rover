@@ -34,16 +34,16 @@ DEBUG = False
 # TIMING_BUDGET = 8.5
 # INTERMEDIATE_PERIOD = 12
 
-# TIMING_BUDGET = 16.5
-# INTERMEDIATE_PERIOD = 21.5
-# DISTANCE_MODE = VL53L1X.MEDIUM
+TIMING_BUDGET = 16.5
+INTERMEDIATE_PERIOD = 22
+DISTANCE_MODE = VL53L1X.MEDIUM
 
-TIMING_BUDGET = 8.5
-INTERMEDIATE_PERIOD = 12
-DISTANCE_MODE = VL53L1X.SHORT
+# TIMING_BUDGET = 8.5
+# INTERMEDIATE_PERIOD = 12
+# DISTANCE_MODE = VL53L1X.SHORT
 
 ROI_TOP = 0
-ROI_BOTTOM = 5
+ROI_BOTTOM = 4
 ROI_LEFT = 0
 ROI_RIGHT = 15
 
@@ -63,13 +63,13 @@ sensors = [s for s in SENSORS_ORDER]
 
 sensorsMap = {
     0: {'bus': 2, 'i2c': I2C_VL53L1X_ADDRESS_1, 'name': 'forward', 'adjust': 83, 'vl53l1x': None},
-    45: {'bus': 4, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'forward_right', 'adjust': 121, 'vl53l1x': None},
+    45: {'bus': 8, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'back_right as fr', 'adjust': 121, 'vl53l1x': None},
     90: {'bus': 4, 'i2c': I2C_VL53L1X_ADDRESS_1, 'name': 'right', 'adjust': 83, 'vl53l1x': None},
-    135: {'bus': 8, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'back_right', 'adjust': 121, 'vl53l1x': None},
+    135: {'bus': 4, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'forward_right', 'adjust': 121, 'vl53l1x': None},
     180: {'bus': 8, 'i2c': I2C_VL53L1X_ADDRESS_1, 'name': 'back', 'adjust': 83, 'vl53l1x': None},
     225: {'bus': 1, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'back_left', 'adjust': 121, 'vl53l1x': None},
     270: {'bus': 1, 'i2c': I2C_VL53L1X_ADDRESS_1, 'name': 'left', 'adjust': 83, 'vl53l1x': None},
-    315: {'bus': 2, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'forward_right', 'adjust': 121, 'vl53l1x': None}
+    315: {'bus': 2, 'i2c': I2C_VL53L1X_ADDRESS_2, 'name': 'forward_right wn', 'adjust': 121, 'vl53l1x': None}
 }
 
 _angle_to_status_position = {0: 0, 45: 1, 90: 2, 135: 3, 180: 4, 225: 5, 270: 6, 315: 7}
@@ -215,10 +215,17 @@ def initDistanceSensors():
 
             if vl53l1x_i2c.is_device_at(I2C_VL53L1X_ADDRESS_1):
                 print("        " + str(name) + ": first sensor already present on " + hex(I2C_VL53L1X_ADDRESS_1))
-                sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=name)
+                try:
+                    sensor1 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_1, name=name)
+                except Exception as ex:
+                    print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
+
             else:
                 print("        " + str(name) + ": configuring first sensor to " + hex(I2C_VL53L1X_ADDRESS_1))
-                sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=name)
+                try:
+                    sensor1 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_1, name=name)
+                except Exception as ex:
+                    print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
             configureSensor(sensor1)
             sensorsMap[angle]['vl53l1x'] = sensor1
@@ -233,9 +240,12 @@ def initDistanceSensors():
                 name = sensorsMap[angle]['name']
 
                 print("        " + str(name) + ": configuring XSHUT sensor to " + hex(I2C_VL53L1X_ADDRESS_2))
-                sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=name)
-                configureSensor(sensor2)
-                sensorsMap[angle]['vl53l1x'] = sensor2
+                try:
+                    sensor2 = VL53L1X(vl53l1x_i2c, required_address=I2C_VL53L1X_ADDRESS_2, name=name)
+                    configureSensor(sensor2)
+                    sensorsMap[angle]['vl53l1x'] = sensor2
+                except Exception as ex:
+                    print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
     else:
         for angle in SENSORS_ORDER:
             i2c_addres = sensorsMap[angle]['i2c']
@@ -244,9 +254,12 @@ def initDistanceSensors():
                 name = sensorsMap[angle]['name']
 
                 print("        " + str(name) + ": configuring XSHUT sensor on " + hex(I2C_VL53L1X_ADDRESS_2))
-                sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=name)
-                configureSensor(sensor2)
-                sensorsMap[angle]['vl53l1x'] = sensor2
+                try:
+                    sensor2 = VL53L1X(vl53l1x_i2c, initial_address=I2C_VL53L1X_ADDRESS_2, name=name)
+                    configureSensor(sensor2)
+                    sensorsMap[angle]['vl53l1x'] = sensor2
+                except Exception as ex:
+                    print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
     current_bus = None
     for angle in SENSORS_ORDER:
@@ -256,9 +269,12 @@ def initDistanceSensors():
             _switchBus(bus)
 
         name = sensorsMap[angle]['name']
-        print("        " + str(name) + ": starting ranging")
-        sensor = sensorsMap[angle]['vl53l1x']
-        sensor.start_ranging()
+        try:
+            print("        " + str(name) + ": starting ranging")
+            sensor = sensorsMap[angle]['vl53l1x']
+            sensor.start_ranging()
+        except Exception as ex:
+            print("ERROR: " + str(ex) + "\n" + ''.join(traceback.format_tb(ex.__traceback__)))
 
 
 def handleFocus(topic, message, groups):

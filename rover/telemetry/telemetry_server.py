@@ -109,6 +109,8 @@ class PubSubLocalPipeTelemetryServer(TelemetryServer):
             if len(buf) == size:
                 return buf
 
+            if DEBUG:
+                print("Failed to load all in once: " + str(len(buf)) + " while needed " + str(size))
             while len(buf) < size:
                 bb = self.pipe.read(size - len(buf))
                 buf = buf + bb
